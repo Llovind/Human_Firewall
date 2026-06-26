@@ -4,16 +4,17 @@ __pycache__/
 *.pyo
 *.egg-info/
 
-# SQLite database files
-instance/
-*.db
+# SQLite databases (persisted via Docker volumes, not source code)
+backend/instance/
+gophish/database/
+
+# GoPhish config — contains server-specific settings.
+# Clone users: copy gophish/config.json.example to gophish/config.json
+gophish/config.json
 
 # Environment files (should never be committed)
 .env
 .env.*
-
-# Docker
-*.log
 
 # OS
 Thumbs.db
