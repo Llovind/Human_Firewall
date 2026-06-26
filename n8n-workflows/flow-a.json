@@ -1,0 +1,217 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "flask-event",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        80,
+        -608
+      ],
+      "id": "9ed999aa-e592-443f-85ee-21578b64d914",
+      "name": "Webhook",
+      "webhookId": "872111d3-74f4-4341-8973-30f147f71ea7"
+    },
+    {
+      "parameters": {
+        "chatId": "2019216831",
+        "text": "=🚨 CHRONIC CLICKER ALERT\n\n👤 {{ $json.body.email }}\n🏢 {{ $json.body.divisi }}\n📊 Klik ke-{{ $json.body.click_count_after }}\n\nUser ini sudah {{ $json.body.click_count_after }} kali gagal mengenali simulasi phishing.\n\nPertimbangkan eskalasi ke atasan langsung untuk mandatory security training.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        544,
+        -688
+      ],
+      "id": "e6204a71-9f80-409d-a4c4-996f93e2c066",
+      "name": "Send a text message",
+      "webhookId": "85ff10ef-9bff-4ec4-ba68-f74eee95d19c",
+      "credentials": {
+        "telegramApi": {
+          "id": "I44oUHC8lBGyDI79",
+          "name": "Telegram account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.tier }}",
+                    "rightValue": "tier_2_chronic",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "dc6dcbd2-742a-4b32-831b-a733d4526a29"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Eskalasi"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "48c82b91-989a-4f2d-98db-d86d84cb704e",
+                    "leftValue": "={{ $json.body.event_type }}",
+                    "rightValue": "submitted_data",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Incident"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "allMatchingOutputs": true
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        288,
+        -608
+      ],
+      "id": "3433f04f-71d3-467f-9c17-7231ddf8edb3",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://flask_api:5000/api/incidents",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"source_type\": \"simulation\",\n  \"divisi\": \"{{ $json.body.divisi }}\",\n  \"severity\": \"{{ $json.body.tier === 'tier_2_chronic' ? 'high' : ($json.body.tier === 'tier_2' ? 'medium' : 'low') }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        544,
+        -464
+      ],
+      "id": "aac9f81b-6e5d-4dca-98e4-6a13dd53f8d0",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "chatId": "2019216831",
+        "text": "=🎫 INCIDENT — CREDENTIAL SUBMISSION\n\n📋 {{ $json.ticket_id }}\n👤 {{ $('Switch').item.json.body.email }}\n🏢 {{ $('Switch').item.json.body.divisi }}\n⚠️ Severity: {{ $json.severity }}\n\nUser mengisi kredensial di halaman fake login simulasi.\n\nIncident ticket otomatis dibuat dan tercatat di sistem.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        752,
+        -464
+      ],
+      "id": "5ae85172-782e-4b68-b7e4-13c44ea0abae",
+      "name": "Send a text message1",
+      "webhookId": "cfa3fa60-a0ae-4cb5-9fb1-a2f61335d000",
+      "credentials": {
+        "telegramApi": {
+          "id": "I44oUHC8lBGyDI79",
+          "name": "Telegram account 2"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message": {
+      "main": [
+        []
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Send a text message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "95855c0b-d99e-4d43-abbe-8352f0054d29",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "8de7cca7e3a56b1b86ebc4dd93be2692f1359860e4db5510fa2b0b8120ab31a5"
+  },
+  "nodeGroups": [],
+  "id": "kibvi8AOAeiKAFCP",
+  "tags": []
+}
