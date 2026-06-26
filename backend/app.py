@@ -389,9 +389,7 @@ def dashboard_summary():
 
 @app.route('/')
 def dashboard():
-    return ("<h1>Human Firewall Lite Dashboard</h1>"
-            "<p>UI Dashboard dengan Chart.js akan dibangun di sini, "
-            "menarik data dari /api/dashboard-summary dan /api/incidents.</p>")
+    return render_template('dashboard.html')
 
 
 @app.route('/health')

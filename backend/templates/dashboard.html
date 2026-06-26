@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Human Firewall Lite — SOC Dashboard</title>
+<meta name="description" content="Security Operations Center dashboard for Human Firewall Lite phishing simulation platform.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  /* ── Reset & Base ─────────────────────────────────────── */
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg-deep:     #060a13;
+    --bg-base:     #0b1120;
+    --bg-surface:  #111a2e;
+    --bg-elevated: #162036;
+    --border:      rgba(99, 102, 241, 0.12);
+    --border-hover:rgba(99, 102, 241, 0.3);
+    --accent:      #818cf8;
+    --accent-dim:  #6366f1;
+    --text-primary:#f1f5f9;
+    --text-secondary:#94a3b8;
+    --text-muted:  #475569;
+    --success:     #34d399;
+    --warning:     #fbbf24;
+    --danger:      #f87171;
+    --info:        #60a5fa;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Ambient Background ───────────────────────────────── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 10% 20%, rgba(99,102,241,0.06), transparent 60%),
+      radial-gradient(ellipse 60% 50% at 90% 80%, rgba(52,211,153,0.04), transparent 50%),
+      radial-gradient(ellipse 70% 40% at 50% 0%,  rgba(96,165,250,0.04), transparent 50%);
+    pointer-events: none;
+  }
+
+  /* ── Layout Shell ─────────────────────────────────────── */
+  .app { position: relative; z-index: 1; }
+
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 32px;
+    background: rgba(11,17,32,0.8);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 100;
+  }
+
+  .topbar-brand {
+    display: flex; align-items: center; gap: 12px;
+  }
+
+  .topbar-logo {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent-dim), var(--accent));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 20px rgba(99,102,241,0.25);
+  }
+
+  .topbar-logo svg { width: 20px; height: 20px; }
+
+  .topbar-title {
+    font-size: 16px; font-weight: 700;
+    letter-spacing: -0.3px;
+    background: linear-gradient(135deg, var(--text-primary), var(--accent));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .topbar-right {
+    display: flex; align-items: center; gap: 20px;
+  }
+
+  .live-indicator {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 500; color: var(--text-secondary);
+  }
+
+  .live-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 8px var(--success);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--success); }
+    50%      { opacity: 0.5; box-shadow: 0 0 16px var(--success); }
+  }
+
+  .clock {
+    font-size: 13px; font-weight: 500; color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Main Content ─────────────────────────────────────── */
+  .main {
+    max-width: 1360px;
+    margin: 0 auto;
+    padding: 28px 32px 48px;
+  }
+
+  .page-header {
+    margin-bottom: 28px;
+  }
+
+  .page-header h1 {
+    font-size: 24px; font-weight: 800;
+    letter-spacing: -0.5px;
+    margin-bottom: 6px;
+  }
+
+  .page-header p {
+    font-size: 14px; color: var(--text-secondary);
+    line-height: 1.5;
+  }
+
+  /* ── KPI Cards Grid ───────────────────────────────────── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+    margin-bottom: 24px;
+  }
+
+  .kpi-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 22px 24px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.3s, transform 0.2s, box-shadow 0.3s;
+  }
+
+  .kpi-card:hover {
+    border-color: var(--border-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  }
+
+  .kpi-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .kpi-card.accent-indigo::before  { background: linear-gradient(90deg, var(--accent-dim), var(--accent)); }
+  .kpi-card.accent-red::before     { background: linear-gradient(90deg, #dc2626, var(--danger)); }
+  .kpi-card.accent-amber::before   { background: linear-gradient(90deg, #d97706, var(--warning)); }
+  .kpi-card.accent-emerald::before { background: linear-gradient(90deg, #059669, var(--success)); }
+
+  .kpi-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 14px;
+  }
+
+  .kpi-icon.indigo  { background: rgba(99,102,241,0.12); color: var(--accent); }
+  .kpi-icon.red     { background: rgba(248,113,113,0.12); color: var(--danger); }
+  .kpi-icon.amber   { background: rgba(251,191,36,0.12);  color: var(--warning); }
+  .kpi-icon.emerald { background: rgba(52,211,153,0.12);  color: var(--success); }
+
+  .kpi-icon svg { width: 20px; height: 20px; }
+
+  .kpi-value {
+    font-size: 32px; font-weight: 800;
+    letter-spacing: -1px;
+    line-height: 1;
+    margin-bottom: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .kpi-label {
+    font-size: 13px; font-weight: 500;
+    color: var(--text-secondary);
+  }
+
+  /* ── Charts Grid ──────────────────────────────────────── */
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr;
+    gap: 18px;
+    margin-bottom: 24px;
+  }
+
+  .chart-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    transition: border-color 0.3s;
+  }
+
+  .chart-card:hover { border-color: var(--border-hover); }
+
+  .chart-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 20px;
+  }
+
+  .chart-title {
+    font-size: 15px; font-weight: 600;
+    letter-spacing: -0.2px;
+  }
+
+  .chart-badge {
+    font-size: 11px; font-weight: 600;
+    padding: 4px 10px; border-radius: 20px;
+    background: rgba(99,102,241,0.12);
+    color: var(--accent);
+  }
+
+  .chart-container { position: relative; }
+  .chart-container.bar-chart { height: 260px; }
+  .chart-container.doughnut-chart {
+    height: 240px;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* ── Incidents Table ──────────────────────────────────── */
+  .table-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    transition: border-color 0.3s;
+  }
+
+  .table-card:hover { border-color: var(--border-hover); }
+
+  .table-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .table-title {
+    font-size: 15px; font-weight: 600;
+    letter-spacing: -0.2px;
+  }
+
+  .table-count {
+    font-size: 12px; font-weight: 600;
+    padding: 3px 10px; border-radius: 20px;
+    background: rgba(248,113,113,0.12);
+    color: var(--danger);
+  }
+
+  .table-wrapper { overflow-x: auto; }
+
+  table {
+    width: 100%; border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  thead th {
+    text-align: left;
+    padding: 12px 20px;
+    font-weight: 600; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--text-muted);
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  tbody td {
+    padding: 14px 20px;
+    border-bottom: 1px solid rgba(99,102,241,0.06);
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  tbody tr { transition: background 0.15s; }
+  tbody tr:hover { background: rgba(99,102,241,0.04); }
+  tbody tr:last-child td { border-bottom: none; }
+
+  .ticket-id {
+    font-weight: 600; color: var(--accent);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+  }
+
+  /* ── Badges ───────────────────────────────────────────── */
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 20px;
+    font-size: 11px; font-weight: 600;
+    text-transform: capitalize;
+  }
+
+  .badge-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+  }
+
+  .badge-low      { background: rgba(96,165,250,0.12);  color: var(--info); }
+  .badge-low .badge-dot      { background: var(--info); }
+  .badge-medium   { background: rgba(251,191,36,0.12);  color: var(--warning); }
+  .badge-medium .badge-dot   { background: var(--warning); }
+  .badge-high     { background: rgba(248,113,113,0.12); color: var(--danger); }
+  .badge-high .badge-dot     { background: var(--danger); }
+
+  .badge-open     { background: rgba(52,211,153,0.12);  color: var(--success); }
+  .badge-open .badge-dot     { background: var(--success); }
+  .badge-closed   { background: rgba(148,163,184,0.12); color: var(--text-muted); }
+  .badge-closed .badge-dot   { background: var(--text-muted); }
+
+  .badge-sim      { background: rgba(99,102,241,0.12);  color: var(--accent); }
+  .badge-real     { background: rgba(248,113,113,0.12); color: var(--danger); }
+
+  /* ── Empty State ──────────────────────────────────────── */
+  .empty-state {
+    text-align: center; padding: 48px 24px;
+    color: var(--text-muted);
+  }
+
+  .empty-state svg { width: 48px; height: 48px; margin-bottom: 16px; opacity: 0.4; }
+
+  .empty-state p {
+    font-size: 13px; line-height: 1.6;
+  }
+
+  /* ── Loading Skeleton ─────────────────────────────────── */
+  .skeleton {
+    background: linear-gradient(90deg, var(--bg-elevated) 25%, rgba(99,102,241,0.08) 50%, var(--bg-elevated) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+    border-radius: 8px;
+  }
+
+  @keyframes shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* ── Fade-in Animation ────────────────────────────────── */
+  .fade-in {
+    animation: fadeUp 0.5s ease-out both;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .kpi-grid .kpi-card:nth-child(1) { animation-delay: 0.05s; }
+  .kpi-grid .kpi-card:nth-child(2) { animation-delay: 0.10s; }
+  .kpi-grid .kpi-card:nth-child(3) { animation-delay: 0.15s; }
+  .kpi-grid .kpi-card:nth-child(4) { animation-delay: 0.20s; }
+  .charts-grid .chart-card:nth-child(1) { animation-delay: 0.25s; }
+  .charts-grid .chart-card:nth-child(2) { animation-delay: 0.30s; }
+  .table-card { animation-delay: 0.35s; }
+
+  /* ── Footer ───────────────────────────────────────────── */
+  .footer {
+    text-align: center;
+    padding: 32px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .footer a { color: var(--accent); text-decoration: none; }
+  .footer a:hover { text-decoration: underline; }
+
+  /* ── Responsive ───────────────────────────────────────── */
+  @media (max-width: 1100px) {
+    .charts-grid { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 900px) {
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .main { padding: 20px 16px 40px; }
+    .topbar { padding: 14px 16px; }
+  }
+
+  @media (max-width: 540px) {
+    .kpi-grid { grid-template-columns: 1fr; }
+    .page-header h1 { font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- ── Top Bar ──────────────────────────────────────── -->
+  <header class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </div>
+      <span class="topbar-title">Human Firewall Lite</span>
+    </div>
+    <div class="topbar-right">
+      <div class="live-indicator">
+        <span class="live-dot"></span>
+        <span>Live</span>
+      </div>
+      <span class="clock" id="clock">--:--:--</span>
+    </div>
+  </header>
+
+  <!-- ── Main Content ─────────────────────────────────── -->
+  <main class="main">
+    <div class="page-header fade-in">
+      <h1>Security Operations Dashboard</h1>
+      <p>Monitoring simulasi phishing, skor risiko divisi, dan insiden keamanan secara real-time.</p>
+    </div>
+
+    <!-- KPI Cards -->
+    <section class="kpi-grid" id="kpi-grid">
+      <div class="kpi-card accent-indigo fade-in">
+        <div class="kpi-icon indigo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
+          </svg>
+        </div>
+        <div class="kpi-value" id="kpi-users">—</div>
+        <div class="kpi-label">Users Terpantau</div>
+      </div>
+
+      <div class="kpi-card accent-red fade-in">
+        <div class="kpi-icon red">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/>
+            <polyline points="10 17 15 12 10 7"/>
+            <line x1="15" y1="12" x2="3" y2="12"/>
+          </svg>
+        </div>
+        <div class="kpi-value" id="kpi-clicks">—</div>
+        <div class="kpi-label">Total Klik Phishing</div>
+      </div>
+
+      <div class="kpi-card accent-amber fade-in">
+        <div class="kpi-icon amber">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="12" y1="18" x2="12" y2="12"/>
+            <line x1="9" y1="15" x2="15" y2="15"/>
+          </svg>
+        </div>
+        <div class="kpi-value" id="kpi-incidents">—</div>
+        <div class="kpi-label">Insiden Terbuka</div>
+      </div>
+
+      <div class="kpi-card accent-emerald fade-in">
+        <div class="kpi-icon emerald">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+        </div>
+        <div class="kpi-value" id="kpi-mttc">—</div>
+        <div class="kpi-label">Rata-rata Resolusi</div>
+      </div>
+    </section>
+
+    <!-- Charts -->
+    <section class="charts-grid">
+      <div class="chart-card fade-in">
+        <div class="chart-header">
+          <span class="chart-title">Human Risk Score per Divisi</span>
+          <span class="chart-badge">Skor 0–100</span>
+        </div>
+        <div class="chart-container bar-chart">
+          <canvas id="riskChart"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card fade-in">
+        <div class="chart-header">
+          <span class="chart-title">Distribusi Severity Insiden</span>
+          <span class="chart-badge" id="severity-total">0 tiket</span>
+        </div>
+        <div class="chart-container doughnut-chart">
+          <canvas id="severityChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- Incidents Table -->
+    <section class="table-card fade-in">
+      <div class="table-header">
+        <span class="table-title">Insiden Terbaru</span>
+        <span class="table-count" id="table-count">0 open</span>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Ticket ID</th>
+              <th>Sumber</th>
+              <th>Divisi</th>
+              <th>Severity</th>
+              <th>Status</th>
+              <th>Dibuat</th>
+            </tr>
+          </thead>
+          <tbody id="incidents-tbody">
+            <tr class="empty-row">
+              <td colspan="6">
+                <div class="empty-state">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                  </svg>
+                  <p>Memuat data insiden...</p>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    Human Firewall Lite &middot; Security Awareness Platform &middot;
+    Data refresh otomatis setiap <strong>30 detik</strong>
+  </footer>
+</div>
+
+<script>
+// ── Utilities ──────────────────────────────────────────────
+function animateValue(el, target, suffix = '') {
+  const duration = 800;
+  const start = performance.now();
+  const from = 0;
+
+  function update(now) {
+    const elapsed = now - start;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3); // easeOutCubic
+    const current = Math.round(from + (target - from) * eased);
+    el.textContent = current + suffix;
+    if (progress < 1) requestAnimationFrame(update);
+  }
+
+  if (target === 0) { el.textContent = '0' + suffix; return; }
+  requestAnimationFrame(update);
+}
+
+function formatDate(isoStr) {
+  if (!isoStr) return '—';
+  const d = new Date(isoStr);
+  const day = d.getDate().toString().padStart(2, '0');
+  const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  const mon = months[d.getMonth()];
+  const h = d.getHours().toString().padStart(2, '0');
+  const m = d.getMinutes().toString().padStart(2, '0');
+  return `${day} ${mon}, ${h}:${m}`;
+}
+
+function sourceLabel(type) {
+  return type === 'simulation' ? 'Simulasi' : 'Real Threat';
+}
+
+function sourceBadgeClass(type) {
+  return type === 'simulation' ? 'badge-sim' : 'badge-real';
+}
+
+// ── Clock ──────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── Chart Instances (global for updates) ───────────────────
+let riskChartInstance = null;
+let severityChartInstance = null;
+
+// ── Chart.js Global Config ─────────────────────────────────
+Chart.defaults.font.family = "'Inter', sans-serif";
+Chart.defaults.color = '#94a3b8';
+
+// ── Risk Score Color ───────────────────────────────────────
+function riskColor(score) {
+  if (score >= 80) return { bg: 'rgba(52,211,153,0.75)',  border: '#34d399' };
+  if (score >= 50) return { bg: 'rgba(251,191,36,0.75)',  border: '#fbbf24' };
+  return                   { bg: 'rgba(248,113,113,0.75)', border: '#f87171' };
+}
+
+// ── Render Risk Score Chart ────────────────────────────────
+function renderRiskChart(divisiScores) {
+  const ctx = document.getElementById('riskChart').getContext('2d');
+
+  const labels = divisiScores.map(d => d.divisi);
+  const data   = divisiScores.map(d => d.human_risk_score);
+  const bgColors     = data.map(s => riskColor(s).bg);
+  const borderColors = data.map(s => riskColor(s).border);
+
+  if (riskChartInstance) riskChartInstance.destroy();
+
+  riskChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Risk Score',
+        data,
+        backgroundColor: bgColors,
+        borderColor: borderColors,
+        borderWidth: 1.5,
+        borderRadius: 6,
+        borderSkipped: false,
+        barPercentage: 0.55,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          min: 0, max: 100,
+          grid: { color: 'rgba(99,102,241,0.06)', drawBorder: false },
+          ticks: { font: { size: 11, weight: '500' } }
+        },
+        y: {
+          grid: { display: false },
+          ticks: { font: { size: 12, weight: '500' }, color: '#e2e8f0' }
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1e293b',
+          titleFont: { weight: '600' },
+          bodyFont: { size: 13 },
+          padding: 12,
+          borderColor: 'rgba(99,102,241,0.2)',
+          borderWidth: 1,
+          cornerRadius: 10,
+          callbacks: {
+            label: (ctx) => ` Skor: ${ctx.parsed.x}/100`
+          }
+        }
+      },
+      animation: { duration: 900, easing: 'easeOutQuart' }
+    }
+  });
+}
+
+// ── Render Severity Doughnut ───────────────────────────────
+function renderSeverityChart(incidents) {
+  const ctx = document.getElementById('severityChart').getContext('2d');
+
+  const counts = { low: 0, medium: 0, high: 0 };
+  incidents.forEach(inc => {
+    if (counts.hasOwnProperty(inc.severity)) counts[inc.severity]++;
+  });
+
+  const total = counts.low + counts.medium + counts.high;
+  document.getElementById('severity-total').textContent = total + ' tiket';
+
+  if (severityChartInstance) severityChartInstance.destroy();
+
+  if (total === 0) {
+    // Draw empty state
+    severityChartInstance = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Belum ada data'],
+        datasets: [{
+          data: [1],
+          backgroundColor: ['rgba(71,85,105,0.2)'],
+          borderWidth: 0,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        cutout: '72%',
+        plugins: {
+          legend: { display: false },
+          tooltip: { enabled: false }
+        }
+      }
+    });
+    return;
+  }
+
+  severityChartInstance = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Low', 'Medium', 'High'],
+      datasets: [{
+        data: [counts.low, counts.medium, counts.high],
+        backgroundColor: [
+          'rgba(96,165,250,0.8)',
+          'rgba(251,191,36,0.8)',
+          'rgba(248,113,113,0.8)',
+        ],
+        borderColor: [
+          'rgba(96,165,250,1)',
+          'rgba(251,191,36,1)',
+          'rgba(248,113,113,1)',
+        ],
+        borderWidth: 2,
+        hoverOffset: 6,
+        spacing: 3,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '72%',
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            padding: 16,
+            usePointStyle: true,
+            pointStyle: 'circle',
+            font: { size: 12, weight: '500' },
+          }
+        },
+        tooltip: {
+          backgroundColor: '#1e293b',
+          bodyFont: { size: 13 },
+          padding: 12,
+          borderColor: 'rgba(99,102,241,0.2)',
+          borderWidth: 1,
+          cornerRadius: 10,
+          callbacks: {
+            label: (ctx) => ` ${ctx.label}: ${ctx.parsed} tiket`
+          }
+        }
+      },
+      animation: { animateRotate: true, duration: 900 }
+    }
+  });
+}
+
+// ── Render Incidents Table ─────────────────────────────────
+function renderIncidentsTable(incidents) {
+  const tbody = document.getElementById('incidents-tbody');
+  const openCount = incidents.filter(i => i.status === 'open').length;
+  document.getElementById('table-count').textContent = openCount + ' open';
+
+  if (incidents.length === 0) {
+    tbody.innerHTML = `
+      <tr><td colspan="6">
+        <div class="empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M8 15h0"/><path d="M16 15h0"/>
+            <path d="M9.5 9 10 9"/><path d="M14 9l.5 0"/>
+            <path d="M9 12h6"/>
+          </svg>
+          <p>Belum ada insiden tercatat.<br>Jalankan simulasi phishing untuk menghasilkan data.</p>
+        </div>
+      </td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = incidents.map(inc => `
+    <tr>
+      <td><span class="ticket-id">${inc.ticket_id}</span></td>
+      <td><span class="badge ${sourceBadgeClass(inc.source_type)}">${sourceLabel(inc.source_type)}</span></td>
+      <td>${inc.divisi || '—'}</td>
+      <td><span class="badge badge-${inc.severity}"><span class="badge-dot"></span>${inc.severity}</span></td>
+      <td><span class="badge badge-${inc.status}"><span class="badge-dot"></span>${inc.status}</span></td>
+      <td>${formatDate(inc.created_at)}</td>
+    </tr>
+  `).join('');
+}
+
+// ── Fetch & Render All ─────────────────────────────────────
+let isFirstLoad = true;
+
+async function loadDashboard() {
+  try {
+    const [summaryRes, incidentsRes] = await Promise.all([
+      fetch('/api/dashboard-summary'),
+      fetch('/api/incidents')
+    ]);
+
+    const summary   = await summaryRes.json();
+    const incData   = await incidentsRes.json();
+    const incidents = incData.incidents || [];
+
+    // KPIs
+    const totalUsers  = summary.divisi_scores.reduce((s, d) => s + d.total_users, 0);
+    const totalClicks = summary.divisi_scores.reduce((s, d) => s + d.total_clicks, 0);
+    const openInc     = incidents.filter(i => i.status === 'open').length;
+    const mttc        = summary.mean_time_to_close_minutes;
+
+    if (isFirstLoad) {
+      animateValue(document.getElementById('kpi-users'), totalUsers);
+      animateValue(document.getElementById('kpi-clicks'), totalClicks);
+      animateValue(document.getElementById('kpi-incidents'), openInc);
+      if (mttc !== null && mttc !== undefined) {
+        animateValue(document.getElementById('kpi-mttc'), Math.round(mttc), ' min');
+      } else {
+        document.getElementById('kpi-mttc').textContent = '—';
+      }
+      isFirstLoad = false;
+    } else {
+      document.getElementById('kpi-users').textContent = totalUsers;
+      document.getElementById('kpi-clicks').textContent = totalClicks;
+      document.getElementById('kpi-incidents').textContent = openInc;
+      document.getElementById('kpi-mttc').textContent = mttc !== null ? Math.round(mttc) + ' min' : '—';
+    }
+
+    // Charts
+    if (summary.divisi_scores.length > 0) {
+      renderRiskChart(summary.divisi_scores);
+    } else {
+      renderRiskChart([{ divisi: 'Belum ada data', human_risk_score: 0 }]);
+    }
+
+    renderSeverityChart(incidents);
+
+    // Table
+    renderIncidentsTable(incidents);
+
+  } catch (err) {
+    console.error('Dashboard fetch error:', err);
+  }
+}
+
+// Initial load
+loadDashboard();
+
+// Auto-refresh every 30 seconds
+setInterval(loadDashboard, 30000);
+</script>
+
+</body>
+</html>
