@@ -1,0 +1,74 @@
+services:
+  # 1. ORCHESTRATOR LAYER
+  n8n:
+    image: docker.n8n.io/n8nio/n8n
+    container_name: hfl-n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - NODE_ENV=production
+      - WEBHOOK_URL=http://localhost:5678/
+      - GENERIC_TIMEZONE=Asia/Jakarta
+      - NODE_OPTIONS=--dns-result-order=ipv4first
+    volumes:
+      - n8n_data:/home/node/.n8n
+    restart: unless-stopped
+    depends_on:
+      - flask_api
+    networks:
+      - hfl_network
+
+  # 2. SIMULATION LAYER
+  # Catatan: admin panel GoPhish default pakai HTTPS (self-signed cert) di
+  # port 3333. Akses via https://localhost:3333 (browser akan warning
+  # certificate tidak trusted, itu normal untuk self-signed, klik "lanjutkan").
+  gophish:
+    build: ./gophish
+    container_name: hfl-gophish
+    ports:
+      - "3333:3333"   # Admin Panel (HTTPS)
+      - "8080:80"      # Phishing Server (Landing Pages) - dipindah ke 8080
+                        # supaya tidak konflik dengan service lain yang
+                        # mungkin sudah pakai port 80 di laptop
+    volumes:
+      - ./gophish/config.json:/opt/gophish/config.json
+      - gophish_data:/opt/gophish/database
+      # config.json di-override supaya db_path mengarah ke subfolder
+      # "database/" yang kita mount sebagai volume bernama gophish_data.
+      # GoPhish TIDAK punya environment variable untuk override db_path
+      # (sudah dicek di dokumentasi resmi & beberapa proyek docker-compose
+      # komunitas) — env var yang didukung resmi hanya untuk admin/phish
+      # server listen_url, TLS, dan contact_address. Override config.json
+      # adalah satu-satunya cara yang terkonfirmasi benar untuk ini.
+    restart: unless-stopped
+    networks:
+      - hfl_network
+
+  # 3. ANALYTICS & DASHBOARD LAYER
+  flask_api:
+    build: ./backend
+    container_name: hfl-flask
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app           # Live-reload pas development
+      - flask_db:/app/instance   # Persistence SQLite Flask
+    environment:
+      - FLASK_APP=app.py
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+    restart: unless-stopped
+    networks:
+      - hfl_network
+
+volumes:
+  n8n_data:
+  gophish_data:
+  flask_db:
+
+networks:
+  hfl_network:
+    driver: bridge

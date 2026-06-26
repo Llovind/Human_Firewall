@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Simulasi Keamanan</title>
+<style>
+  body { font-family: Arial, sans-serif; background: #f4f6f8; margin: 0; padding: 0; }
+  .container { max-width: 600px; margin: 40px auto; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+  .header { background: #d32f2f; color: #fff; padding: 24px; text-align: center; }
+  .header h1 { margin: 0; font-size: 22px; }
+  .content { padding: 24px; color: #333; line-height: 1.6; }
+  .redflag-box { background: #fff8e1; border-left: 4px solid #f9a825; padding: 12px 16px; margin: 16px 0; border-radius: 4px; }
+  .redflag-box ul { margin: 8px 0 0 0; padding-left: 20px; }
+  .learn-box { background: #e3f2fd; border-left: 4px solid #1976d2; padding: 12px 16px; margin: 16px 0; border-radius: 4px; }
+  .btn { display: block; width: 100%; background: #2e7d32; color: #fff; text-align: center; padding: 14px; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 20px; }
+  .btn:hover { background: #1b5e20; }
+  .btn:disabled { background: #666; cursor: default; }
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>⚠️ Ini adalah Simulasi</h1>
+      <p>Tidak ada ancaman nyata. Ini bagian dari program Security Awareness.</p>
+    </div>
+    <div class="content">
+      <p>Email yang Anda klik tadi adalah simulasi phishing, bukan ancaman asli. Tidak ada data Anda yang terkirim.</p>
+
+       <div class="redflag-box" style="background:#ede7f6;border-left:4px solid #5e35b1;">
+        __HISTORY_NOTE__
+       </div>
+
+      <div class="redflag-box">
+        <strong>🚩 Tanda-tanda yang seharusnya dicurigai dari email tadi:</strong>
+        <ul>
+          <li>Bahasa urgensi berlebihan ("24 jam", "dibatasi otomatis")</li>
+          <li>Sapaan generik ("Yth. Karyawan", bukan nama Anda)</li>
+          <li>Pengirim tidak personal ("IT Security Division" tanpa nama jelas)</li>
+          <li>Meminta klik segera tanpa verifikasi melalui jalur resmi</li>
+        </ul>
+      </div>
+
+      <div class="learn-box">
+        <strong>💡 Yang sebaiknya dilakukan:</strong>
+        <p>Jika ragu terhadap email serupa, jangan klik tautan apa pun. Laporkan ke tim IT melalui jalur resmi (Telegram Bot/helpdesk) untuk verifikasi sebelum bertindak.</p>
+      </div>
+
+      <button class="btn" id="ack-btn" onclick="markDone()">Saya Mengerti</button>
+    </div>
+  </div>
+
+<script>
+  // Email diselipkan oleh Flask saat render template (lihat app.py),
+  // dipakai untuk mengirim event 'viewed_training' atau 'skipped_training'
+  // ke Flask sendiri (BUKAN ke n8n langsung - tetap mengikuti prinsip
+  // "Flask = satu-satunya pintu ke database").
+  const USER_EMAIL = "__USER_EMAIL__";
+  let trainingMarked = false;
+
+  function markDone() {
+    trainingMarked = true;
+    document.getElementById('ack-btn').innerText = '✓ Tercatat, Terima Kasih';
+    document.getElementById('ack-btn').disabled = true;
+
+    fetch('/api/event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: USER_EMAIL, event_type: 'viewed_training' })
+    }).catch(() => {
+      // Gagal kirim diam-diam tidak masalah untuk MVP - user tetap
+      // melihat konfirmasi visual, training tetap "dianggap selesai"
+      // dari sisi UX walau pencatatan skor terlewat.
+    });
+  }
+
+  // Kalau user menutup tab TANPA klik "Saya Mengerti", catat sebagai
+  // skipped_training. beforeunload + fetch dengan keepalive supaya
+  // request tetap terkirim walau halaman sedang ditutup.
+  window.addEventListener('beforeunload', () => {
+    if (!trainingMarked) {
+      fetch('/api/event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: USER_EMAIL, event_type: 'skipped_training' }),
+        keepalive: true
+      });
+    }
+  });
+</script>
+</body>
+</html>
