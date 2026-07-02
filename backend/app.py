@@ -143,6 +143,7 @@ def redirect_handler():
     # None ke record_event, yang sebelumnya menyebabkan INSERT OR IGNORE
     # gagal diam-diam karena kolom divisi adalah NOT NULL.
     divisi = history.get("divisi") or derive_divisi_from_email(email)
+    telegram_chat_id = history.get("telegram_chat_id")
 
     # Catat event 'clicked_link' SEBELUM render halaman, supaya
     # click_count yang dipakai untuk klasifikasi tier BERIKUTNYA sudah
@@ -172,6 +173,7 @@ def redirect_handler():
         "tier": tier,
         "event_type": "clicked_link",
         "click_count_after": history["click_count"] + 1,
+        "telegram_chat_id": telegram_chat_id,
         "submitted_data": False
     })
 
@@ -224,6 +226,7 @@ def fake_login_submit():
         "tier": database.classify_tier(history["click_count"]),
         "event_type": "submitted_data",
         "click_count_after": history["click_count"],
+        "telegram_chat_id": history.get("telegram_chat_id"),
         "submitted_data": True
     })
 
@@ -289,6 +292,85 @@ def save_event():
                      "event_type": event_type}), 201
 
 
+@app.route('/api/register-telegram', methods=['POST'])
+def register_telegram():
+    """Endpoint untuk mendaftarkan telegram_chat_id ke email karyawan."""
+    data = request.get_json(silent=True)
+    if not data or not data.get('email') or not data.get('telegram_chat_id'):
+        return jsonify({"error": "field 'email' dan 'telegram_chat_id' wajib diisi"}), 400
+
+    email = data['email']
+    telegram_chat_id = str(data['telegram_chat_id'])
+
+    try:
+        database.update_user_telegram_chat_id(email, telegram_chat_id)
+        return jsonify({"message": "Pendaftaran Telegram sukses", "email": email, "telegram_chat_id": telegram_chat_id}), 200
+    except Exception as e:
+        return jsonify({"error": "Gagal mendaftarkan Telegram", "detail": str(e)}), 500
+
+
+@app.route('/api/otp/create', methods=['POST'])
+def create_otp():
+    """Endpoint untuk membuat kode OTP baru."""
+    data = request.get_json(silent=True)
+    if not data or not data.get('email') or not data.get('telegram_chat_id') or not data.get('otp_code'):
+        return jsonify({"error": "fields 'email', 'telegram_chat_id', and 'otp_code' are required"}), 400
+
+    email = data['email']
+    telegram_chat_id = str(data['telegram_chat_id'])
+    otp_code = str(data['otp_code'])
+
+    try:
+        # 1. Simpan OTP ke database
+        database.create_otp(email, telegram_chat_id, otp_code)
+        
+        # 2. Kirim email tiruan ke Mock Webmail secara lokal
+        subject = "Human Firewall — Kode Verifikasi OTP Telegram"
+        body = (
+            f"Halo Karyawan Infranexia,<br><br>"
+            f"Kami menerima permintaan verifikasi akun Telegram Anda untuk platform Human Firewall.<br>"
+            f"Kode OTP Anda adalah: <b>{otp_code}</b><br><br>"
+            f"Masukkan kode di atas pada chat bot Telegram untuk menyelesaikan pendaftaran.<br>"
+            f"Kode ini berlaku selama 15 menit.<br><br>"
+            f"Salam hangat,<br><b>Tim IT Security Infranexia</b>"
+        )
+        database.create_inbox_email(email, subject, body)
+        
+        return jsonify({"message": "OTP created and email logged successfully"}), 201
+    except Exception as e:
+        return jsonify({"error": "Gagal membuat OTP", "detail": str(e)}), 500
+
+
+@app.route('/api/otp/verify', methods=['POST'])
+def verify_otp():
+    """Endpoint untuk memverifikasi kode OTP."""
+    data = request.get_json(silent=True)
+    if not data or not data.get('telegram_chat_id') or not data.get('otp_code'):
+        return jsonify({"error": "fields 'telegram_chat_id' and 'otp_code' are required"}), 400
+
+    telegram_chat_id = str(data['telegram_chat_id'])
+    otp_code = str(data['otp_code'])
+
+    try:
+        email = database.verify_otp(telegram_chat_id, otp_code)
+        if email:
+            return jsonify({"status": "success", "message": "Verification successful", "email": email}), 200
+        else:
+            return jsonify({"status": "fail", "error": "Kode OTP salah atau kedaluwarsa"}), 400
+    except Exception as e:
+        return jsonify({"error": "Gagal memverifikasi OTP", "detail": str(e)}), 500
+
+
+@app.route('/api/emails', methods=['GET'])
+def list_emails():
+    """Mendapatkan daftar semua email tiruan untuk webmail."""
+    try:
+        emails = database.list_inbox_emails()
+        return jsonify({"status": "success", "emails": emails, "count": len(emails)}), 200
+    except Exception as e:
+        return jsonify({"error": "Gagal mengambil inbox", "detail": str(e)}), 500
+
+
 # ---------------------------------------------------------------------------
 # INCIDENTS — dipakai DUA mode: simulation (Flow A eskalasi, dipanggil n8n
 # setelah menerima webhook dari notify_n8n di atas) dan real_world_report
@@ -332,7 +414,9 @@ def create_incident():
             vt_verdict=data.get('vt_verdict'),
             urlscan_verdict=data.get('urlscan_verdict'),
             screenshot_url=data.get('screenshot_url'),
-            checklist=data.get('checklist')
+            checklist=data.get('checklist'),
+            file_hash=data.get('file_hash'),
+            original_filename=data.get('original_filename')
         )
     except ValueError as e:
         return jsonify({"error": str(e)}), 400

@@ -10,7 +10,7 @@ services:
       - N8N_PORT=5678
       - N8N_PROTOCOL=http
       - NODE_ENV=production
-      - WEBHOOK_URL=http://localhost:5678/
+      - WEBHOOK_URL=https://ropge-114-10-45-156.run.pinggy-free.link
       - GENERIC_TIMEZONE=Asia/Jakarta
       - NODE_OPTIONS=--dns-result-order=ipv4first
     volumes:

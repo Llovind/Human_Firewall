@@ -19,7 +19,7 @@
     },
     {
       "parameters": {
-        "chatId": "2019216831",
+        "chatId": "-1003979650342",
         "text": "=🚨 CHRONIC CLICKER ALERT\n\n👤 {{ $json.body.email }}\n🏢 {{ $json.body.divisi }}\n📊 Klik ke-{{ $json.body.click_count_after }}\n\nUser ini sudah {{ $json.body.click_count_after }} kali gagal mengenali simulasi phishing.\n\nPertimbangkan eskalasi ke atasan langsung untuk mandatory security training.",
         "additionalFields": {
           "appendAttribution": false
@@ -92,6 +92,30 @@
               },
               "renameOutput": true,
               "outputKey": "Incident"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "clicked-link-cond-id",
+                    "leftValue": "={{ $json.body.event_type }}",
+                    "rightValue": "clicked_link",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "User Click"
             }
           ]
         },
@@ -129,7 +153,7 @@
     },
     {
       "parameters": {
-        "chatId": "2019216831",
+        "chatId": "-1003979650342",
         "text": "=🎫 INCIDENT — CREDENTIAL SUBMISSION\n\n📋 {{ $json.ticket_id }}\n👤 {{ $('Switch').item.json.body.email }}\n🏢 {{ $('Switch').item.json.body.divisi }}\n⚠️ Severity: {{ $json.severity }}\n\nUser mengisi kredensial di halaman fake login simulasi.\n\nIncident ticket otomatis dibuat dan tercatat di sistem.",
         "additionalFields": {
           "appendAttribution": false
@@ -150,6 +174,31 @@
           "name": "Telegram account 2"
         }
       }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.body.telegram_chat_id }}",
+        "text": "=⚠️ <b>Anda baru saja mengklik tautan simulasi phishing.</b>\n\nJangan khawatir, ini adalah bagian dari latihan keamanan berkala untuk karyawan <b>Infranexia</b>.\n\nTetap tenang dan silakan baca panduan di halaman edukasi yang terbuka di browser Anda untuk mengenali ciri-ciri email serupa di masa depan! 🛡️\n\n<i>This message was sent automatically with n8n</i>",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        544,
+        -888
+      ],
+      "id": "user-click-alert-telegram-node-id",
+      "name": "User Click Alert",
+      "webhookId": "user-click-alert-webhook-id",
+      "credentials": {
+        "telegramApi": {
+          "id": "I44oUHC8lBGyDI79",
+          "name": "Telegram account 2"
+        }
+      },
+      "onError": "continueRegularOutput"
     }
   ],
   "pinData": {},
@@ -177,6 +226,13 @@
         [
           {
             "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "User Click Alert",
             "type": "main",
             "index": 0
           }

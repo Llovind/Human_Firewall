@@ -1,28 +1,33 @@
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.egg-info/
-
-# SQLite databases (persisted via Docker volumes, not source code)
+# SQLite Database
 backend/instance/
-gophish/database/
+*.db
+*.db-journal
 
-# GoPhish config — contains server-specific settings.
-# Clone users: copy gophish/config.json.example to gophish/config.json
-gophish/config.json
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 
-# Environment files (should never be committed)
+# Environment & Virtual Env
 .env
-.env.*
+venv/
+.venv/
+env/
 
-# OS
-Thumbs.db
-Desktop.ini
-.DS_Store
-
-# IDE
+# IDE files
 .vscode/
 .idea/
-*.swp
-*.swo
+*.backup
+*.tmp
+
+# Excluded project files
+n8n-workflows/flow-b.json
+Handoff.MD
+Handoff_Addendum.MD
+Handoff*.MD
+Progress_Report_*.docx
+User_Guide_*.docx
+~$*.docx
+update_flow_a.py
+update_flow_b_otp.py

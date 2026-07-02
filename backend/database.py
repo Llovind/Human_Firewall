@@ -47,6 +47,7 @@ def init_db():
             viewed_training_count INTEGER NOT NULL DEFAULT 0,
             skipped_training_count INTEGER NOT NULL DEFAULT 0,
             last_clicked TIMESTAMP,
+            telegram_chat_id TEXT,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -79,11 +80,48 @@ def init_db():
             urlscan_verdict TEXT,
             screenshot_url TEXT,
             checklist TEXT,
+            file_hash TEXT,
+            original_filename TEXT,
             status TEXT NOT NULL DEFAULT 'open',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             closed_at TIMESTAMP
         )
     ''')
+
+    # Tabel registration_otp — menyimpan kode OTP pendaftaran Telegram
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS registration_otp (
+            email TEXT NOT NULL,
+            telegram_chat_id TEXT NOT NULL,
+            otp_code TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # Tabel inbox_emails — menyimpan email tiruan untuk Mock Webmail
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS inbox_emails (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            to_email TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            body TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # Migration: tambah kolom Flow B jika belum ada (aman untuk DB existing,
+    # ALTER TABLE ADD COLUMN di SQLite tidak error-prone seperti di RDBMS lain).
+    for col in ['file_hash TEXT', 'original_filename TEXT']:
+        try:
+            cursor.execute(f'ALTER TABLE incidents ADD COLUMN {col}')
+        except sqlite3.OperationalError:
+            pass  # Kolom sudah ada
+
+    # Migration: tambah kolom telegram_chat_id jika belum ada
+    try:
+        cursor.execute('ALTER TABLE user_history ADD COLUMN telegram_chat_id TEXT')
+    except sqlite3.OperationalError:
+        pass
 
     conn.commit()
     conn.close()
@@ -111,6 +149,7 @@ def get_user_history(email: str):
             "viewed_training_count": 0,
             "skipped_training_count": 0,
             "last_clicked": None,
+            "telegram_chat_id": None,
             "is_new_user": True
         }
 
@@ -121,6 +160,7 @@ def get_user_history(email: str):
         "viewed_training_count": row["viewed_training_count"],
         "skipped_training_count": row["skipped_training_count"],
         "last_clicked": row["last_clicked"],
+        "telegram_chat_id": row["telegram_chat_id"],
         "is_new_user": False
     }
 
@@ -199,6 +239,117 @@ def record_event(email: str, divisi: str, event_type: str,
         conn.close()
 
 
+def update_user_telegram_chat_id(email: str, telegram_chat_id: str):
+    """Petakan telegram chat ID ke email user di user_history.
+    Jika user belum ada di database, kita buat record baru dengan divisi Default."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        # INSERT OR IGNORE biar aman kalau email belum terdaftar
+        cursor.execute('''
+            INSERT OR IGNORE INTO user_history (email, divisi, click_count)
+            VALUES (?, 'Unknown', 0)
+        ''', (email,))
+        
+        cursor.execute('''
+            UPDATE user_history
+            SET telegram_chat_id = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE email = ?
+        ''', (telegram_chat_id, email))
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def create_otp(email: str, telegram_chat_id: str, otp_code: str):
+    """Simpan kode OTP pendaftaran baru, hapus OTP lama jika ada."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        # Hapus OTP lama untuk email atau chat ID ini agar tidak menumpuk
+        cursor.execute('DELETE FROM registration_otp WHERE email = ? OR telegram_chat_id = ?', (email, telegram_chat_id))
+        
+        cursor.execute('''
+            INSERT INTO registration_otp (email, telegram_chat_id, otp_code)
+            VALUES (?, ?, ?)
+        ''', (email, telegram_chat_id, otp_code))
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def verify_otp(telegram_chat_id: str, otp_code: str):
+    """Verifikasi kecocokan OTP. Jika cocok, otomatis update telegram_chat_id
+    milik user di user_history dan hapus record OTP dari database."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        row = cursor.execute('''
+            SELECT * FROM registration_otp 
+            WHERE telegram_chat_id = ? AND otp_code = ?
+        ''', (telegram_chat_id, otp_code)).fetchone()
+        
+        if row is None:
+            return None
+        
+        email = row["email"]
+        
+        # Buat record default di user_history jika belum ada
+        cursor.execute('''
+            INSERT OR IGNORE INTO user_history (email, divisi, click_count)
+            VALUES (?, 'Unknown', 0)
+        ''', (email,))
+        
+        # Update chat ID Telegram user
+        cursor.execute('''
+            UPDATE user_history
+            SET telegram_chat_id = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE email = ?
+        ''', (telegram_chat_id, email))
+        
+        # Hapus OTP yang sudah terpakai
+        cursor.execute('DELETE FROM registration_otp WHERE email = ?', (email,))
+        conn.commit()
+        return email
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def create_inbox_email(to_email: str, subject: str, body: str):
+    """Simpan email tiruan baru ke database."""
+    conn = get_connection()
+    try:
+        conn.execute('''
+            INSERT INTO inbox_emails (to_email, subject, body)
+            VALUES (?, ?, ?)
+        ''', (to_email, subject, body))
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def list_inbox_emails():
+    """Ambil semua email tiruan dari database, urutkan dari yang terbaru."""
+    conn = get_connection()
+    try:
+        rows = conn.execute('SELECT * FROM inbox_emails ORDER BY created_at DESC').fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
 # ---------------------------------------------------------------------------
 # INCIDENTS (untuk Flow A eskalasi & Flow B report)
 # ---------------------------------------------------------------------------
@@ -206,7 +357,8 @@ def record_event(email: str, divisi: str, event_type: str,
 def create_incident(ticket_id: str, source_type: str, divisi: str,
                      severity: str = "low", reported_url: str = None,
                      vt_verdict: str = None, urlscan_verdict: str = None,
-                     screenshot_url: str = None, checklist: str = None):
+                     screenshot_url: str = None, checklist: str = None,
+                     file_hash: str = None, original_filename: str = None):
     """Buat incident ticket baru. source_type divalidasi di sini —
     kalau bukan 'simulation' atau 'real_world_report', request ditolak
     di layer route SEBELUM fungsi ini dipanggil (lihat app.py), tapi
@@ -227,10 +379,12 @@ def create_incident(ticket_id: str, source_type: str, divisi: str,
         conn.execute('''
             INSERT INTO incidents (
                 ticket_id, source_type, reported_url, divisi, severity,
-                vt_verdict, urlscan_verdict, screenshot_url, checklist, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')
+                vt_verdict, urlscan_verdict, screenshot_url, checklist,
+                file_hash, original_filename, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')
         ''', (ticket_id, source_type, reported_url, divisi, severity,
-              vt_verdict, urlscan_verdict, screenshot_url, checklist))
+              vt_verdict, urlscan_verdict, screenshot_url, checklist,
+              file_hash, original_filename))
         conn.commit()
     finally:
         conn.close()

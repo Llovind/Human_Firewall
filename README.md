@@ -1,165 +1,134 @@
-# Human_Firewall Lite
+# 🛡️ Human Firewall — Integrated Security Awareness & Threat Response Platform
 
-A **security awareness training platform** that simulates internal phishing attacks to vaccinate employees against social engineering threats.
+An enterprise-grade, interactive security awareness and automated threat intelligence platform. This solution orchestrates phishing simulations, delivers real-time educational interventions ("Teachable Moments"), and automates Threat Assessment & SOC Incident Ticketing using **Docker, Python (Flask), SQLite, n8n, and Telegram Bot API**.
 
-## What It Does
+---
 
-Human_Firewall Lite is not a passive monitoring or defense tool — it's an **active security awareness simulator** that:
+## 📐 System Architecture & Data Flow
 
-- 🎯 **Sends fake phishing emails** to employees to test their security awareness
-- 📊 **Measures vulnerability** — tracks who falls for the bait and who doesn't
-- 🧠 **Delivers instant education** — automatically educates users who click malicious links
-- ⚠️ **Escalates chronic clickers** — notifies security teams about repeated victims
-- 🛡️ **Crowdsources threat detection** — employees can report suspicious emails via Telegram, which are automatically verified using VirusTotal/urlscan.io
+### Flow A — Phishing Simulation Loop
+This workflow handles simulated attacks, employee education, and chronic offender tracking:
 
-## Architecture
-
-The platform consists of three containerized components:
-
-| Component | Role |
-|-----------|------|
-| **GoPhish** | Open-source phishing framework — sends simulated phishing emails with unique tracking links |
-| **Flask Backend** | Serves real-time education pages, logs all events, calculates Human Risk Score, generates incidents |
-| **n8n** | Orchestration engine — handles notifications, escalations, and Telegram integration |
-| **SQLite** | Single source of truth for all event data (employee clicks, training views, submissions) |
-
-## Quick Start
-
-### Prerequisites
-- Docker Desktop (Windows) with WSL2 backend
-- Or Docker Engine (Linux/Mac)
-
-### Setup & Run
-
-```bash
-# Clone the repository
-git clone https://github.com/Llovind/Human_Firewall.git
-cd Human_Firewall
-
-# Start all services
-docker compose up -d
-
-# Check container status
-docker compose ps
+```mermaid
+flowchart LR
+    GP["GoPhish Engine"] -->|1. Sends Email| Victim["Employee"]
+    Victim -->|2. Clicks Link| Flask["Flask API Server"]
+    Flask -->|3. Fires Webhook| n8n["n8n Orchestrator"]
+    n8n -->|4a. Warning Japri| TG["Telegram Bot"]
+    n8n -->|4b. Chronic Escalation| SOC["SOC Incident Group"]
 ```
 
-Services will be available at:
-- **GoPhish Admin**: http://localhost:3333
-- **Flask API**: http://localhost:5000
-- **n8n**: http://localhost:5678
+### Flow B — Threat Reporting & Assessment Loop
+This workflow automates the analysis of user-reported URLs/files and creates incident tickets:
 
-## How It Works
-
-### 1. Phishing Simulation
-- Administrator creates a phishing campaign in GoPhish with target employees
-- GoPhish generates unique tracking links for each recipient
-- Employees receive simulated phishing emails
-
-### 2. User Interaction
-- If user **clicks the link**: redirected to Flask backend
-- Flask serves a fake login page or educational content (based on campaign type)
-- User's interaction is logged to SQLite database
-
-### 3. Automatic Response
-- Flask calculates **Human Risk Score** per division
-- If user submitted credentials: instant educational redirect + notification to n8n
-- If user is a "chronic clicker" (repeated victims): escalation ticket generated
-
-### 4. Human-Initiated Detection (In Progress)
-- Employees can report suspicious emails via Telegram bot
-- System automatically verifies URLs using VirusTotal/urlscan.io
-- Verified threats trigger security team notifications
-
-## Project Structure
-
-```
-Human_Firewall/
-├── backend/               # Flask application
-│   ├── app.py            # Main Flask app (event logging, risk scoring)
-│   ├── database.py       # SQLite database schema & queries
-│   ├── requirements.txt  # Python dependencies
-│   ├── Dockerfile        # Flask container configuration
-│   └── templates/        # HTML templates (fake login, education pages)
-├── gophish/              # GoPhish configuration
-│   ├── config.json       # GoPhish settings (admin API, email server)
-│   └── Dockerfile        # GoPhish container configuration
-├── docker-compose.yml    # Orchestration for all services
-├── .env.example          # Environment variables template
-└── README.md             # This file
+```mermaid
+flowchart LR
+    Victim["Employee"] -->|1. Reports URL/File| TG["Telegram Bot"]
+    TG -->|2. Webhook Trigger| n8n["n8n Orchestrator"]
+    n8n -->|3a. Scan Request| VT["VirusTotal API"]
+    n8n -->|3b. Sandbox Render| US["urlscan.io API"]
+    n8n -->|4. Creates Ticket| Flask["Flask API Server"]
+    n8n -->|5. Dispatches Report| SOC["SOC Incident Group"]
 ```
 
-## Environment Configuration
+---
 
-Create a `.env` file from the template:
+## ✨ Key Features
 
-```bash
-cp .env.example .env
+### 1. Phishing Simulation (Flow A)
+*   **Teachable Moment Landing Page**: Instantly redirects employees who click simulated phishing links to a friendly, informative educational landing page.
+*   **Personal Telegram Warnings**: Bot automatically registers and dispatches a direct message warning to the specific employee, ensuring they receive immediate feedback.
+*   **SOC Escalation (Chronic Clickers)**: Monitors employee performance. If an employee fails the simulation multiple times, the bot automatically dispatches a priority escalation alert to the SOC team.
+
+### 2. On-Demand Threat Assessment Bot (Flow B)
+*   **Self-Service Reporting**: Employees can forward suspicious URLs or document attachments directly to the bot.
+*   **Automated Multi-Engine Scan**: Evaluates reports against VirusTotal (static threat intelligence) and urlscan.io (dynamic headless browser behavior).
+*   **Incident Ticketing**: Generates a ticket on the Flask SOC Dashboard and broadcasts formatted incident logs (with verdicts, metadata, and link analyses) to the SOC team.
+
+### 3. Automated OTP Onboarding
+*   **Self-Service Registration**: Employees initiate registration by sending `/start` to the bot.
+*   **Email OTP Verification**: Generates a 6-digit OTP code, saves it to SQLite, and logs it to a local webmail inbox, linking the Telegram Chat ID to the employee's corporate email.
+
+### 4. Integrated Mock Webmail Portal
+*   Includes a built-in mock **Webmail Inbox** in the dashboard. This allows for 100% offline testing of OTP emails during presentations without requiring Mailtrap or external SMTP setups.
+
+---
+
+## 🚀 Quick Start Guide
+
+### 1. Prerequisites
+Ensure the following tools are installed on your system:
+*   [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+*   Python 3.10+
+*   Git
+
+### 2. Installation & Setup
+1.  **Clone and navigate to the project directory**:
+    ```bash
+    cd C:\Human_Firewall
+    ```
+2.  **Initialize the Database**:
+    Seed the SQLite database with 30 days of mock history to populate dashboard analytics:
+    ```bash
+    cd backend
+    python seed_data.py
+    cd ..
+    ```
+3.  **Spin Up the Services**:
+    Launch the containers (Flask, n8n, GoPhish) in the background:
+    ```bash
+    docker-compose up -d
+    ```
+4.  **Expose the Webhook Tunnel (Bypass Firewall)**:
+    Since the Telegram Bot API requires an HTTPS URL to send webhook events to your local n8n, run the following SSH tunnel command:
+    ```bash
+    ssh -p 443 -R 0:localhost:5678 qr@a.pinggy.io
+    ```
+    *Copy the generated HTTPS URL (e.g., `https://xxx.run.pinggy-free.link`).*
+
+5.  **Configure n8n Webhook**:
+    *   Open `docker-compose.yml`, locate the `WEBHOOK_URL` environment variable under the `n8n` service, and paste your active Pinggy HTTPS URL.
+    *   Apply the update:
+        ```bash
+        docker-compose up -d
+        ```
+    *   Open the n8n editor (`http://localhost:5678`), open both **Flow A** and **Flow B**, toggle their status to **Inactive** and back to **Active** (Publish) to register the new webhook URL with the Telegram Bot API.
+
+---
+
+## 🛠️ Developer Guide
+
+### Directory Layout
+```text
+C:/Human_Firewall/
+├── backend/
+│   ├── instance/
+│   │   └── human_firewall.db  # Local SQLite Database (Excluded from Git)
+│   ├── templates/
+│   │   └── dashboard.html     # SOC Analytics Dashboard & Webmail Interface
+│   ├── app.py                 # Flask API Server & Controllers
+│   ├── database.py            # SQLite Schemas & Queries
+│   └── seed_data.py           # Database Initializer & Mock Data Seeder
+├── n8n-workflows/
+│   ├── flow-a.json            # Flow A: Phishing Simulation Workflow
+│   └── Flow B ... .json       # Flow B: Threat Assessment & Onboarding
+└── docker-compose.yml         # Container Orchestration Configuration
 ```
 
-Key environment variables:
-- `FLASK_SECRET_KEY` — Flask session secret
-- `GOPHISH_API_KEY` — GoPhish admin API authentication
-- `N8N_WEBHOOK_URL` — n8n webhook for event notifications
-- `TELEGRAM_BOT_TOKEN` — Telegram bot token (for threat reporting)
-- `VIRUSTOTAL_API_KEY` — VirusTotal API key (for URL verification)
-
-## API Endpoints
-
-### Flask Backend
-
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| `GET` | `/redirect-handler?rid=<tracking_id>` | Capture click event, serve education content |
-| `POST` | `/api/submit-credentials` | Log credential submission, trigger education |
-| `GET` | `/api/risk-score/<division>` | Get Human Risk Score for a division |
-| `GET` | `/api/incidents` | List all generated security incidents |
-
-## Configuration
-
-### GoPhish Setup
-- Admin panel: `http://localhost:3333`
-- Default credentials: See `gophish/config.json`
-- Configure SMTP server for email delivery
-
-### Flask Configuration
-- Edit `backend/app.py` to customize education content
-- Modify `backend/templates/` for landing page design
-
-### n8n Workflows
-- Access at `http://localhost:5678`
-- Configure Telegram notifications
-- Set up escalation rules for chronic clickers
-
-## Important Limitations
-
-⚠️ **This is NOT an automated threat detection system.** Human_Firewall requires human action to work:
-- It only logs events when users **click** phishing links (requires GoPhish sending)
-- It only verifies threats when users **report** via Telegram (no passive scanning)
-- It does NOT catch real attacks without manual trigger
-
-This is a **deliberate design choice**, not a limitation to hide. The tool focuses on education and awareness, not replacing network security infrastructure.
-
-## Development
-
-### Running in Development Mode
-
-```bash
-# Without Docker (requires Python 3.8+)
-cd backend
-pip install -r requirements.txt
-python app.py
-```
-
-### Running Tests
-```bash
-docker compose -f docker-compose.test.yml up
-```
-
-## Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| Containers fail to start | Check Docker daemon is running, verify ports 3333, 5000, 5678 are free |
-| Flask can't connect to SQLite | Ensure `/backend/data/` directory exists with proper permissions |
-| Emails not sending | Verify SMTP credentials in GoPhish config, check `docker compose logs gophish` |
-| n8n webhooks not firing | Verify Flask can reach n8n container, check n8n logs: `docker compose logs n8n` |
+### Git Commits & Credential Sanitization
+Before committing and pushing any changes to a public repository:
+1.  **Sanitize active API credentials**:
+    ```bash
+    python prepare_git_commit.py
+    ```
+2.  **Commit and push to GitHub**:
+    ```bash
+    git add .
+    git commit -m "feat: your feature summary"
+    git push origin main
+    ```
+3.  **Restore local active credentials**:
+    ```bash
+    python restore_git_commit.py
+    ```
+*(Note: Backup files and local databases are automatically excluded via `.gitignore`).*

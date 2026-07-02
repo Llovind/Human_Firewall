@@ -397,6 +397,152 @@
     .kpi-grid { grid-template-columns: 1fr; }
     .page-header h1 { font-size: 20px; }
   }
+
+  /* ── Webmail Layout ────────────────────────────────────── */
+  .webmail-panel {
+    display: none;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    height: calc(100vh - 180px);
+    min-height: 500px;
+    overflow: hidden;
+  }
+  
+  .webmail-container {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    height: 100%;
+  }
+  
+  .webmail-sidebar {
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    background: rgba(99, 102, 241, 0.02);
+  }
+  
+  .webmail-sidebar-header {
+    padding: 20px;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  
+  .email-list {
+    flex: 1;
+    overflow-y: auto;
+  }
+  
+  .email-item {
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(99, 102, 241, 0.05);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  
+  .email-item:hover {
+    background: rgba(99, 102, 241, 0.04);
+  }
+  
+  .email-item.active {
+    background: rgba(99, 102, 241, 0.08);
+    border-left: 3px solid var(--accent);
+  }
+  
+  .email-item-subject {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--text-primary);
+  }
+  
+  .email-item-to {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+  }
+  
+  .email-item-date {
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+  
+  .webmail-content {
+    padding: 32px;
+    overflow-y: auto;
+    background: rgba(6, 10, 19, 0.2);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  
+  .webmail-content-header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 20px;
+    margin-bottom: 24px;
+    display: none;
+  }
+  
+  .webmail-subject {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  
+  .webmail-meta {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  
+  .webmail-body {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-primary);
+    display: none;
+  }
+  
+  .webmail-empty-state {
+    text-align: center;
+    color: var(--text-muted);
+  }
+  
+  .webmail-empty-state svg {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 16px;
+    opacity: 0.3;
+  }
+  
+  .topbar-nav {
+    display: flex;
+    gap: 8px;
+    margin-left: 32px;
+  }
+  
+  .nav-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 6px 14px;
+    border-radius: 8px;
+    transition: all 0.2s;
+  }
+  
+  .nav-btn:hover {
+    color: var(--text-primary);
+    background: rgba(99, 102, 241, 0.06);
+  }
+  
+  .nav-btn.active {
+    color: var(--text-primary);
+    background: rgba(99, 102, 241, 0.12);
+    border-color: var(--border);
+  }
 </style>
 </head>
 <body>
@@ -411,6 +557,11 @@
         </svg>
       </div>
       <span class="topbar-title">Human Firewall Lite</span>
+      
+      <div class="topbar-nav">
+        <button class="nav-btn active" id="btn-dashboard" onclick="switchTab('dashboard')">Dashboard</button>
+        <button class="nav-btn" id="btn-webmail" onclick="switchTab('webmail')">Webmail Inbox <span class="badge" id="webmail-badge" style="background: var(--accent-dim); color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px; margin-left: 6px; display: none;">0</span></button>
+      </div>
     </div>
     <div class="topbar-right">
       <div class="live-indicator">
@@ -422,7 +573,7 @@
   </header>
 
   <!-- ── Main Content ─────────────────────────────────── -->
-  <main class="main">
+  <main class="main" id="panel-dashboard">
     <div class="page-header fade-in">
       <h1>Security Operations Dashboard</h1>
       <p>Monitoring simulasi phishing, skor risiko divisi, dan insiden keamanan secara real-time.</p>
@@ -513,6 +664,7 @@
             <tr>
               <th>Ticket ID</th>
               <th>Sumber</th>
+              <th>Detail Target</th>
               <th>Divisi</th>
               <th>Severity</th>
               <th>Status</th>
@@ -521,7 +673,7 @@
           </thead>
           <tbody id="incidents-tbody">
             <tr class="empty-row">
-              <td colspan="6">
+              <td colspan="7">
                 <div class="empty-state">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
@@ -535,6 +687,50 @@
         </table>
       </div>
     </section>
+  </main>
+
+  <!-- ── Webmail Content ──────────────────────────────── -->
+  <main class="main webmail-panel" id="panel-webmail">
+    <div class="page-header fade-in">
+      <h1>Mock Corporate Webmail</h1>
+      <p>Simulasi kotak masuk email karyawan untuk memudahkan penyalinan kode OTP selama pengujian offline.</p>
+    </div>
+    
+    <div class="webmail-panel fade-in" style="display: block;">
+      <div class="webmail-container">
+        <!-- Sidebar: List of emails -->
+        <div class="webmail-sidebar">
+          <div class="webmail-sidebar-header">Kotak Masuk (Inbox)</div>
+          <div class="email-list" id="webmail-list">
+            <!-- Email items injected here -->
+          </div>
+        </div>
+        
+        <!-- Mail View Content -->
+        <div class="webmail-content" id="webmail-detail">
+          <div class="webmail-empty-state" id="webmail-placeholder">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width: 48px; height: 48px; margin-bottom: 16px; opacity: 0.3; margin-left: auto; margin-right: auto; display: block;">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+              <polyline points="22,6 12,13 2,6"/>
+            </svg>
+            <p style="text-align: center; color: var(--text-secondary);">Pilih email dari daftar untuk membaca isinya.</p>
+          </div>
+          
+          <div class="webmail-content-header" id="webmail-detail-header">
+            <div class="webmail-subject" id="webmail-detail-subject">—</div>
+            <div class="webmail-meta">
+              <span>Ke: </span><span id="webmail-detail-to" style="font-weight: 600; color: var(--text-primary);">—</span>
+              <span style="margin: 0 8px; color: var(--text-muted);">|</span>
+              <span id="webmail-detail-date">—</span>
+            </div>
+          </div>
+          
+          <div class="webmail-body" id="webmail-detail-body">
+            <!-- Email body HTML goes here -->
+          </div>
+        </div>
+      </div>
+    </div>
   </main>
 
   <footer class="footer">
@@ -765,7 +961,7 @@ function renderIncidentsTable(incidents) {
 
   if (incidents.length === 0) {
     tbody.innerHTML = `
-      <tr><td colspan="6">
+      <tr><td colspan="7">
         <div class="empty-state">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"/>
@@ -779,16 +975,28 @@ function renderIncidentsTable(incidents) {
     return;
   }
 
-  tbody.innerHTML = incidents.map(inc => `
-    <tr>
-      <td><span class="ticket-id">${inc.ticket_id}</span></td>
-      <td><span class="badge ${sourceBadgeClass(inc.source_type)}">${sourceLabel(inc.source_type)}</span></td>
-      <td>${inc.divisi || '—'}</td>
-      <td><span class="badge badge-${inc.severity}"><span class="badge-dot"></span>${inc.severity}</span></td>
-      <td><span class="badge badge-${inc.status}"><span class="badge-dot"></span>${inc.status}</span></td>
-      <td>${formatDate(inc.created_at)}</td>
-    </tr>
-  `).join('');
+  tbody.innerHTML = incidents.map(inc => {
+    let targetDetail = '—';
+    if (inc.reported_url) {
+      const urlText = inc.reported_url.length > 45 ? inc.reported_url.substring(0, 42) + '...' : inc.reported_url;
+      targetDetail = `🔗 <a href="${inc.reported_url}" target="_blank" style="color: var(--accent); text-decoration: none; border-bottom: 1px dashed rgba(129,140,248,0.4);">${urlText}</a>`;
+    } else if (inc.original_filename) {
+      const shortHash = inc.file_hash ? inc.file_hash.substring(0, 8) : '—';
+      targetDetail = `📄 <b>${inc.original_filename}</b> <span style="font-family: monospace; font-size: 11px; color: var(--text-muted); margin-left: 6px;">(${shortHash})</span>`;
+    }
+
+    return `
+      <tr>
+        <td><span class="ticket-id">${inc.ticket_id}</span></td>
+        <td><span class="badge ${sourceBadgeClass(inc.source_type)}">${sourceLabel(inc.source_type)}</span></td>
+        <td>${targetDetail}</td>
+        <td>${inc.divisi || '—'}</td>
+        <td><span class="badge badge-${inc.severity}"><span class="badge-dot"></span>${inc.severity}</span></td>
+        <td><span class="badge badge-${inc.status}"><span class="badge-dot"></span>${inc.status}</span></td>
+        <td>${formatDate(inc.created_at)}</td>
+      </tr>
+    `;
+  }).join('');
 }
 
 // ── Fetch & Render All ─────────────────────────────────────
@@ -843,6 +1051,82 @@ async function loadDashboard() {
   } catch (err) {
     console.error('Dashboard fetch error:', err);
   }
+  
+  // Update webmail badge on dashboard refresh
+  loadWebmail();
+}
+
+// ── Webmail & Tab Switching Logic ──────────────────────────
+let activeTab = 'dashboard';
+let cachedEmails = [];
+
+function switchTab(tab) {
+  activeTab = tab;
+  if (tab === 'dashboard') {
+    document.getElementById('panel-dashboard').style.display = 'block';
+    document.getElementById('panel-webmail').style.display = 'none';
+    document.getElementById('btn-dashboard').classList.add('active');
+    document.getElementById('btn-webmail').classList.remove('active');
+  } else {
+    document.getElementById('panel-dashboard').style.display = 'none';
+    document.getElementById('panel-webmail').style.display = 'block';
+    document.getElementById('btn-dashboard').classList.remove('active');
+    document.getElementById('btn-webmail').classList.add('active');
+    loadWebmail();
+  }
+}
+
+async function loadWebmail() {
+  try {
+    const res = await fetch('/api/emails');
+    const data = await res.json();
+    const emails = data.emails || [];
+    cachedEmails = emails;
+    
+    // Update Badge
+    const badge = document.getElementById('webmail-badge');
+    if (emails.length > 0) {
+      badge.textContent = emails.length;
+      badge.style.display = 'inline-block';
+    } else {
+      badge.style.display = 'none';
+    }
+    
+    // Fill Sidebar list
+    const listContainer = document.getElementById('webmail-list');
+    if (emails.length === 0) {
+      listContainer.innerHTML = '<div style="padding: 24px; text-align: center; color: var(--text-muted); font-size: 13px;">Kotak masuk kosong.</div>';
+      return;
+    }
+    
+    listContainer.innerHTML = emails.map((email, idx) => {
+      return `
+        <div class="email-item" id="email-item-${idx}" onclick="selectEmail(${idx})">
+          <div class="email-item-subject">${email.subject}</div>
+          <div class="email-item-to">Ke: ${email.to_email}</div>
+          <div class="email-item-date">${formatDate(email.created_at)}</div>
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error('Error loading webmail:', err);
+  }
+}
+
+function selectEmail(idx) {
+  document.querySelectorAll('.email-item').forEach(el => el.classList.remove('active'));
+  document.getElementById(`email-item-${idx}`).classList.add('active');
+  
+  const email = cachedEmails[idx];
+  
+  document.getElementById('webmail-placeholder').style.display = 'none';
+  document.getElementById('webmail-detail-header').style.display = 'block';
+  document.getElementById('webmail-detail-body').style.display = 'block';
+  
+  document.getElementById('webmail-detail-subject').textContent = email.subject;
+  document.getElementById('webmail-detail-to').textContent = email.to_email;
+  document.getElementById('webmail-detail-date').textContent = formatDate(email.created_at);
+  document.getElementById('webmail-detail-body').innerHTML = email.body;
 }
 
 // Initial load
