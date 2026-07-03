@@ -1,22 +1,20 @@
 {
-  "name": "Flow B — Threat Reporting (Fully Configured)",
+  "name": "Flow B \u2014 Threat Reporting (Fully Configured)",
   "nodes": [
     {
       "parameters": {
         "updates": [
           "message"
-        ],
-        "additionalFields": {}
+        ]
       },
-      "id": "f5f43e7a-d758-4b0f-a28e-4aa35a3bb54c",
+      "id": "node-tg-trigger",
       "name": "Telegram Trigger",
       "type": "n8n-nodes-base.telegramTrigger",
       "typeVersion": 1.1,
       "position": [
-        -2240,
+        100,
         240
       ],
-      "webhookId": "0b0a5465-ef54-42bc-bfec-be78e5c313c7",
       "credentials": {
         "telegramApi": {
           "id": "I44oUHC8lBGyDI79",
@@ -29,12 +27,12 @@
         "mode": "runOnceForEachItem",
         "jsCode": "const message = $input.item.json.message;\nconst text = message.text || message.caption || '';\nconst urlRegex = /https?:\\/\\/\\S+/gi;\nconst urls = text.match(urlRegex);\nconst chatId = message.chat.id;\nconst reporterName = message.from.first_name || 'Unknown';\n\nif (urls && urls.length > 0) {\n  return { json: { type: 'url', url: urls[0], chat_id: chatId, reporter_name: reporterName } };\n} else if (message.document) {\n  return { json: { type: 'file', file_id: message.document.file_id, file_name: message.document.file_name || 'unknown_file', chat_id: chatId, reporter_name: reporterName } };\n} else {\n  return { json: { type: 'invalid', chat_id: chatId, reporter_name: reporterName } };\n}"
       },
-      "id": "b7552b50-26ae-4a6b-8b02-41c0861ec4d8",
+      "id": "node-parse-input",
       "name": "Parse Input",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -2016,
+        320,
         240
       ]
     },
@@ -112,15 +110,14 @@
               "outputKey": "Invalid"
             }
           ]
-        },
-        "options": {}
+        }
       },
-      "id": "ad550177-fee3-431a-b30e-60821fc6175e",
+      "id": "node-route-type",
       "name": "Route Type",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.4,
       "position": [
-        -1808,
+        540,
         240
       ]
     },
@@ -129,11 +126,12 @@
         "method": "POST",
         "url": "https://www.virustotal.com/api/v3/urls",
         "sendHeaders": true,
+        "specifyHeaders": "keypair",
         "headerParameters": {
           "parameters": [
             {
               "name": "x-apikey",
-              "value": "fbfdaaa618dc7446a3e8417c08cd53d6d818e51d7d733dc2208de64e2902cb08"
+              "value": "={{ $env.VT_API_KEY }}"
             }
           ]
         },
@@ -146,15 +144,14 @@
               "value": "={{ $json.url }}"
             }
           ]
-        },
-        "options": {}
+        }
       },
-      "id": "8ab1a711-33f1-48b7-b419-81cd980f9468",
+      "id": "node-vt-submit-url",
       "name": "VT Submit URL",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        -1568,
+        780,
         80
       ]
     },
@@ -163,85 +160,94 @@
         "method": "POST",
         "url": "https://urlscan.io/api/v1/scan/",
         "sendHeaders": true,
+        "specifyHeaders": "keypair",
         "headerParameters": {
           "parameters": [
             {
               "name": "API-Key",
-              "value": "019f0841-2c4c-74ba-a7b7-d057f9a70cdd"
+              "value": "={{ $env.URLSCAN_API_KEY }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\"url\": \"{{ $('Parse Input').item.json.url }}\", \"visibility\": \"public\"}",
-        "options": {}
+        "jsonBody": "={\"url\": \"{{ $('Parse Input').item.json.url }}\", \"visibility\": \"public\"}"
       },
-      "id": "92e6992d-83c1-46be-8c39-4ea7a6e35c50",
+      "id": "node-urlscan-submit-url",
       "name": "urlscan Submit URL",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        -1344,
+        1000,
         80
       ]
     },
     {
       "parameters": {
-        "url": "=https://www.virustotal.com/api/v3/analyses/{{ $('VT Submit URL').item.json.data.id }}",
+        "amount": 15,
+        "unit": "seconds"
+      },
+      "id": "node-wait-url",
+      "name": "Wait 15s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        1220,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://www.virustotal.com/api/v3/analyses/{{ $json.data.id }}",
         "sendHeaders": true,
+        "specifyHeaders": "keypair",
         "headerParameters": {
           "parameters": [
             {
               "name": "x-apikey",
-              "value": "fbfdaaa618dc7446a3e8417c08cd53d6d818e51d7d733dc2208de64e2902cb08"
+              "value": "={{ $env.VT_API_KEY }}"
             }
           ]
-        },
-        "options": {}
+        }
       },
-      "id": "82e1ae8a-e52b-4dd1-8f70-587726a1e05f",
+      "id": "node-vt-get-url",
       "name": "VT Get URL Result",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        -896,
+        1440,
         80
-      ]
+      ],
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
         "url": "=https://urlscan.io/api/v1/result/{{ $('urlscan Submit URL').item.json.uuid }}/",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "API-Key",
-              "value": "019f0841-2c4c-74ba-a7b7-d057f9a70cdd"
-            }
-          ]
-        },
-        "options": {}
+        "options": {
+          "neverFail": true
+        }
       },
-      "id": "00ff10c7-ddce-40cf-8a64-6f5723a7c3bb",
+      "id": "node-urlscan-get-url",
       "name": "urlscan Get URL Result",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        -688,
+        1660,
         80
-      ]
+      ],
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
         "mode": "runOnceForEachItem",
         "jsCode": "const vtResult = $('VT Get URL Result').item.json;\nconst usResult = $('urlscan Get URL Result').item.json;\nconst origInput = $('Parse Input').item.json;\n\nconst vtMalicious = vtResult.data?.attributes?.stats?.malicious || 0;\nconst vtTotal = Object.values(vtResult.data?.attributes?.stats || {}).reduce((a, b) => a + b, 0);\n\nconst urlscanScore = usResult.verdicts?.overall?.score || 0;\nconst urlscanVerdict = usResult.verdicts?.overall?.malicious ? 'malicious' : (urlscanScore >= 40 ? 'suspicious' : 'clean');\nconst screenshotUrl = usResult.task?.screenshotURL || '';\n\nlet vtSeverity = 'clean';\nif (vtMalicious >= 8) vtSeverity = 'high';\nelse if (vtMalicious >= 4) vtSeverity = 'medium';\nelse if (vtMalicious >= 1) vtSeverity = 'low';\n\nlet usSeverity = 'clean';\nif (urlscanVerdict === 'malicious') usSeverity = 'high';\nelse if (urlscanVerdict === 'suspicious') usSeverity = 'medium';\n\nconst rank = { clean: 0, low: 1, medium: 2, high: 3 };\nconst severity = rank[vtSeverity] >= rank[usSeverity] ? vtSeverity : usSeverity;\nconst isDangerous = severity !== 'clean';\n\nreturn {\n  json: {\n    is_dangerous: isDangerous,\n    severity: severity,\n    vt_verdict: vtMalicious + '/' + vtTotal + ' engines flagged malicious',\n    urlscan_verdict: urlscanVerdict,\n    screenshot_url: screenshotUrl,\n    reported_url: origInput.url,\n    chat_id: origInput.chat_id,\n    reporter_name: origInput.reporter_name\n  }\n};"
       },
-      "id": "f9113611-0b25-47e6-aa35-a74947b8588c",
+      "id": "node-evaluate-url",
       "name": "Evaluate URL",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -464,
+        1880,
         80
       ]
     },
@@ -251,8 +257,7 @@
           "options": {
             "caseSensitive": true,
             "leftValue": "",
-            "typeValidation": "loose",
-            "version": 1
+            "typeValidation": "loose"
           },
           "conditions": [
             {
@@ -265,15 +270,14 @@
             }
           ],
           "combinator": "and"
-        },
-        "options": {}
+        }
       },
-      "id": "f3e0181e-bd88-49af-98be-eb92d6567459",
+      "id": "node-if-url-dangerous",
       "name": "IF URL Dangerous",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -240,
+        2100,
         80
       ]
     },
@@ -283,33 +287,32 @@
         "url": "http://flask_api:5000/api/incidents",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"source_type\": \"real_world_report\",\n  \"divisi\": \"User Report\",\n  \"severity\": \"{{ $json.severity }}\",\n  \"reported_url\": \"{{ $json.reported_url }}\",\n  \"vt_verdict\": \"{{ $json.vt_verdict }}\",\n  \"urlscan_verdict\": \"{{ $json.urlscan_verdict }}\",\n  \"screenshot_url\": \"{{ $json.screenshot_url }}\"\n}",
+        "jsonBody": "={\n  \"source_type\": \"real_world_report\",\n  \"divisi\": \"User Report\",\n  \"severity\": \"{{ $json.severity }}\",\n  \"reported_url\": \"{{ $json.reported_url }}\",\n  \"vt_verdict\": \"{{ $json.vt_verdict }}\",\n  \"urlscan_verdict\": \"{{ $json.urlscan_verdict }}\",\n  \"screenshot_url\": \"{{ $json.screenshot_url }}\",\n  \"reporter_chat_id\": \"{{ $json.chat_id }}\"\n}",
         "options": {}
       },
-      "id": "f92c2df4-1754-4a1d-8833-2a0bcecad5f4",
+      "id": "node-create-url-incident",
       "name": "Create URL Incident",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        0,
+        2340,
         0
       ]
     },
     {
       "parameters": {
         "chatId": "2019216831",
-        "text": "=🔍 THREAT REPORT — URL\n\n📋 {{ $json.ticket_id }}\n🔗 {{ $('Evaluate URL').item.json.reported_url }}\n⚠️ Severity: {{ $json.severity }}\n\n🛡️ VT: {{ $('Evaluate URL').item.json.vt_verdict }}\n🌐 urlscan: {{ $('Evaluate URL').item.json.urlscan_verdict }}\n\n👤 Dilaporkan oleh: {{ $('Evaluate URL').item.json.reporter_name }}",
+        "text": "=\ud83d\udd0d THREAT REPORT \u2014 URL\n\n\ud83d\udccb {{ $json.ticket_id }}\n\ud83d\udd17 {{ $('Evaluate URL').item.json.reported_url }}\n\u26a0\ufe0f Severity: {{ $json.severity }}\n\n\ud83d\udee1\ufe0f VT: {{ $('Evaluate URL').item.json.vt_verdict }}\n\ud83c\udf10 urlscan: {{ $('Evaluate URL').item.json.urlscan_verdict }}\n\n\ud83d\udc64 Dilaporkan oleh: {{ $('Evaluate URL').item.json.reporter_name }}",
         "additionalFields": {}
       },
-      "id": "f40a06a3-2e07-4502-834e-01d68f634643",
+      "id": "node-soc-alert-url",
       "name": "SOC Alert URL",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        224,
+        2560,
         0
       ],
-      "webhookId": "edc22a58-1a1b-4d47-8402-d452f0a6578f",
       "credentials": {
         "telegramApi": {
           "id": "I44oUHC8lBGyDI79",
@@ -320,20 +323,16 @@
     {
       "parameters": {
         "chatId": "={{ $('Evaluate URL').item.json.chat_id }}",
-        "text": "=⚠️ URL yang Anda laporkan terdeteksi BERBAHAYA.\n\n🔗 {{ $('Evaluate URL').item.json.reported_url }}\n⚠️ Severity: {{ $('Evaluate URL').item.json.severity }}\n🛡️ VT: {{ $('Evaluate URL').item.json.vt_verdict }}\n\nTiket insiden sudah dibuat dan tim SOC telah diberitahu.\nTerima kasih atas laporan Anda! 🙏",
-        "additionalFields": {
-          "appendAttribution": false
-        }
+        "text": "=\u26a0\ufe0f URL yang Anda laporkan terdeteksi BERBAHAYA.\n\n\ud83d\udd17 {{ $('Evaluate URL').item.json.reported_url }}\n\u26a0\ufe0f Severity: {{ $('Evaluate URL').item.json.severity }}\n\ud83d\udee1\ufe0f VT: {{ $('Evaluate URL').item.json.vt_verdict }}\n\nTiket insiden sudah dibuat dan tim SOC telah diberitahu.\nTerima kasih atas laporan Anda! \ud83d\ude4f"
       },
-      "id": "41cbe9a4-a4ea-4a33-a84e-835480eb272a",
+      "id": "node-reply-url-dangerous",
       "name": "Reply URL Dangerous",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        448,
+        2780,
         0
       ],
-      "webhookId": "98251ec8-f392-47a7-96f0-08d97122ca1a",
       "credentials": {
         "telegramApi": {
           "id": "I44oUHC8lBGyDI79",
@@ -344,20 +343,16 @@
     {
       "parameters": {
         "chatId": "={{ $json.chat_id }}",
-        "text": "=✅ URL yang Anda laporkan tampak AMAN.\n\n🔗 {{ $json.reported_url }}\n🛡️ VT: {{ $json.vt_verdict }}\n🌐 urlscan: {{ $json.urlscan_verdict }}\n\n\nTolak indikasi ancaman. Silakan buka dengan aman. 👍",
-        "additionalFields": {
-          "appendAttribution": false
-        }
+        "text": "=\u2705 URL yang Anda laporkan tampak AMAN.\n\n\ud83d\udd17 {{ $json.reported_url }}\n\ud83d\udee1\ufe0f VT: {{ $json.vt_verdict }}\n\ud83c\udf10 urlscan: {{ $json.urlscan_verdict }}\n\n\nTolak indikasi ancaman. Silakan buka dengan aman. \ud83d\udc4d"
       },
-      "id": "ad5536ab-3bcf-445e-aec0-bde914f73516",
+      "id": "node-reply-url-safe",
       "name": "Reply URL Safe",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        0,
-        192
+        2340,
+        180
       ],
-      "webhookId": "1c892666-829c-49b7-ab49-0d1c8da5ddbb",
       "credentials": {
         "telegramApi": {
           "id": "I44oUHC8lBGyDI79",
@@ -367,30 +362,31 @@
     },
     {
       "parameters": {
-        "url": "=https://api.telegram.org/bot8771953552:AAEV6BLdhjLp0IBXunrQ5k_4FHh9WwXuSCU/getFile?file_id={{ $json.file_id }}",
-        "options": {}
+        "url": "=https://api.telegram.org/bot8771953552:AAEV6BLdhjLp0IBXunrQ5k_4FHh9WwXuSCU/getFile?file_id={{ $json.file_id }}"
       },
-      "id": "1b5cd6b7-d9aa-47d2-b412-df24451f50b5",
+      "id": "node-get-tg-file",
       "name": "Get TG File Path",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        -1568,
-        432
+        780,
+        420
       ]
     },
     {
       "parameters": {
         "url": "=https://api.telegram.org/file/bot8771953552:AAEV6BLdhjLp0IBXunrQ5k_4FHh9WwXuSCU/{{ $json.result.file_path }}",
-        "options": {}
+        "options": {
+          "responseFormat": "file"
+        }
       },
-      "id": "180b2398-d513-43b9-abd6-4b836466a367",
+      "id": "node-download-file",
       "name": "Download File",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        -1344,
-        432
+        1000,
+        420
       ]
     },
     {
@@ -398,11 +394,12 @@
         "method": "POST",
         "url": "https://www.virustotal.com/api/v3/files",
         "sendHeaders": true,
+        "specifyHeaders": "keypair",
         "headerParameters": {
           "parameters": [
             {
               "name": "x-apikey",
-              "value": "fbfdaaa618dc7446a3e8417c08cd53d6d818e51d7d733dc2208de64e2902cb08"
+              "value": "={{ $env.VT_API_KEY }}"
             }
           ]
         },
@@ -416,16 +413,15 @@
               "inputDataFieldName": "data"
             }
           ]
-        },
-        "options": {}
+        }
       },
-      "id": "53cd638e-5e39-4c8d-a003-59257824e5d3",
+      "id": "node-vt-submit-file",
       "name": "VT Submit File",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        -1120,
-        432
+        1220,
+        420
       ]
     },
     {
@@ -433,37 +429,36 @@
         "amount": 30,
         "unit": "seconds"
       },
-      "id": "13b6628b-edc5-4290-adb6-fe7c6f4edae0",
+      "id": "node-wait-file",
       "name": "Wait 30s",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1,
       "position": [
-        -896,
-        432
-      ],
-      "webhookId": "33283154-b30e-406f-b872-5383c18b370c"
+        1440,
+        420
+      ]
     },
     {
       "parameters": {
-        "url": "=https://www.virustotal.com/api/v3/analyses/{{ $('VT Submit File').item.json.data.id }}",
+        "url": "=https://www.virustotal.com/api/v3/analyses/{{ $json.data.id }}",
         "sendHeaders": true,
+        "specifyHeaders": "keypair",
         "headerParameters": {
           "parameters": [
             {
               "name": "x-apikey",
-              "value": "fbfdaaa618dc7446a3e8417c08cd53d6d818e51d7d733dc2208de64e2902cb08"
+              "value": "={{ $env.VT_API_KEY }}"
             }
           ]
-        },
-        "options": {}
+        }
       },
-      "id": "41d0b024-b0ba-43e2-a06a-13b6885175d2",
+      "id": "node-vt-get-file",
       "name": "VT Get File Result",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        -688,
-        432
+        1660,
+        420
       ]
     },
     {
@@ -471,13 +466,13 @@
         "mode": "runOnceForEachItem",
         "jsCode": "const vtResult = $('VT Get File Result').item.json;\nconst origInput = $('Parse Input').item.json;\n\nconst vtMalicious = vtResult.data?.attributes?.stats?.malicious || 0;\nconst vtTotal = Object.values(vtResult.data?.attributes?.stats || {}).reduce((a, b) => a + b, 0);\nconst fileHash = vtResult.meta?.file_info?.sha256 || '';\n\nlet severity = 'clean';\nif (vtMalicious >= 8) severity = 'high';\nelse if (vtMalicious >= 4) severity = 'medium';\nelse if (vtMalicious >= 1) severity = 'low';\n\nconst isDangerous = severity !== 'clean';\n\nreturn {\n  json: {\n    is_dangerous: isDangerous,\n    severity: severity,\n    vt_verdict: vtMalicious + '/' + vtTotal + ' engines flagged malicious',\n    file_hash: fileHash,\n    file_name: origInput.file_name,\n    chat_id: origInput.chat_id,\n    reporter_name: origInput.reporter_name\n  }\n};"
       },
-      "id": "d8b8400c-f6f6-4daf-a774-9716ddb696be",
+      "id": "node-evaluate-file",
       "name": "Evaluate File",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -464,
-        432
+        1880,
+        420
       ]
     },
     {
@@ -486,8 +481,7 @@
           "options": {
             "caseSensitive": true,
             "leftValue": "",
-            "typeValidation": "loose",
-            "version": 1
+            "typeValidation": "loose"
           },
           "conditions": [
             {
@@ -500,16 +494,15 @@
             }
           ],
           "combinator": "and"
-        },
-        "options": {}
+        }
       },
-      "id": "699acc96-450e-41dd-93dc-c0b4819c50df",
+      "id": "node-if-file-dangerous",
       "name": "IF File Dangerous",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -240,
-        432
+        2100,
+        420
       ]
     },
     {
@@ -518,33 +511,31 @@
         "url": "http://flask_api:5000/api/incidents",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"source_type\": \"real_world_report\",\n  \"divisi\": \"User Report\",\n  \"severity\": \"{{ $json.severity }}\",\n  \"vt_verdict\": \"{{ $json.vt_verdict }}\",\n  \"file_hash\": \"{{ $json.file_hash }}\",\n  \"original_filename\": \"{{ $json.file_name }}\"\n}",
+        "jsonBody": "={\n  \"source_type\": \"real_world_report\",\n  \"divisi\": \"User Report\",\n  \"severity\": \"{{ $json.severity }}\",\n  \"vt_verdict\": \"{{ $json.vt_verdict }}\",\n  \"file_hash\": \"{{ $json.file_hash }}\",\n  \"original_filename\": \"{{ $json.file_name }}\",\n  \"reporter_chat_id\": \"{{ $json.chat_id }}\"\n}",
         "options": {}
       },
-      "id": "278e2552-f8a3-432c-a7af-f37c153d9bb9",
+      "id": "node-create-file-incident",
       "name": "Create File Incident",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        0,
-        352
+        2340,
+        340
       ]
     },
     {
       "parameters": {
         "chatId": "2019216831",
-        "text": "=🔍 THREAT REPORT — FILE\n\n📋 {{ $json.ticket_id }}\n📎 {{ $('Evaluate File').item.json.file_name }}\n⚠️ Severity: {{ $json.severity }}\n🔑 SHA256: {{ $('Evaluate File').item.json.file_hash }}\n\n🛡️ VT: {{ $('Evaluate File').item.json.vt_verdict }}\n\n👤 Dilaporkan oleh: {{ $('Evaluate File').item.json.reporter_name }}",
-        "additionalFields": {}
+        "text": "=\ud83d\udd0d THREAT REPORT \u2014 FILE\n\n\ud83d\udccb {{ $json.ticket_id }}\n\ud83d\udcce {{ $('Evaluate File').item.json.file_name }}\n\u26a0\ufe0f Severity: {{ $json.severity }}\n\ud83d\udd11 SHA256: {{ $('Evaluate File').item.json.file_hash }}\n\n\ud83d\udee1\ufe0f VT: {{ $('Evaluate File').item.json.vt_verdict }}\n\n\ud83d\udc64 Dilaporkan oleh: {{ $('Evaluate File').item.json.reporter_name }}"
       },
-      "id": "6762a67a-4093-4c38-bf17-c489462097e6",
+      "id": "node-soc-alert-file",
       "name": "SOC Alert File",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        224,
-        352
+        2560,
+        340
       ],
-      "webhookId": "37ec6c09-2fd0-49ed-9fbc-d177084ac316",
       "credentials": {
         "telegramApi": {
           "id": "I44oUHC8lBGyDI79",
@@ -555,20 +546,16 @@
     {
       "parameters": {
         "chatId": "={{ $('Evaluate File').item.json.chat_id }}",
-        "text": "=⚠️ File yang Anda laporkan terdeteksi BERBAHAYA.\n\n📎 {{ $('Evaluate File').item.json.file_name }}\n⚠️ Severity: {{ $('Evaluate File').item.json.severity }}\n🛡️ VT: {{ $('Evaluate File').item.json.vt_verdict }}\n\nTiket insiden sudah dibuat dan tim SOC telah diberitahu.\nTerima kasih atas laporan Anda! 🙏",
-        "additionalFields": {
-          "appendAttribution": false
-        }
+        "text": "=\u26a0\ufe0f File yang Anda laporkan terdeteksi BERBAHAYA.\n\n\ud83d\udcce {{ $('Evaluate File').item.json.file_name }}\n\u26a0\ufe0f Severity: {{ $('Evaluate File').item.json.severity }}\n\ud83d\udee1\ufe0f VT: {{ $('Evaluate File').item.json.vt_verdict }}\n\nTiket insiden sudah dibuat dan tim SOC telah diberitahu.\nTerima kasih atas laporan Anda! \ud83d\ude4f"
       },
-      "id": "03f88625-013f-472c-8341-ac08051a2261",
+      "id": "node-reply-file-dangerous",
       "name": "Reply File Dangerous",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        448,
-        352
+        2780,
+        340
       ],
-      "webhookId": "d85c266d-89eb-4712-9a2a-8d03e8f866b5",
       "credentials": {
         "telegramApi": {
           "id": "I44oUHC8lBGyDI79",
@@ -579,20 +566,16 @@
     {
       "parameters": {
         "chatId": "={{ $json.chat_id }}",
-        "text": "=✅ File yang Anda laporkan tampak AMAN.\n\n📎 {{ $json.file_name }}\n🛡️ VT: {{ $json.vt_verdict }}\n\nTidak ditemukan indikasi ancaman. Silakan buka dengan aman. 👍",
-        "additionalFields": {
-          "appendAttribution": false
-        }
+        "text": "=\u2705 File yang Anda laporkan tampak AMAN.\n\n\ud83d\udcce {{ $json.file_name }}\n\ud83d\udee1\ufe0f VT: {{ $json.vt_verdict }}\n\nTidak ditemukan indikasi ancaman. Silakan buka dengan aman. \ud83d\udc4d"
       },
-      "id": "4fd11b78-306e-4310-960a-d33d62dbf61b",
+      "id": "node-reply-file-safe",
       "name": "Reply File Safe",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        0,
-        512
+        2340,
+        500
       ],
-      "webhookId": "e9c4efa5-ed4c-410a-878d-b56d52020935",
       "credentials": {
         "telegramApi": {
           "id": "I44oUHC8lBGyDI79",
@@ -603,81 +586,16 @@
     {
       "parameters": {
         "chatId": "={{ $json.chat_id }}",
-        "text": "=Halo {{ $json.reporter_name }}! 👋\n\nUntuk melaporkan ancaman, silakan kirimkan:\n• 🔗 URL mencurigakan (teks berisi http/https)\n• 📎 File attachment yang ingin dicek\n\nSaya akan menganalisisnya menggunakan VirusTotal dan urlscan.io secara otomatis.",
-        "additionalFields": {
-          "appendAttribution": false
-        }
+        "text": "=Halo {{ $json.reporter_name }}! \ud83d\udc4b\n\nUntuk melaporkan ancaman, silakan kirimkan:\n\u2022 \ud83d\udd17 URL mencurigakan (teks berisi http/https)\n\u2022 \ud83d\udcce File attachment yang ingin dicek\n\nSaya akan menganalisisnya menggunakan VirusTotal dan urlscan.io secara otomatis."
       },
-      "id": "8f0befaf-8f34-4b16-9b7a-9a9dc112038d",
+      "id": "node-reply-invalid",
       "name": "Reply Invalid",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        -1568,
+        780,
         640
       ],
-      "webhookId": "e35cfcd9-f7b0-454d-aa52-789c77f0c442",
-      "credentials": {
-        "telegramApi": {
-          "id": "I44oUHC8lBGyDI79",
-          "name": "Telegram account 2"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "amount": 30,
-        "unit": "seconds"
-      },
-      "id": "888f42c3-6fe9-4079-a857-f47478fe8d38",
-      "name": "Wait 30s2",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1,
-      "position": [
-        -1120,
-        80
-      ],
-      "webhookId": "2ac82032-29d8-4d43-9d83-e1f6cfa52b94"
-    },
-    {
-      "parameters": {
-        "chatId": "={{ $('Parse Input').item.json.chat_id }}",
-        "text": "🔍 Laporan URL Anda telah diterima. Sedang menganalisis menggunakan VirusTotal dan urlscan.io... Mohon tunggu sekitar 30 detik untuk hasil analisis.",
-        "additionalFields": {
-          "appendAttribution": false
-        }
-      },
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        -1344,
-        -192
-      ],
-      "id": "7a35c55c-deb8-4c20-8aef-7e27b79d7e2e",
-      "name": "Send a text message",
-      "webhookId": "f6403de9-5fd8-4736-848e-c40d60406456",
-      "credentials": {
-        "telegramApi": {
-          "id": "I44oUHC8lBGyDI79",
-          "name": "Telegram account 2"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "chatId": "={{ $('Parse Input').item.json.chat_id }}",
-        "text": "🔍 Laporan file Anda telah diterima. Sedang mengunduh dan menganalisis menggunakan VirusTotal... Mohon tunggu sekitar 30 detik untuk hasil analisis.",
-        "additionalFields": {}
-      },
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        -1232,
-        720
-      ],
-      "id": "42fc04d3-87aa-4ae3-bfbb-d958d282ac1e",
-      "name": "Send a text message1",
-      "webhookId": "d8fbe624-6934-4ba8-bca0-1bc21f14bd61",
       "credentials": {
         "telegramApi": {
           "id": "I44oUHC8lBGyDI79",
@@ -686,42 +604,6 @@
       }
     }
   ],
-  "pinData": {
-    "Telegram Trigger": [
-      {
-        "json": {
-          "update_id": 656681012,
-          "message": {
-            "message_id": 76,
-            "from": {
-              "id": 2019216831,
-              "is_bot": false,
-              "first_name": "kikoenak",
-              "username": "vinlhf",
-              "language_code": "id"
-            },
-            "chat": {
-              "id": 2019216831,
-              "first_name": "kikoenak",
-              "username": "vinlhf",
-              "type": "private"
-            },
-            "date": 1782704566,
-            "document": {
-              "file_name": "test1.pdf",
-              "mime_type": "application/pdf",
-              "file_id": "BQACAgUAAxkBAANMakHptmjaWGrjKeU-fKCVrzwzDLYAAtAeAAJoLRFWBMOI8Odahto8BA",
-              "file_unique_id": "AgAD0B4AAmgtEVY",
-              "file_size": 1021
-            }
-          }
-        },
-        "pairedItem": {
-          "item": 0
-        }
-      }
-    ]
-  },
   "connections": {
     "Telegram Trigger": {
       "main": [
@@ -777,11 +659,6 @@
             "node": "urlscan Submit URL",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Send a text message",
-            "type": "main",
-            "index": 0
           }
         ]
       ]
@@ -790,7 +667,18 @@
       "main": [
         [
           {
-            "node": "Wait 30s2",
+            "node": "Wait 15s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 15s": {
+      "main": [
+        [
+          {
+            "node": "VT Get URL Result",
             "type": "main",
             "index": 0
           }
@@ -805,6 +693,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Reply Invalid",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -813,6 +708,13 @@
         [
           {
             "node": "Evaluate URL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reply Invalid",
             "type": "main",
             "index": 0
           }
@@ -875,11 +777,6 @@
         [
           {
             "node": "Download File",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Send a text message1",
             "type": "main",
             "index": 0
           }
@@ -980,36 +877,14 @@
           }
         ]
       ]
-    },
-    "Wait 30s2": {
-      "main": [
-        [
-          {
-            "node": "VT Get URL Result",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Send a text message": {
-      "main": [
-        []
-      ]
     }
   },
-  "active": true,
+  "active": false,
   "settings": {
-    "executionOrder": "v1",
-    "binaryMode": "separate",
-    "availableInMCP": false
+    "executionOrder": "v1"
   },
-  "versionId": "89f54e52-a2a4-40fc-b784-0722636835e2",
   "meta": {
-    "templateCredsSetupCompleted": true,
-    "instanceId": "8de7cca7e3a56b1b86ebc4dd93be2692f1359860e4db5510fa2b0b8120ab31a5"
+    "templateCredsSetupCompleted": true
   },
-  "nodeGroups": [],
-  "id": "PeFydGHrkKOvS6GA",
   "tags": []
 }

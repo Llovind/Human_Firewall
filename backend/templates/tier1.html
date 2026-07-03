@@ -1,91 +1,848 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="UTF-8">
-<title>Simulasi Keamanan</title>
-<style>
-  body { font-family: Arial, sans-serif; background: #f4f6f8; margin: 0; padding: 0; }
-  .container { max-width: 600px; margin: 40px auto; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-  .header { background: #d32f2f; color: #fff; padding: 24px; text-align: center; }
-  .header h1 { margin: 0; font-size: 22px; }
-  .content { padding: 24px; color: #333; line-height: 1.6; }
-  .redflag-box { background: #fff8e1; border-left: 4px solid #f9a825; padding: 12px 16px; margin: 16px 0; border-radius: 4px; }
-  .redflag-box ul { margin: 8px 0 0 0; padding-left: 20px; }
-  .learn-box { background: #e3f2fd; border-left: 4px solid #1976d2; padding: 12px 16px; margin: 16px 0; border-radius: 4px; }
-  .btn { display: block; width: 100%; background: #2e7d32; color: #fff; text-align: center; padding: 14px; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 20px; }
-  .btn:hover { background: #1b5e20; }
-  .btn:disabled { background: #666; cursor: default; }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Portal Keamanan Personal — Simulasi phishing awareness training" />
+  <title>Portal Keamanan Personal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    /* ===== RESET & BASE ===== */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg-base: #060a13;
+      --bg-card: rgba(15, 23, 42, 0.65);
+      --bg-card-hover: rgba(15, 23, 42, 0.8);
+      --border-card: rgba(148, 163, 184, 0.12);
+      --border-card-hover: rgba(148, 163, 184, 0.25);
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --cyan: #06b6d4;
+      --indigo: #818cf8;
+      --emerald: #34d399;
+      --amber: #fbbf24;
+      --red: #ef4444;
+      --font-display: 'Outfit', sans-serif;
+      --font-body: 'Inter', sans-serif;
+      --radius: 16px;
+      --radius-sm: 10px;
+      --blur: 20px;
+    }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Ambient lighting */
+    body::before {
+      content: '';
+      position: fixed;
+      top: -40%;
+      left: -20%;
+      width: 80vw;
+      height: 80vw;
+      background: radial-gradient(circle, rgba(6,182,212,0.06) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    body::after {
+      content: '';
+      position: fixed;
+      bottom: -30%;
+      right: -15%;
+      width: 70vw;
+      height: 70vw;
+      background: radial-gradient(circle, rgba(129,140,248,0.05) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ===== LAYOUT ===== */
+    .page-wrapper {
+      position: relative;
+      z-index: 1;
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 24px 16px 60px;
+      opacity: 0;
+      animation: fadeInPage 0.8s ease-out forwards;
+    }
+
+    @keyframes fadeInPage {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ===== GLASSMORPHISM CARD ===== */
+    .glass-card {
+      background: var(--bg-card);
+      backdrop-filter: blur(var(--blur));
+      -webkit-backdrop-filter: blur(var(--blur));
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 20px;
+      transition: border-color 0.3s ease, background 0.3s ease, box-shadow 0.3s ease;
+    }
+    .glass-card:hover {
+      border-color: var(--border-card-hover);
+      background: var(--bg-card-hover);
+    }
+
+    /* ===== 1. HEADER BANNER ===== */
+    .header-banner {
+      position: relative;
+      background: linear-gradient(135deg, #991b1b 0%, #b45309 50%, #991b1b 100%);
+      background-size: 200% 200%;
+      animation: shimmer 4s ease-in-out infinite;
+      border-radius: var(--radius);
+      padding: 28px 24px;
+      margin-bottom: 20px;
+      text-align: center;
+      overflow: hidden;
+      border: 1px solid rgba(239,68,68,0.25);
+      box-shadow: 0 0 40px rgba(239,68,68,0.15), inset 0 0 40px rgba(0,0,0,0.15);
+    }
+    @keyframes shimmer {
+      0%,100% { background-position: 0% 50%; }
+      50%     { background-position: 100% 50%; }
+    }
+    .header-banner::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.04) 50%, transparent 100%);
+      background-size: 200% 100%;
+      animation: scan-line 3s linear infinite;
+    }
+    @keyframes scan-line {
+      from { background-position: 200% 0; }
+      to   { background-position: -200% 0; }
+    }
+    .header-banner h1 {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 1.55rem;
+      margin-bottom: 8px;
+      position: relative;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    }
+    .header-banner p {
+      font-size: 0.92rem;
+      color: rgba(255,255,255,0.85);
+      line-height: 1.5;
+      position: relative;
+      max-width: 520px;
+      margin: 0 auto;
+    }
+
+    /* ===== 2. PROFILE CARD ===== */
+    .profile-card {
+      display: flex;
+      gap: 28px;
+      align-items: flex-start;
+      padding: 32px 28px;
+    }
+    .profile-badge-wrap {
+      flex-shrink: 0;
+      position: relative;
+      width: 110px;
+      height: 110px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 4px;
+    }
+    .badge-glow {
+      position: absolute;
+      inset: -8px;
+      border-radius: 50%;
+      animation: badgePulse 2.5s ease-in-out infinite;
+      opacity: 0.5;
+    }
+    .badge-glow.guardian  { box-shadow: 0 0 30px var(--indigo), 0 0 60px rgba(129,140,248,0.3); }
+    .badge-glow.sentinel  { box-shadow: 0 0 30px var(--emerald), 0 0 60px rgba(52,211,153,0.3); }
+    .badge-glow.vulnerable{ box-shadow: 0 0 30px var(--red), 0 0 60px rgba(239,68,68,0.3); }
+    @keyframes badgePulse {
+      0%,100% { opacity: 0.45; transform: scale(1); }
+      50%     { opacity: 0.75; transform: scale(1.06); }
+    }
+    .badge-glow.vulnerable { animation-duration: 1.4s; }
+    .badge-glow.sentinel  { animation-duration: 3s; }
+
+    .badge-shield {
+      position: relative;
+      z-index: 1;
+      width: 72px;
+      height: 72px;
+    }
+    .badge-shield svg { width: 100%; height: 100%; }
+    .badge-shield.guardian  svg .shield-fill { fill: var(--indigo); }
+    .badge-shield.sentinel  svg .shield-fill { fill: var(--emerald); }
+    .badge-shield.vulnerable svg .shield-fill { fill: var(--red); }
+
+    .profile-info { flex: 1; min-width: 0; }
+    .profile-name {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 1.45rem;
+      line-height: 1.2;
+      margin-bottom: 4px;
+    }
+    .profile-division {
+      color: var(--text-secondary);
+      font-size: 0.88rem;
+      margin-bottom: 12px;
+    }
+    .badge-pill {
+      display: inline-block;
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+    .badge-pill.guardian  { background: rgba(129,140,248,0.18); color: var(--indigo); border: 1px solid rgba(129,140,248,0.3); }
+    .badge-pill.sentinel  { background: rgba(52,211,153,0.18); color: var(--emerald); border: 1px solid rgba(52,211,153,0.3); }
+    .badge-pill.vulnerable{ background: rgba(239,68,68,0.18); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+
+    /* Circular Progress */
+    .points-progress-wrap {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(148,163,184,0.1);
+    }
+    .circle-progress {
+      position: relative;
+      width: 56px;
+      height: 56px;
+      flex-shrink: 0;
+    }
+    .circle-progress svg { 
+      transform: rotate(-90deg); 
+      display: block; /* Fixes vertical misalignment */
+    }
+    .circle-bg   { fill: none; stroke: rgba(148,163,184,0.1); stroke-width: 5; }
+    .circle-fill { fill: none; stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset 1.2s ease-out, stroke 0.4s; }
+    .circle-fill.guardian  { stroke: var(--indigo); }
+    .circle-fill.sentinel  { stroke: var(--emerald); }
+    .circle-fill.vulnerable{ stroke: var(--red); }
+    .points-number {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 0.95rem;
+    }
+    .points-label {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      line-height: 1.3;
+    }
+    .points-label strong {
+      display: block;
+      font-size: 0.95rem;
+      color: var(--text-primary);
+    }
+
+    /* ===== 3. STREAK CARD ===== */
+    .streak-card {
+      text-align: center;
+      padding: 28px 24px;
+      position: relative;
+      overflow: hidden;
+    }
+    .streak-card::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(251,191,36,0.1) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .streak-fire {
+      font-size: 3.2rem;
+      display: inline-block;
+      position: relative;
+      animation: flameBob 1.2s ease-in-out infinite;
+      filter: drop-shadow(0 0 18px rgba(251,191,36,0.45));
+    }
+    @keyframes flameBob {
+      0%,100% { transform: translateY(0) scale(1); }
+      50%     { transform: translateY(-6px) scale(1.06); }
+    }
+    .streak-number {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 3rem;
+      color: var(--amber);
+      line-height: 1;
+      margin: 8px 0 4px;
+      text-shadow: 0 0 20px rgba(251,191,36,0.3);
+    }
+    .streak-label {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+    .streak-sublabel {
+      font-size: 0.84rem;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+    .streak-zero .streak-fire  { filter: grayscale(0.6) drop-shadow(0 0 8px rgba(148,163,184,0.2)); animation: none; }
+    .streak-zero .streak-number { color: var(--text-muted); text-shadow: none; }
+
+    /* ===== 4. LEADERBOARD CARD ===== */
+    .leaderboard-card h3 {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 1.1rem;
+      margin-bottom: 14px;
+    }
+    .leaderboard-rank-line {
+      font-size: 0.95rem;
+      margin-bottom: 14px;
+      line-height: 1.5;
+    }
+    .rank-medal { font-size: 1.2rem; margin-right: 2px; }
+    .leaderboard-bar-wrap {
+      background: rgba(148,163,184,0.08);
+      border-radius: 8px;
+      height: 10px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+    .leaderboard-bar-fill {
+      height: 100%;
+      border-radius: 8px;
+      background: linear-gradient(90deg, var(--cyan), var(--indigo));
+      transition: width 1.2s ease-out;
+      width: 0%;
+    }
+    .leaderboard-avg {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+    }
+    .leaderboard-persuade {
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+      line-height: 1.55;
+      padding: 12px 16px;
+      background: rgba(239,68,68,0.06);
+      border-left: 3px solid var(--red);
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    }
+
+    /* ===== 5. RED FLAGS ACCORDION ===== */
+    .redflags-card h3 {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 1.1rem;
+      margin-bottom: 16px;
+    }
+    .accordion-item {
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-sm);
+      margin-bottom: 10px;
+      overflow: hidden;
+      transition: border-color 0.3s;
+    }
+    .accordion-item:hover { border-color: var(--border-card-hover); }
+    .accordion-header {
+      width: 100%;
+      background: rgba(15,23,42,0.4);
+      border: none;
+      color: var(--text-primary);
+      padding: 14px 16px;
+      font-size: 0.92rem;
+      font-weight: 600;
+      font-family: var(--font-body);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-align: left;
+      transition: background 0.2s;
+    }
+    .accordion-header:hover { background: rgba(15,23,42,0.7); }
+    .accordion-icon {
+      margin-left: auto;
+      font-size: 0.75rem;
+      transition: transform 0.3s ease;
+      color: var(--text-muted);
+    }
+    .accordion-item.open .accordion-icon { transform: rotate(180deg); }
+    .accordion-body {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.35s ease;
+    }
+    .accordion-body-inner {
+      padding: 0 16px 16px;
+      font-size: 0.86rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    /* ===== 6. WHAT TO DO CARD ===== */
+    .action-card {
+      border-left: 3px solid var(--cyan);
+      background: linear-gradient(135deg, rgba(6,182,212,0.06) 0%, var(--bg-card) 100%);
+    }
+    .action-card h3 {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 1.1rem;
+      margin-bottom: 12px;
+    }
+    .action-card p {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+    .action-card ul {
+      list-style: none;
+      margin-top: 12px;
+    }
+    .action-card li {
+      padding: 8px 0;
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      line-height: 1.5;
+    }
+    .action-card li span.action-icon {
+      font-size: 1rem;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    /* ===== 7. CTA BUTTON ===== */
+    .cta-wrap { margin-top: 8px; }
+    .cta-button {
+      display: block;
+      width: 100%;
+      padding: 18px 24px;
+      border: none;
+      border-radius: var(--radius);
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 1.1rem;
+      cursor: pointer;
+      color: #fff;
+      background: linear-gradient(135deg, #059669 0%, var(--emerald) 100%);
+      box-shadow: 0 0 30px rgba(52,211,153,0.25), 0 4px 15px rgba(0,0,0,0.3);
+      transition: box-shadow 0.3s ease, transform 0.2s ease, background 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .cta-button::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+      background-size: 200% 100%;
+      animation: cta-sheen 3s ease-in-out infinite;
+    }
+    @keyframes cta-sheen {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    .cta-button:hover:not(:disabled) {
+      box-shadow: 0 0 50px rgba(52,211,153,0.4), 0 6px 20px rgba(0,0,0,0.4);
+      transform: translateY(-2px);
+    }
+    .cta-button:active:not(:disabled) {
+      transform: translateY(0);
+    }
+    .cta-button:disabled {
+      cursor: default;
+      background: linear-gradient(135deg, #334155 0%, #475569 100%);
+      box-shadow: none;
+      color: var(--text-muted);
+    }
+    .cta-button:disabled::before { animation: none; }
+
+    /* ===== LOADING SKELETON ===== */
+    .skeleton {
+      background: linear-gradient(90deg, rgba(148,163,184,0.06) 25%, rgba(148,163,184,0.12) 50%, rgba(148,163,184,0.06) 75%);
+      background-size: 200% 100%;
+      animation: skeletonShimmer 1.5s ease-in-out infinite;
+      border-radius: 6px;
+    }
+    @keyframes skeletonShimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    .skeleton-text  { height: 16px; width: 60%; margin-bottom: 8px; }
+    .skeleton-text-sm { height: 12px; width: 40%; }
+
+    /* ===== STAGGER ANIMATIONS ===== */
+    .stagger-1 { animation-delay: 0.08s; }
+    .stagger-2 { animation-delay: 0.16s; }
+    .stagger-3 { animation-delay: 0.24s; }
+    .stagger-4 { animation-delay: 0.32s; }
+    .stagger-5 { animation-delay: 0.40s; }
+    .stagger-6 { animation-delay: 0.48s; }
+
+    .fade-up {
+      opacity: 0;
+      transform: translateY(16px);
+      animation: fadeUp 0.55s ease-out forwards;
+    }
+    @keyframes fadeUp {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 520px) {
+      .profile-card { flex-direction: column; text-align: center; gap: 16px; }
+      .points-progress-wrap { justify-content: center; }
+      .badge-pill { margin-bottom: 12px; }
+      .header-banner h1 { font-size: 1.3rem; }
+      .streak-number { font-size: 2.4rem; }
+    }
+  </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>⚠️ Ini adalah Simulasi</h1>
-      <p>Tidak ada ancaman nyata. Ini bagian dari program Security Awareness.</p>
+  <div class="page-wrapper">
+
+    <!-- 1. HEADER BANNER -->
+    <div class="header-banner fade-up stagger-1" id="header-banner">
+      <h1>⚠️ Ini Adalah Simulasi Keamanan</h1>
+      <p>Email yang Anda klik adalah simulasi phishing. Tidak ada data yang terkirim — ini adalah bagian dari program keamanan perusahaan.</p>
     </div>
-    <div class="content">
-      <p>Email yang Anda klik tadi adalah simulasi phishing, bukan ancaman asli. Tidak ada data Anda yang terkirim.</p>
 
-       <div class="redflag-box" style="background:#ede7f6;border-left:4px solid #5e35b1;">
-        __HISTORY_NOTE__
-       </div>
+    <!-- 2. PROFILE CARD -->
+    <div class="glass-card profile-card fade-up stagger-2" id="profile-card" style="align-items: center; justify-content: space-between; gap: 0;">
+      <div class="profile-left" style="display: flex; align-items: center; gap: 28px; flex: 1;">
+        <div class="profile-badge-wrap">
+          <div class="badge-glow guardian" id="badge-glow"></div>
+          <div class="badge-shield guardian" id="badge-shield">
+            <svg viewBox="0 0 80 96" xmlns="http://www.w3.org/2000/svg">
+              <path class="shield-fill" d="M40 4L8 20v28c0 22.4 13.6 38.4 32 44 18.4-5.6 32-21.6 32-44V20L40 4z" opacity="0.18"/>
+              <path class="shield-fill" d="M40 4L8 20v28c0 22.4 13.6 38.4 32 44 18.4-5.6 32-21.6 32-44V20L40 4z" fill="none" stroke="currentColor" stroke-width="2.5" opacity="0.6"/>
+              <path d="M36 52l-8-8 3.6-3.6L36 44.8l12.4-12.4L52 36 36 52z" fill="rgba(255,255,255,0.9)"/>
+            </svg>
+          </div>
+        </div>
+        <div class="profile-info">
+          <div class="profile-name" id="profile-name">
+            <div class="skeleton skeleton-text"></div>
+          </div>
+          <div class="profile-division" id="profile-division">
+            <div class="skeleton skeleton-text-sm"></div>
+          </div>
+          <div class="badge-pill guardian" id="badge-pill" style="margin-bottom: 0;">—</div>
+        </div>
+      </div>
+      <div class="profile-right" style="border-left: 1px solid rgba(148,163,184,0.1); padding-left: 32px; margin-left: 32px; display: flex; align-items: center;">
+        <div class="points-progress-wrap" style="margin-top: 0; padding-top: 0; border-top: none;">
+          <div class="circle-progress" id="circle-progress">
+            <svg width="56" height="56" viewBox="0 0 56 56">
+              <circle class="circle-bg" cx="28" cy="28" r="23"/>
+              <circle class="circle-fill guardian" id="circle-fill" cx="28" cy="28" r="23"
+                stroke-dasharray="144.51"
+                stroke-dashoffset="144.51"/>
+            </svg>
+            <span class="points-number" id="points-number">—</span>
+          </div>
+          <div class="points-label">
+            <strong id="points-display">— poin</strong>
+            dari 200 poin maksimum
+          </div>
+        </div>
+      </div>
+    </div>
 
-      <div class="redflag-box">
-        <strong>🚩 Tanda-tanda yang seharusnya dicurigai dari email tadi:</strong>
-        <ul>
-          <li>Bahasa urgensi berlebihan ("24 jam", "dibatasi otomatis")</li>
-          <li>Sapaan generik ("Yth. Karyawan", bukan nama Anda)</li>
-          <li>Pengirim tidak personal ("IT Security Division" tanpa nama jelas)</li>
-          <li>Meminta klik segera tanpa verifikasi melalui jalur resmi</li>
-        </ul>
+    <!-- 3. STREAK CARD -->
+    <div class="glass-card streak-card fade-up stagger-3" id="streak-card">
+      <div class="streak-fire" id="streak-fire">🔥</div>
+      <div class="streak-number" id="streak-number">—</div>
+      <div class="streak-label" id="streak-label">Minggu Bebas Phishing!</div>
+      <div class="streak-sublabel" id="streak-sublabel"></div>
+    </div>
+
+    <!-- 4. LEADERBOARD CARD -->
+    <div class="glass-card leaderboard-card fade-up stagger-4" id="leaderboard-card">
+      <h3>📊 Posisi Divisi Anda</h3>
+      <div class="leaderboard-rank-line" id="leaderboard-rank">
+        <div class="skeleton skeleton-text"></div>
+      </div>
+      <div class="leaderboard-bar-wrap">
+        <div class="leaderboard-bar-fill" id="leaderboard-bar"></div>
+      </div>
+      <div class="leaderboard-avg" id="leaderboard-avg">Rata-rata divisi: — poin</div>
+      <div class="leaderboard-persuade">
+        🛡️ Jaga reputasi divisi Anda! Setiap klik phishing menurunkan skor tim.
+      </div>
+    </div>
+
+    <!-- 5. RED FLAGS ACCORDION -->
+    <div class="glass-card redflags-card fade-up stagger-5" id="redflags-card">
+      <h3>🚩 Tanda-Tanda yang Seharusnya Dicurigai</h3>
+
+      <div class="accordion-item">
+        <button class="accordion-header" onclick="toggleAccordion(this)">
+          <span>📧</span> Bahasa urgensi berlebihan
+          <span class="accordion-icon">▼</span>
+        </button>
+        <div class="accordion-body">
+          <div class="accordion-body-inner">
+            Email phishing sering menggunakan kata-kata seperti <strong>"segera"</strong>, <strong>"darurat"</strong>, atau <strong>"akun Anda akan diblokir"</strong> untuk memancing kepanikan. Penyerang ingin Anda bertindak tanpa berpikir. Selalu tenang dan verifikasi terlebih dahulu sebelum mengklik apapun.
+          </div>
+        </div>
       </div>
 
-      <div class="learn-box">
-        <strong>💡 Yang sebaiknya dilakukan:</strong>
-        <p>Jika ragu terhadap email serupa, jangan klik tautan apa pun. Laporkan ke tim IT melalui jalur resmi (Telegram Bot/helpdesk) untuk verifikasi sebelum bertindak.</p>
+      <div class="accordion-item">
+        <button class="accordion-header" onclick="toggleAccordion(this)">
+          <span>👤</span> Sapaan generik
+          <span class="accordion-icon">▼</span>
+        </button>
+        <div class="accordion-body">
+          <div class="accordion-body-inner">
+            Email resmi dari perusahaan biasanya menyapa Anda dengan nama lengkap. Jika email hanya menggunakan <strong>"Dear User"</strong> atau <strong>"Yth. Pelanggan"</strong>, itu adalah tanda bahwa email tersebut dikirim secara massal dan bukan untuk Anda secara personal.
+          </div>
+        </div>
       </div>
 
-      <button class="btn" id="ack-btn" onclick="markDone()">Saya Mengerti</button>
+      <div class="accordion-item">
+        <button class="accordion-header" onclick="toggleAccordion(this)">
+          <span>🔗</span> Pengirim tidak personal
+          <span class="accordion-icon">▼</span>
+        </button>
+        <div class="accordion-body">
+          <div class="accordion-body-inner">
+            Perhatikan alamat email pengirim. Penyerang sering menggunakan domain yang mirip tapi tidak sama, misalnya <strong>admin@perusahaan-support.com</strong> alih-alih domain resmi. Selalu periksa detail pengirim sebelum mempercayai isi email.
+          </div>
+        </div>
+      </div>
+
+      <div class="accordion-item">
+        <button class="accordion-header" onclick="toggleAccordion(this)">
+          <span>⚡</span> Meminta klik segera tanpa verifikasi
+          <span class="accordion-icon">▼</span>
+        </button>
+        <div class="accordion-body">
+          <div class="accordion-body-inner">
+            Email yang meminta Anda <strong>mengklik link</strong> atau <strong>mengunduh lampiran</strong> tanpa memberikan cara verifikasi adalah tanda bahaya besar. Prosedur resmi perusahaan tidak pernah meminta aksi mendesak melalui email tanpa konfirmasi multi-channel.
+          </div>
+        </div>
+      </div>
     </div>
+
+    <!-- 6. WHAT TO DO CARD -->
+    <div class="glass-card action-card fade-up stagger-6" id="action-card">
+      <h3>💡 Yang Sebaiknya Dilakukan</h3>
+      <p>Jika Anda menerima email mencurigakan, jangan panik. Ikuti langkah-langkah berikut:</p>
+      <ul>
+        <li>
+          <span class="action-icon">🚫</span>
+          <span>Jangan klik link atau unduh lampiran dari email yang mencurigakan.</span>
+        </li>
+        <li>
+          <span class="action-icon">🔍</span>
+          <span>Periksa alamat pengirim dan pastikan domain-nya sesuai dengan yang resmi.</span>
+        </li>
+        <li>
+          <span class="action-icon">📱</span>
+          <span>Laporkan email mencurigakan ke Tim IT Security melalui <strong>Telegram Bot</strong> perusahaan.</span>
+        </li>
+        <li>
+          <span class="action-icon">🗑️</span>
+          <span>Hapus email tersebut dari inbox Anda setelah melaporkan.</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- 7. CTA BUTTON -->
+    <div class="cta-wrap fade-up stagger-6">
+      <button class="cta-button" id="cta-button" onclick="markDone()">
+        ✅ Saya Mengerti
+      </button>
+    </div>
+
   </div>
 
-<script>
-  // Email diselipkan oleh Flask saat render template (lihat app.py),
-  // dipakai untuk mengirim event 'viewed_training' atau 'skipped_training'
-  // ke Flask sendiri (BUKAN ke n8n langsung - tetap mengikuti prinsip
-  // "Flask = satu-satunya pintu ke database").
-  const USER_EMAIL = "__USER_EMAIL__";
-  let trainingMarked = false;
+  <script>
+    // === SERVER-INJECTED EMAIL ===
+    const USER_EMAIL = "__USER_EMAIL__";
+    let trainingMarked = false;
 
-  function markDone() {
-    trainingMarked = true;
-    document.getElementById('ack-btn').innerText = '✓ Tercatat, Terima Kasih';
-    document.getElementById('ack-btn').disabled = true;
+    // === ACCORDION ===
+    function toggleAccordion(btn) {
+      const item = btn.parentElement;
+      const body = item.querySelector('.accordion-body');
+      const isOpen = item.classList.contains('open');
 
-    fetch('/api/event', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: USER_EMAIL, event_type: 'viewed_training' })
-    }).catch(() => {
-      // Gagal kirim diam-diam tidak masalah untuk MVP - user tetap
-      // melihat konfirmasi visual, training tetap "dianggap selesai"
-      // dari sisi UX walau pencatatan skor terlewat.
-    });
-  }
+      // Close all others
+      document.querySelectorAll('.accordion-item.open').forEach(function(el) {
+        el.classList.remove('open');
+        el.querySelector('.accordion-body').style.maxHeight = null;
+      });
 
-  // Kalau user menutup tab TANPA klik "Saya Mengerti", catat sebagai
-  // skipped_training. beforeunload + fetch dengan keepalive supaya
-  // request tetap terkirim walau halaman sedang ditutup.
-  window.addEventListener('beforeunload', () => {
-    if (!trainingMarked) {
+      if (!isOpen) {
+        item.classList.add('open');
+        body.style.maxHeight = body.scrollHeight + 'px';
+      }
+    }
+
+    // === BADGE HELPERS ===
+    function getBadgeClass(badge) {
+      if (badge === 'Sentinel') return 'sentinel';
+      if (badge === 'Guardian') return 'guardian';
+      return 'vulnerable';
+    }
+
+    function getRankMedal(rank) {
+      if (rank === 1) return '🥇';
+      if (rank === 2) return '🥈';
+      if (rank === 3) return '🥉';
+      return '#' + rank;
+    }
+
+    // === POPULATE UI ===
+    function populateProfile(data) {
+      var badgeClass = getBadgeClass(data.badge);
+
+      // Name & Division
+      document.getElementById('profile-name').textContent = data.name || 'Pengguna';
+      document.getElementById('profile-division').textContent = data.divisi || '';
+
+      // Badge glow & shield
+      var glow = document.getElementById('badge-glow');
+      glow.className = 'badge-glow ' + badgeClass;
+      var shield = document.getElementById('badge-shield');
+      shield.className = 'badge-shield ' + badgeClass;
+
+      // Badge pill
+      var pill = document.getElementById('badge-pill');
+      pill.className = 'badge-pill ' + badgeClass;
+      pill.textContent = data.badge || '—';
+
+      // Points circle
+      var points = data.points || 0;
+      var maxPoints = 200;
+      var circumference = 2 * Math.PI * 23; // r=23
+      var offset = circumference - (Math.min(points, maxPoints) / maxPoints) * circumference;
+      var circleFill = document.getElementById('circle-fill');
+      circleFill.className.baseVal = 'circle-fill ' + badgeClass;
+      // Delay for animation
+      setTimeout(function() {
+        circleFill.style.strokeDashoffset = offset;
+      }, 300);
+
+      document.getElementById('points-number').textContent = points;
+      document.getElementById('points-display').textContent = points + ' poin';
+
+      // Streak
+      var streak = data.streak_weeks || 0;
+      var streakCard = document.getElementById('streak-card');
+      document.getElementById('streak-number').textContent = streak;
+
+      if (streak === 0) {
+        streakCard.classList.add('streak-zero');
+        document.getElementById('streak-label').textContent = 'Minggu Bebas Phishing';
+        document.getElementById('streak-sublabel').textContent = '🌱 Mulai streak baru Anda hari ini!';
+      } else {
+        streakCard.classList.remove('streak-zero');
+        document.getElementById('streak-label').textContent = 'Minggu Bebas Phishing!';
+        if (streak >= 4) {
+          document.getElementById('streak-sublabel').textContent = '🎉 Luar biasa! Anda konsisten menjaga keamanan!';
+        } else {
+          document.getElementById('streak-sublabel').textContent = '💪 Terus pertahankan!';
+        }
+      }
+
+      // Leaderboard
+      var rank = data.division_rank || '?';
+      var total = data.total_divisions || '?';
+      var divName = data.divisi || 'Anda';
+      var medal = getRankMedal(rank);
+      document.getElementById('leaderboard-rank').innerHTML =
+        '<span class="rank-medal">' + medal + '</span> Divisi <strong>' + divName +
+        '</strong> berada di peringkat <strong>#' + rank + '</strong> dari <strong>' + total + '</strong> divisi';
+
+      var avgPoints = data.division_avg_points || 0;
+      document.getElementById('leaderboard-avg').textContent = 'Rata-rata divisi: ' + avgPoints + ' poin';
+      setTimeout(function() {
+        document.getElementById('leaderboard-bar').style.width = Math.min(avgPoints / maxPoints * 100, 100) + '%';
+      }, 400);
+    }
+
+    // === FETCH PROFILE DATA ===
+    fetch('/api/user-profile?email=' + encodeURIComponent(USER_EMAIL))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        populateProfile(data);
+      })
+      .catch(function() {
+        // Fallback defaults
+        populateProfile({
+          email: USER_EMAIL,
+          name: 'Pengguna',
+          divisi: '',
+          points: 0,
+          badge: 'Vulnerable',
+          click_count: 0,
+          viewed_training_count: 0,
+          streak_weeks: 0,
+          division_rank: 0,
+          total_divisions: 0,
+          division_avg_points: 0,
+          is_new_user: true
+        });
+      });
+
+    // === MARK DONE ===
+    function markDone() {
+      trainingMarked = true;
+      var btn = document.getElementById('cta-button');
+      btn.disabled = true;
+      btn.textContent = '✓ Tercatat, Terima Kasih';
+
       fetch('/api/event', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: USER_EMAIL, event_type: 'skipped_training' }),
-        keepalive: true
-      });
+        body: JSON.stringify({ email: USER_EMAIL, event_type: 'viewed_training' })
+      }).catch(function() {});
     }
-  });
-</script>
+
+    // === BEFOREUNLOAD — skipped_training ===
+    window.addEventListener('beforeunload', function() {
+      if (!trainingMarked) {
+        fetch('/api/event', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: USER_EMAIL, event_type: 'skipped_training' }),
+          keepalive: true
+        });
+      }
+    });
+  </script>
 </body>
 </html>

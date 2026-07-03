@@ -423,9 +423,25 @@ def create_incident():
     except Exception as e:
         return jsonify({"error": "gagal membuat ticket", "detail": str(e)}), 500
 
-    return jsonify({"message": "Ticket incident berhasil dibuat",
-                     "ticket_id": ticket_id, "source_type": source_type,
-                     "severity": severity}), 201
+    response_body = {"message": "Ticket incident berhasil dibuat",
+                      "ticket_id": ticket_id, "source_type": source_type,
+                      "severity": severity}
+
+    # Gamifikasi Step A.3: +15 poin kalau ini laporan Flow B (real_world_report)
+    # DAN sudah terkonfirmasi berbahaya (severity medium/high dari VT/urlscan,
+    # bukan sekadar clean/low). "reporter_chat_id" wajib dikirim n8n di body
+    # request ini (lihat flow-b.json) supaya kita bisa resolve ke email lewat
+    # mapping OTP registration — tanpa ini, poin TIDAK diberikan (fail-open,
+    # bukan fail-error, karena tiket tetap harus tercatat walau reporter
+    # belum ke-link Telegram-nya).
+    if source_type == 'real_world_report' and severity in ('medium', 'high'):
+        reporter_chat_id = data.get('reporter_chat_id')
+        award = database.award_points_for_report(reporter_chat_id)
+        if award:
+            response_body["points_awarded"] = database.POINTS_CONFIRMED_REPORT
+            response_body["reporter"] = award
+
+    return jsonify(response_body), 201
 
 
 @app.route('/api/incidents/<ticket_id>', methods=['PATCH'])
@@ -469,6 +485,30 @@ def list_incidents():
 def dashboard_summary():
     summary = database.get_dashboard_summary()
     return jsonify(summary), 200
+
+
+@app.route('/api/leaderboard', methods=['GET'])
+def leaderboard():
+    """Handoff Step A.4 — Leaderboard UI Tab data source. Mengembalikan
+    ranking individu (berdasarkan poin) dan rata-rata poin per divisi."""
+    return jsonify(database.get_leaderboard()), 200
+
+
+@app.route('/api/user-profile', methods=['GET'])
+def user_profile():
+    """Mengembalikan profil lengkap user untuk Personal Security Portal.
+    Dipanggil oleh tier1.html via AJAX."""
+    email = request.args.get('email')
+    if not email:
+        return jsonify({"error": "parameter 'email' wajib diisi"}), 400
+    return jsonify(database.get_user_profile(email)), 200
+
+
+@app.route('/api/compliance-summary', methods=['GET'])
+def compliance_summary():
+    """Mengembalikan data kepatuhan regulasi UU PDP & BSSN untuk
+    Dashboard SOC. Dipanggil oleh dashboard.html via AJAX."""
+    return jsonify(database.get_compliance_summary()), 200
 
 
 @app.route('/')

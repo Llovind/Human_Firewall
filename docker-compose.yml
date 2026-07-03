@@ -10,9 +10,19 @@ services:
       - N8N_PORT=5678
       - N8N_PROTOCOL=http
       - NODE_ENV=production
-      - WEBHOOK_URL=https://ropge-114-10-45-156.run.pinggy-free.link
+      - WEBHOOK_URL=${WEBHOOK_URL}
       - GENERIC_TIMEZONE=Asia/Jakarta
       - NODE_OPTIONS=--dns-result-order=ipv4first
+      # Wajib false, karena n8n versi baru default BLOKIR akses process.env
+      # dari dalam expression node ({{ $env.X }}) demi keamanan. Flow B
+      # butuh ini supaya VT_API_KEY & URLSCAN_API_KEY bisa dibaca dari
+      # environment variable, bukan hardcoded di JSON workflow.
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      - N8N_ALLOW_ENV_VARIABLES=true
+      - NODE_FUNCTION_ALLOW_BUILTIN=crypto
+      - VT_API_KEY=${VT_API_KEY}
+      - URLSCAN_API_KEY=${URLSCAN_API_KEY}
+      - SOC_CHAT_ID=${SOC_CHAT_ID}
     volumes:
       - n8n_data:/home/node/.n8n
     restart: unless-stopped
@@ -58,8 +68,8 @@ services:
       - flask_db:/app/instance   # Persistence SQLite Flask
     environment:
       - FLASK_APP=app.py
-      - FLASK_ENV=development
-      - FLASK_DEBUG=1
+      - FLASK_ENV=production
+      - FLASK_DEBUG=0
     restart: unless-stopped
     networks:
       - hfl_network
