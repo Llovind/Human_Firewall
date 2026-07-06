@@ -1,0 +1,289 @@
+/* ══════════════════════════════════════════════════════════════
+   Auth Page Styles — Magic Link Transition
+   ══════════════════════════════════════════════════════════════ */
+
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  padding: var(--space-8);
+}
+
+/* Scan line effect for cybersecurity aesthetic */
+.auth-scanline {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: 0.3;
+  animation: scanLine 4s linear infinite;
+  z-index: 10;
+}
+
+.auth-container {
+  background: rgba(17, 26, 46, 0.8);
+  backdrop-filter: blur(24px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-12) var(--space-10);
+  text-align: center;
+  max-width: 440px;
+  width: 100%;
+  position: relative;
+  z-index: 1;
+}
+
+.auth-container::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-xl);
+  background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(99,102,241,0.08), transparent 60%);
+  pointer-events: none;
+}
+
+/* ── Logo ─────────────────────────────────────────────────── */
+.auth-logo {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto var(--space-8);
+  background: linear-gradient(135deg, var(--accent-dim), var(--accent));
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-glow-accent);
+  animation: pulseGlow 3s ease-in-out infinite;
+}
+
+.auth-logo svg {
+  width: 32px;
+  height: 32px;
+  color: white;
+}
+
+/* ── Status States ────────────────────────────────────────── */
+.auth-status {
+  position: relative;
+}
+
+.auth-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  margin-bottom: var(--space-2);
+  color: var(--text-primary);
+}
+
+.auth-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: var(--space-6);
+}
+
+.auth-subtitle code {
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--accent);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.auth-subtitle strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* ── Spinner ──────────────────────────────────────────────── */
+.auth-spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto var(--space-6);
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Progress Bar ─────────────────────────────────────────── */
+.auth-progress {
+  width: 200px;
+  height: 3px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-full);
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+.auth-progress-bar {
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+  border-radius: var(--radius-full);
+  animation: progressPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes progressPulse {
+  0%, 100% { width: 30%; margin-left: 0; }
+  50% { width: 60%; margin-left: 40%; }
+}
+
+/* ── Success State ────────────────────────────────────────── */
+.auth-success-state .auth-title {
+  background: linear-gradient(135deg, var(--success), var(--accent-bright));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.auth-checkmark {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(52, 211, 153, 0.15);
+  border: 2px solid var(--success);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto var(--space-6);
+  animation: fadeUp 0.4s ease-out;
+  box-shadow: var(--shadow-glow-success);
+}
+
+.auth-checkmark svg {
+  width: 28px;
+  height: 28px;
+  color: var(--success);
+}
+
+.auth-redirect-dots {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.auth-redirect-dots .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: dotBounce 1.2s ease-in-out infinite;
+}
+
+.auth-redirect-dots .dot:nth-child(2) { animation-delay: 0.2s; }
+.auth-redirect-dots .dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes dotBounce {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+/* ── Error State ──────────────────────────────────────────── */
+.auth-error-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(248, 113, 113, 0.15);
+  border: 2px solid var(--danger);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto var(--space-6);
+  box-shadow: var(--shadow-glow-danger);
+}
+
+.auth-error-icon svg {
+  width: 28px;
+  height: 28px;
+  color: var(--danger);
+}
+
+.auth-help {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: var(--space-2);
+}
+
+/* ── No Token State ───────────────────────────────────────── */
+.auth-telegram-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(96, 165, 250, 0.15);
+  border: 2px solid var(--info);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto var(--space-6);
+  box-shadow: var(--shadow-glow-accent);
+}
+
+.auth-telegram-icon svg {
+  width: 28px;
+  height: 28px;
+  color: var(--info);
+}
+
+.auth-telegram-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-6);
+  background: linear-gradient(135deg, #2AABEE, #229ED9);
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  text-decoration: none;
+  box-shadow: 0 4px 16px rgba(42, 171, 238, 0.3);
+}
+
+.auth-telegram-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(42, 171, 238, 0.4);
+}
+
+.auth-telegram-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.auth-demo-hint {
+  margin-top: var(--space-6);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.auth-demo-hint a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.auth-demo-hint a:hover {
+  color: var(--accent-bright);
+}
+
+/* ── Footer ───────────────────────────────────────────────── */
+.auth-footer {
+  position: fixed;
+  bottom: var(--space-6);
+  font-size: 12px;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}

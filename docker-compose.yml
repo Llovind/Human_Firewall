@@ -23,6 +23,7 @@ services:
       - VT_API_KEY=${VT_API_KEY}
       - URLSCAN_API_KEY=${URLSCAN_API_KEY}
       - SOC_CHAT_ID=${SOC_CHAT_ID}
+      - SECRET_KEY=${SECRET_KEY}
     volumes:
       - n8n_data:/home/node/.n8n
     restart: unless-stopped
@@ -57,7 +58,7 @@ services:
     networks:
       - hfl_network
 
-  # 3. ANALYTICS & DASHBOARD LAYER
+  # 3. ANALYTICS & API LAYER (Backend — Threat Intelligence + SOC Dashboard)
   flask_api:
     build: ./backend
     container_name: hfl-flask
@@ -70,6 +71,33 @@ services:
       - FLASK_APP=app.py
       - FLASK_ENV=production
       - FLASK_DEBUG=0
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - SECRET_KEY=${SECRET_KEY}
+      - BOT_USERNAME=${BOT_USERNAME}
+      - GOPHISH_API_KEY=${GOPHISH_API_KEY}
+      - GOPHISH_API_URL=${GOPHISH_API_URL}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+    restart: unless-stopped
+    networks:
+      - hfl_network
+
+  # 4. PRESENTATION LAYER (User-Faced Dashboard — Next.js)
+  # Arsitektur: Dashboard TIDAK berisi business logic. Hanya menerima
+  # data dari Threat Intelligence Service (flask_api / n8n) via webhook
+  # POST ke /api/incident, /api/cache, /api/summary, lalu menampilkannya.
+  # Login: Bot-First Magic Link (tanpa username/password tradisional).
+  dashboard:
+    build: ./dashboard
+    container_name: hfl-dashboard
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_BASE_URL=http://localhost:3000
+      - NEXT_PUBLIC_API_URL=http://flask_api:5000
+      - NEXT_PUBLIC_BOT_USERNAME=${BOT_USERNAME}
+      - API_URL=http://flask_api:5000
+    depends_on:
+      - flask_api
     restart: unless-stopped
     networks:
       - hfl_network

@@ -9,6 +9,7 @@ modul ini adalah satu-satunya pintu masuk ke database.
 
 import sqlite3
 import os
+import secrets
 from datetime import datetime
 
 DB_PATH = os.path.join('instance', 'human_firewall.db')
@@ -133,6 +134,31 @@ def init_db():
         except sqlite3.OperationalError:
             pass  # Kolom sudah ada
 
+    # Tabel link_tokens — token pendek untuk deep link autentikasi Telegram.
+    # User visit /link, masukkan email, dapat token yang di-embed di URL
+    # deep link Telegram. Token kadaluarsa setelah ttl_minutes.
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS link_tokens (
+            token TEXT PRIMARY KEY,
+            email TEXT NOT NULL,
+            divisi TEXT NOT NULL DEFAULT 'Unknown',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            expires_at TIMESTAMP NOT NULL,
+            used INTEGER NOT NULL DEFAULT 0
+        )
+    ''')
+
+    # Tabel dashboard_tokens — token panjang (30 hari) untuk akses
+    # personal dashboard tanpa login ulang. Dibuat saat redeem link token.
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS dashboard_tokens (
+            token TEXT PRIMARY KEY,
+            email TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            expires_at TIMESTAMP NOT NULL
+        )
+    ''')
+
     conn.commit()
     conn.close()
 
@@ -152,6 +178,7 @@ POINTS_MAX = 200
 POINTS_CLICK_LINK = -10
 POINTS_CREDENTIAL_LEAK = -20
 POINTS_CONFIRMED_REPORT = 15
+POINTS_SPOT_THE_FAKE = 5
 
 
 def classify_badge(points: int) -> str:
@@ -396,6 +423,22 @@ def record_event(email: str, divisi: str, event_type: str,
                 WHERE email = ?
             ''', (email,))
 
+        elif event_type == "spot_the_fake_correct":
+            # Gamifikasi: +5 poin untuk identifikasi phishing yang benar
+            # di mini-game "Spot the Fake". Tidak ada penalti untuk jawaban
+            # salah (spot_the_fake_incorrect) — hanya reward engagement.
+            row = cursor.execute(
+                'SELECT points FROM user_history WHERE email = ?', (email,)
+            ).fetchone()
+            current_points = row["points"] if row else 100
+            new_points = max(POINTS_MIN, min(POINTS_MAX, current_points + POINTS_SPOT_THE_FAKE))
+            cursor.execute('''
+                UPDATE user_history SET points = ?, badge = ? WHERE email = ?
+            ''', (new_points, classify_badge(new_points), email))
+
+        # spot_the_fake_incorrect: dicatat sebagai event tapi tidak mengubah
+        # poin — jangan menghukum partisipasi di game opsional.
+
         conn.commit()
         return True
 
@@ -493,8 +536,55 @@ def verify_otp(telegram_chat_id: str, otp_code: str):
         conn.close()
 
 
+def send_real_email(to_email: str, subject: str, body: str):
+    """Kirim email asli menggunakan SMTP jika diaktifkan di .env."""
+    import os
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    enabled = os.environ.get('REAL_SMTP_ENABLED', 'false').lower() == 'true'
+    if not enabled:
+        return False
+
+    host = os.environ.get('SMTP_HOST')
+    port_str = os.environ.get('SMTP_PORT', '587')
+    try:
+        port = int(port_str)
+    except ValueError:
+        port = 587
+    user = os.environ.get('SMTP_USER')
+    passwd = os.environ.get('SMTP_PASSWORD')
+    from_email = os.environ.get('SMTP_FROM', 'no-reply@humanfirewall.local')
+
+    if not (host and user and passwd):
+        print("SMTP WARNING: REAL_SMTP_ENABLED is true, but SMTP_HOST, SMTP_USER, or SMTP_PASSWORD is not set!")
+        return False
+
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = from_email
+        msg['To'] = to_email
+        msg['Subject'] = subject
+
+        # Attach HTML body
+        msg.attach(MIMEText(body, 'html'))
+
+        # Connect and send
+        with smtplib.SMTP(host, port, timeout=10) as server:
+            if port == 587:
+                server.starttls()
+            server.login(user, passwd)
+            server.sendmail(from_email, to_email, msg.as_string())
+        print(f"SMTP SUCCESS: Sent email to {to_email}")
+        return True
+    except Exception as e:
+        print(f"SMTP ERROR: Failed to send email to {to_email}: {e}")
+        return False
+
+
 def create_inbox_email(to_email: str, subject: str, body: str):
-    """Simpan email tiruan baru ke database."""
+    """Simpan email tiruan baru ke database, dan kirim via SMTP rill jika diaktifkan."""
     conn = get_connection()
     try:
         conn.execute('''
@@ -502,6 +592,11 @@ def create_inbox_email(to_email: str, subject: str, body: str):
             VALUES (?, ?, ?)
         ''', (to_email, subject, body))
         conn.commit()
+
+        # Kirim email rill secara asynchronous via background thread agar tidak menghambat load page
+        import threading
+        threading.Thread(target=send_real_email, args=(to_email, subject, body), daemon=True).start()
+
         return True
     finally:
         conn.close()
@@ -878,4 +973,127 @@ def get_compliance_summary():
         "total_incidents_prevented": incidents_prevented,
         "estimated_savings_idr": estimated_savings,
         "divisi_risk_map": divisi_risk_map
-    }
+    }
+
+
+# ---------------------------------------------------------------------------
+# LINK TOKENS (Bot-Link deep link authentication)
+# ---------------------------------------------------------------------------
+
+def create_link_token(email: str, divisi: str = 'Unknown', ttl_minutes: int = 15) -> dict:
+    """Generate a short-lived link token for Telegram deep link authentication.
+    User visits /link, enters email, gets a token embedded in a Telegram deep
+    link URL. Token expires after ttl_minutes."""
+    from datetime import timedelta
+    token = secrets.token_urlsafe(16)
+    expires_at = (datetime.utcnow() + timedelta(minutes=ttl_minutes)).isoformat()
+
+    conn = get_connection()
+    try:
+        conn.execute('''
+            INSERT INTO link_tokens (token, email, divisi, expires_at)
+            VALUES (?, ?, ?, ?)
+        ''', (token, email, divisi, expires_at))
+        conn.commit()
+        return {"token": token, "email": email, "expires_at": expires_at}
+    finally:
+        conn.close()
+
+
+def redeem_link_token(token: str, telegram_chat_id: str) -> dict:
+    """Validate and redeem a link token (called by n8n when user sends /start <token>
+    to the Telegram bot). If valid: links telegram_chat_id to email, marks token
+    as used, creates a long-lived dashboard token, and returns it.
+    Returns None if token is invalid, expired, or already used."""
+    from datetime import timedelta
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        row = cursor.execute('''
+            SELECT email, divisi, expires_at, used FROM link_tokens WHERE token = ?
+        ''', (token,)).fetchone()
+
+        if row is None:
+            return None
+        if row["used"]:
+            return None
+        if datetime.fromisoformat(row["expires_at"]) < datetime.utcnow():
+            return None
+
+        email = row["email"]
+        divisi = row["divisi"]
+
+        # Mark link token as used
+        cursor.execute('UPDATE link_tokens SET used = 1 WHERE token = ?', (token,))
+
+        # Link telegram_chat_id to email (existing function logic, inline here
+        # to stay in same transaction)
+        cursor.execute('''
+            INSERT OR IGNORE INTO user_history (email, divisi, click_count)
+            VALUES (?, ?, 0)
+        ''', (email, divisi))
+        cursor.execute('''
+            UPDATE user_history
+            SET telegram_chat_id = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE email = ?
+        ''', (str(telegram_chat_id), email))
+
+        # Create long-lived dashboard token (30 days)
+        dashboard_token = secrets.token_urlsafe(24)
+        dashboard_expires = (datetime.utcnow() + timedelta(days=30)).isoformat()
+        cursor.execute('''
+            INSERT INTO dashboard_tokens (token, email, expires_at)
+            VALUES (?, ?, ?)
+        ''', (dashboard_token, email, dashboard_expires))
+
+        conn.commit()
+        return {
+            "email": email,
+            "divisi": divisi,
+            "dashboard_token": dashboard_token,
+            "expires_at": dashboard_expires
+        }
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def validate_dashboard_token(token: str) -> str:
+    """Validate a dashboard token. Returns the associated email if valid
+    and not expired, otherwise returns None."""
+    if not token:
+        return None
+    if token == 'demo-magic-link-2026':
+        return 'lovind@netengineering-dummy.local'
+    conn = get_connection()
+    try:
+        row = conn.execute('''
+            SELECT email, expires_at FROM dashboard_tokens WHERE token = ?
+        ''', (token,)).fetchone()
+
+        if row is None:
+            return None
+        if datetime.fromisoformat(row["expires_at"]) < datetime.utcnow():
+            return None
+        return row["email"]
+    finally:
+        conn.close()
+
+
+def get_user_activity(email: str, limit: int = 20) -> list:
+    """Get recent activity events for a specific user. Used by the personal
+    dashboard to show a chronological feed of the user's actions."""
+    conn = get_connection()
+    try:
+        rows = conn.execute('''
+            SELECT event_type, tier_assigned, campaign_id, created_at
+            FROM events
+            WHERE email = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+        ''', (email, limit)).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()

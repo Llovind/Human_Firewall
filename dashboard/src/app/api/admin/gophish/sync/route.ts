@@ -1,0 +1,25 @@
+import { NextRequest, NextResponse } from 'next/server';
+
+export async function POST(request: NextRequest) {
+  try {
+    const apiUrl = (process.env.API_URL || process.env.NEXT_PUBLIC_API_URL) || 'http://flask_api:5000';
+    const secretKey = process.env.SECRET_KEY || 'dev-fallback-key-change-in-production';
+
+    const res = await fetch(`${apiUrl}/api/admin/gophish/sync`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${secretKey}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      return NextResponse.json({ error: data.error || 'Gagal sinkronisasi target group' }, { status: res.status });
+    }
+
+    return NextResponse.json(data);
+  } catch (error: any) {
+    return NextResponse.json({ error: 'Gagal menghubungi server backend', detail: error.message }, { status: 500 });
+  }
+}
