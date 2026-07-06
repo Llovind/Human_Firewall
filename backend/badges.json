@@ -1,0 +1,28 @@
+{
+  "badges": [
+    {
+      "id": "sentinel_troops",
+      "label": "Sentinel Troops",
+      "threshold": 1,
+      "description": "Melaporkan threat pertama kali — Anda mulai berkontribusi!"
+    },
+    {
+      "id": "front_line_defender",
+      "label": "Front Line Defender",
+      "threshold": 3,
+      "description": "Telah melaporkan 3 threat berbahaya — Anda adalah garda depan kami."
+    },
+    {
+      "id": "the_front_man",
+      "label": "The Front Man",
+      "threshold": 5,
+      "description": "Telah melaporkan 5 threat berbahaya — Pemimpin keamanan di tim!"
+    },
+    {
+      "id": "cyber_shield_elite",
+      "label": "Cyber Shield Elite",
+      "threshold": 10,
+      "description": "Telah melaporkan 10 threat berbahaya — Elite defender perusahaan kami!"
+    }
+  ]
+}

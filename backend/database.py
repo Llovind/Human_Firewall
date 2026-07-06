@@ -10,7 +10,8 @@ modul ini adalah satu-satunya pintu masuk ke database.
 import sqlite3
 import os
 import secrets
-from datetime import datetime
+import json
+from datetime import datetime, date, timedelta
 
 DB_PATH = os.path.join('instance', 'human_firewall.db')
 
@@ -19,6 +20,25 @@ DB_PATH = os.path.join('instance', 'human_firewall.db')
 VALID_SOURCE_TYPES = ("simulation", "real_world_report")
 VALID_SEVERITIES = ("low", "medium", "high")
 VALID_STATUSES = ("open", "closed")
+VALID_REPORT_TYPES = ("url", "file")
+VALID_VERDICTS = ("clean", "suspicious", "malicious")
+
+# =========================================================================
+# BADGE CONFIG — Single Source of Truth (loaded once at module init)
+# =========================================================================
+_BADGE_CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'badges.json')
+try:
+    with open(_BADGE_CONFIG_PATH, 'r') as f:
+        BADGE_CONFIG = json.load(f)
+    BADGE_THRESHOLDS = [b["threshold"] for b in BADGE_CONFIG["badges"]]
+    BADGE_NAMES = [b["id"] for b in BADGE_CONFIG["badges"]]
+    BADGE_LABELS = {b["id"]: b["label"] for b in BADGE_CONFIG["badges"]}
+except (FileNotFoundError, json.JSONDecodeError) as e:
+    print(f"WARNING: badges.json tidak ditemukan atau invalid: {e}")
+    BADGE_CONFIG = {"badges": []}
+    BADGE_THRESHOLDS = [1, 3, 5, 10]  # fallback
+    BADGE_NAMES = ["sentinel_troops", "front_line_defender", "the_front_man", "cyber_shield_elite"]
+    BADGE_LABELS = {}
 
 
 def get_connection():
@@ -30,137 +50,218 @@ def get_connection():
     return conn
 
 
+def _column_exists(cursor, table: str, column: str) -> bool:
+    """Helper: check apakah kolom sudah ada di tabel (untuk idempotent migrations)."""
+    try:
+        pragma = cursor.execute(f'PRAGMA table_info({table})').fetchall()
+        return any(row[1] == column for row in pragma)
+    except Exception:
+        return False
+
+
 def init_db():
-    """Bikin semua tabel kalau belum ada. Dipanggil sekali saat app start."""
+    """Bikin semua tabel kalau belum ada. Dipanggil sekali saat app start.
+    Semua migration di-design idempotent (aman untuk dijalankan berkali-kali).
+    """
     os.makedirs('instance', exist_ok=True)
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Tabel user_history — dipakai Flow A (simulasi GoPhish) untuk
-    # menentukan tier (first-timer / repeat / chronic clicker).
-    # Satu baris per kombinasi email+divisi dummy.
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS user_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT NOT NULL UNIQUE,
-            divisi TEXT NOT NULL,
-            click_count INTEGER NOT NULL DEFAULT 0,
-            viewed_training_count INTEGER NOT NULL DEFAULT 0,
-            skipped_training_count INTEGER NOT NULL DEFAULT 0,
-            last_clicked TIMESTAMP,
-            telegram_chat_id TEXT,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-
-    # Tabel events — log mentah tiap event yang masuk dari n8n
-    # (klik, submit data, lihat training, dst). Ini histori detail,
-    # sedangkan user_history di atas adalah agregat/ringkasan per user.
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT NOT NULL,
-            divisi TEXT,
-            event_type TEXT NOT NULL,
-            tier_assigned TEXT,
-            campaign_id TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-
-    # Tabel incidents — konvergensi dua mode (simulation & real_world_report).
-    # source_type WAJIB diisi, divalidasi di layer Python sebelum INSERT.
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS incidents (
-            ticket_id TEXT PRIMARY KEY,
-            source_type TEXT NOT NULL,
-            reported_url TEXT,
-            divisi TEXT,
-            severity TEXT NOT NULL DEFAULT 'low',
-            vt_verdict TEXT,
-            urlscan_verdict TEXT,
-            screenshot_url TEXT,
-            checklist TEXT,
-            file_hash TEXT,
-            original_filename TEXT,
-            status TEXT NOT NULL DEFAULT 'open',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            closed_at TIMESTAMP
-        )
-    ''')
-
-    # Tabel registration_otp — menyimpan kode OTP pendaftaran Telegram
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS registration_otp (
-            email TEXT NOT NULL,
-            telegram_chat_id TEXT NOT NULL,
-            otp_code TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-
-    # Tabel inbox_emails — menyimpan email tiruan untuk Mock Webmail
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS inbox_emails (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            to_email TEXT NOT NULL,
-            subject TEXT NOT NULL,
-            body TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-
-    # Migration: tambah kolom Flow B jika belum ada (aman untuk DB existing,
-    # ALTER TABLE ADD COLUMN di SQLite tidak error-prone seperti di RDBMS lain).
-    for col in ['file_hash TEXT', 'original_filename TEXT']:
-        try:
-            cursor.execute(f'ALTER TABLE incidents ADD COLUMN {col}')
-        except sqlite3.OperationalError:
-            pass  # Kolom sudah ada
-
-    # Migration: tambah kolom telegram_chat_id jika belum ada
     try:
-        cursor.execute('ALTER TABLE user_history ADD COLUMN telegram_chat_id TEXT')
-    except sqlite3.OperationalError:
-        pass
+        # Tabel user_history — dipakai Flow A (simulasi GoPhish) untuk
+        # menentukan tier (first-timer / repeat / chronic clicker).
+        # Satu baris per kombinasi email+divisi dummy.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE,
+                divisi TEXT NOT NULL,
+                click_count INTEGER NOT NULL DEFAULT 0,
+                viewed_training_count INTEGER NOT NULL DEFAULT 0,
+                skipped_training_count INTEGER NOT NULL DEFAULT 0,
+                last_clicked TIMESTAMP,
+                telegram_chat_id TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
 
-    # Migration: gamifikasi (Handoff Step A) — points & badge per user.
-    # Default points=100 supaya user baru mulai netral (bukan 0, karena
-    # 0 akan langsung terlihat seperti "sudah bermasalah" padahal belum
-    # ada histori sama sekali).
-    for col in ['points INTEGER NOT NULL DEFAULT 100', "badge TEXT NOT NULL DEFAULT 'Guardian'"]:
+        # Tabel events — log mentah tiap event yang masuk dari n8n
+        # (klik, submit data, lihat training, dst). Ini histori detail,
+        # sedangkan user_history di atas adalah agregat/ringkasan per user.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL,
+                divisi TEXT,
+                event_type TEXT NOT NULL,
+                tier_assigned TEXT,
+                campaign_id TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Tabel incidents — konvergensi dua mode (simulation & real_world_report).
+        # source_type WAJIB diisi, divalidasi di layer Python sebelum INSERT.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS incidents (
+                ticket_id TEXT PRIMARY KEY,
+                source_type TEXT NOT NULL,
+                reported_url TEXT,
+                divisi TEXT,
+                severity TEXT NOT NULL DEFAULT 'low',
+                vt_verdict TEXT,
+                urlscan_verdict TEXT,
+                screenshot_url TEXT,
+                checklist TEXT,
+                file_hash TEXT,
+                original_filename TEXT,
+                status TEXT NOT NULL DEFAULT 'open',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                closed_at TIMESTAMP
+            )
+        ''')
+
+        # Tabel registration_otp — menyimpan kode OTP pendaftaran Telegram
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS registration_otp (
+                email TEXT NOT NULL,
+                telegram_chat_id TEXT NOT NULL,
+                otp_code TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Tabel inbox_emails — menyimpan email tiruan untuk Mock Webmail
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS inbox_emails (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                to_email TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                body TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Migration: tambah kolom Flow B jika belum ada (aman untuk DB existing,
+        # ALTER TABLE ADD COLUMN di SQLite tidak error-prone seperti di RDBMS lain).
+        for col in ['file_hash TEXT', 'original_filename TEXT']:
+            try:
+                cursor.execute(f'ALTER TABLE incidents ADD COLUMN {col}')
+            except sqlite3.OperationalError:
+                pass  # Kolom sudah ada
+
+        # Migration: tambah kolom telegram_chat_id jika belum ada
         try:
-            cursor.execute(f'ALTER TABLE user_history ADD COLUMN {col}')
+            cursor.execute('ALTER TABLE user_history ADD COLUMN telegram_chat_id TEXT')
         except sqlite3.OperationalError:
-            pass  # Kolom sudah ada
+            pass
 
-    # Tabel link_tokens — token pendek untuk deep link autentikasi Telegram.
-    # User visit /link, masukkan email, dapat token yang di-embed di URL
-    # deep link Telegram. Token kadaluarsa setelah ttl_minutes.
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS link_tokens (
-            token TEXT PRIMARY KEY,
-            email TEXT NOT NULL,
-            divisi TEXT NOT NULL DEFAULT 'Unknown',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            expires_at TIMESTAMP NOT NULL,
-            used INTEGER NOT NULL DEFAULT 0
-        )
-    ''')
+        # Migration: gamifikasi (Handoff Step A) — points & badge per user.
+        # Default points=100 supaya user baru mulai netral (bukan 0, karena
+        # 0 akan langsung terlihat seperti "sudah bermasalah" padahal belum
+        # ada histori sama sekali).
+        for col in ['points INTEGER NOT NULL DEFAULT 100', "badge TEXT NOT NULL DEFAULT 'Guardian'"]:
+            try:
+                cursor.execute(f'ALTER TABLE user_history ADD COLUMN {col}')
+            except sqlite3.OperationalError:
+                pass  # Kolom sudah ada
 
-    # Tabel dashboard_tokens — token panjang (30 hari) untuk akses
-    # personal dashboard tanpa login ulang. Dibuat saat redeem link token.
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS dashboard_tokens (
-            token TEXT PRIMARY KEY,
-            email TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            expires_at TIMESTAMP NOT NULL
-        )
-    ''')
+        # Tabel link_tokens — token pendek untuk deep link autentikasi Telegram.
+        # User visit /link, masukkan email, dapat token yang di-embed di URL
+        # deep link Telegram. Token kadaluarsa setelah ttl_minutes.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS link_tokens (
+                token TEXT PRIMARY KEY,
+                email TEXT NOT NULL,
+                divisi TEXT NOT NULL DEFAULT 'Unknown',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL,
+                used INTEGER NOT NULL DEFAULT 0
+            )
+        ''')
 
-    conn.commit()
-    conn.close()
+        # Tabel dashboard_tokens — token panjang (30 hari) untuk akses
+        # personal dashboard tanpa login ulang. Dibuat saat redeem link token.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS dashboard_tokens (
+                token TEXT PRIMARY KEY,
+                email TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL
+            )
+        ''')
+
+        # =========================================================================
+        # MIGRATION: GAMIFICATION LAYER (Handoff Step B) — threat reports & daily events
+        # =========================================================================
+
+        # Migration: tambah kolom ke user_history untuk gamification (idempotent check)
+        gamification_cols = [
+            'reports_count_malicious INTEGER NOT NULL DEFAULT 0',
+            'reports_count_total INTEGER NOT NULL DEFAULT 0',
+            'daily_streak INTEGER NOT NULL DEFAULT 0',
+            'last_quiz_completed_at DATE'
+        ]
+        for col_def in gamification_cols:
+            col_name = col_def.split()[0]
+            if not _column_exists(cursor, 'user_history', col_name):
+                try:
+                    cursor.execute(f'ALTER TABLE user_history ADD COLUMN {col_def}')
+                except sqlite3.OperationalError:
+                    pass  # Kolom sudah ada atau error lain
+
+        # Tabel threat_reports — store setiap laporan dari Flow B setelah triase VT+urlscan
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS threat_reports (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                report_id TEXT NOT NULL UNIQUE,
+                email TEXT NOT NULL,
+                telegram_user_id TEXT,
+                type TEXT NOT NULL,
+                target TEXT NOT NULL,
+                verdict TEXT NOT NULL,
+                severity_tier TEXT,
+                source_engine TEXT NOT NULL,
+                raw_scores TEXT,
+                counted_for_gamification INTEGER NOT NULL DEFAULT 0,
+                dedupe_status TEXT NOT NULL DEFAULT 'new',
+                submitted_at TIMESTAMP NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (email) REFERENCES user_history(email)
+            )
+        ''')
+
+        # Index buat query dedupe & reporting summary yang cepat
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_threat_reports_email_target 
+            ON threat_reports(email, target)
+        ''')
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_threat_reports_email_verdict 
+            ON threat_reports(email, verdict)
+        ''')
+
+        # Tabel daily_events — track aktivitas harian per employee (quiz completion, dll)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS daily_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                event_date DATE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (email) REFERENCES user_history(email),
+                UNIQUE(email, event_type, event_date)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_daily_events_email_date 
+            ON daily_events(email, event_date)
+        ''')
+
+        conn.commit()
+    finally:
+        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -179,6 +280,7 @@ POINTS_CLICK_LINK = -10
 POINTS_CREDENTIAL_LEAK = -20
 POINTS_CONFIRMED_REPORT = 15
 POINTS_SPOT_THE_FAKE = 5
+POINTS_QUIZ_COMPLETE = 10
 
 
 def classify_badge(points: int) -> str:
@@ -247,16 +349,18 @@ def award_points_for_report(telegram_chat_id: str, points: int = POINTS_CONFIRME
         return None
 
     conn = get_connection()
-    row = conn.execute(
-        'SELECT email, divisi FROM user_history WHERE telegram_chat_id = ?',
-        (str(telegram_chat_id),)
-    ).fetchone()
-    conn.close()
+    try:
+        row = conn.execute(
+            'SELECT email, divisi FROM user_history WHERE telegram_chat_id = ?',
+            (str(telegram_chat_id),)
+        ).fetchone()
 
-    if row is None:
-        return None
+        if row is None:
+            return None
 
-    return adjust_points(row["email"], row["divisi"] or "Unknown", points)
+        return adjust_points(row["email"], row["divisi"] or "Unknown", points)
+    finally:
+        conn.close()
 
 
 def get_leaderboard():
@@ -264,36 +368,330 @@ def get_leaderboard():
     Dipakai untuk Leaderboard UI Tab (Handoff Step A.4). Hanya
     menampilkan user yang punya divisi (bukan record kosong)."""
     conn = get_connection()
-    rows = conn.execute('''
-        SELECT email, divisi, points, badge, click_count,
-               viewed_training_count, skipped_training_count
-        FROM user_history
-        WHERE divisi IS NOT NULL
-        ORDER BY points DESC, viewed_training_count DESC
-    ''').fetchall()
-    conn.close()
+    try:
+        rows = conn.execute('''
+            SELECT email, divisi, points, badge, click_count,
+                   viewed_training_count, skipped_training_count
+            FROM user_history
+            WHERE divisi IS NOT NULL
+            ORDER BY points DESC, viewed_training_count DESC
+        ''').fetchall()
 
-    leaderboard = [dict(row) for row in rows]
-    for i, entry in enumerate(leaderboard, start=1):
-        entry["rank"] = i
+        leaderboard = [dict(row) for row in rows]
+        for i, entry in enumerate(leaderboard, start=1):
+            entry["rank"] = i
 
-    # Agregat per divisi (rata-rata poin), untuk "division rankings"
-    # sesuai deskripsi tab di handoff, terpisah dari ranking individu.
-    divisi_totals = {}
-    for entry in leaderboard:
-        d = entry["divisi"]
-        divisi_totals.setdefault(d, []).append(entry["points"])
+        # Agregat per divisi (rata-rata poin), untuk "division rankings"
+        # sesuai deskripsi tab di handoff, terpisah dari ranking individu.
+        divisi_totals = {}
+        for entry in leaderboard:
+            d = entry["divisi"]
+            divisi_totals.setdefault(d, []).append(entry["points"])
 
-    divisi_rankings = sorted(
-        [
-            {"divisi": d, "avg_points": round(sum(pts) / len(pts), 1), "member_count": len(pts)}
-            for d, pts in divisi_totals.items()
-        ],
-        key=lambda x: x["avg_points"],
-        reverse=True
-    )
+        divisi_rankings = sorted(
+            [
+                {"divisi": d, "avg_points": round(sum(pts) / len(pts), 1), "member_count": len(pts)}
+                for d, pts in divisi_totals.items()
+            ],
+            key=lambda x: x["avg_points"],
+            reverse=True
+        )
 
-    return {"individual": leaderboard, "by_divisi": divisi_rankings}
+        return {"individual": leaderboard, "by_divisi": divisi_rankings}
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# GAMIFICATION LAYER (Handoff Step B) — threat reports & daily events
+# ---------------------------------------------------------------------------
+
+def create_threat_report(email: str, telegram_user_id: str, type_: str, target: str,
+                         verdict: str, severity_tier: str, source_engine: str,
+                         raw_scores: dict = None, submitted_at: str = None) -> dict:
+    """
+    Simpan laporan threat dari Flow B, handle dedupe, increment counter,
+    dan evaluasi badge. Return dict berisi report_id, counted status,
+    dan employee gamification stats terbaru.
+    
+    Dedupe key = (email, target) tanpa verdict.
+    """
+    import uuid
+    
+    if verdict not in VALID_VERDICTS:
+        raise ValueError(f"verdict tidak valid: {verdict}")
+    if type_ not in VALID_REPORT_TYPES:
+        raise ValueError(f"type tidak valid: {type_}")
+    if source_engine not in ("vt", "urlscan", "both"):
+        raise ValueError(f"source_engine tidak valid: {source_engine}")
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # 1. Cek employee ada
+        emp_row = cursor.execute(
+            'SELECT email, divisi FROM user_history WHERE email = ?', (email,)
+        ).fetchone()
+        if not emp_row:
+            raise ValueError(f"Employee {email} tidak ditemukan")
+        
+        # 2. Cek dedupe: apakah (email, target) sudah pernah dilaporkan dengan verdict malicious/suspicious?
+        dedupe_row = cursor.execute('''
+            SELECT id FROM threat_reports 
+            WHERE email = ? AND target = ? AND verdict IN ('malicious', 'suspicious')
+            LIMIT 1
+        ''', (email, target)).fetchone()
+        
+        is_duplicate = dedupe_row is not None
+        report_id = f"rpt_{uuid.uuid4().hex[:6]}"
+        submitted_at_val = submitted_at or datetime.utcnow().isoformat()
+        raw_scores_json = json.dumps(raw_scores) if raw_scores else None
+        
+        # 3. Tentukan apakah laporan ini dihitung untuk gamification
+        counted = (verdict in ('malicious', 'suspicious')) and not is_duplicate
+        dedupe_status = "duplicate" if is_duplicate else "new"
+        
+        # 4. Simpan row ke threat_reports (always, bahkan kalau duplicate)
+        cursor.execute('''
+            INSERT INTO threat_reports (
+                report_id, email, telegram_user_id, type, target, verdict,
+                severity_tier, source_engine, raw_scores, counted_for_gamification,
+                dedupe_status, submitted_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (report_id, email, telegram_user_id, type_, target, verdict,
+              severity_tier, source_engine, raw_scores_json, int(counted),
+              dedupe_status, submitted_at_val))
+        
+        badge_just_unlocked = None
+        
+        # 5. Update counter: counted=True nambah both, False (clean atau duplicate) nambah total only
+        if counted:
+            cursor.execute('''
+                UPDATE user_history
+                SET reports_count_malicious = reports_count_malicious + 1,
+                    reports_count_total = reports_count_total + 1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE email = ?
+            ''', (email,))
+        else:
+            # clean ATAU duplicate — sama-sama cuma nambah total, gak nambah malicious count
+            cursor.execute('''
+                UPDATE user_history
+                SET reports_count_total = reports_count_total + 1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE email = ?
+            ''', (email,))
+        
+        conn.commit()
+        
+        # 6. Fetch employee stats terbaru buat return
+        emp_final = cursor.execute(
+            'SELECT reports_count_malicious, daily_streak FROM user_history WHERE email = ?', (email,)
+        ).fetchone()
+        
+        # Get badges unlocked (reuse module-level BADGE_THRESHOLDS & BADGE_NAMES)
+        malicious_count = emp_final["reports_count_malicious"] if emp_final else 0
+        badges_unlocked = []
+        
+        for threshold, badge_name in zip(BADGE_THRESHOLDS, BADGE_NAMES):
+            if malicious_count >= threshold:
+                badges_unlocked.append(badge_name)
+        
+        # Check if badge just unlocked
+        if counted:
+            for threshold, badge_name in zip(BADGE_THRESHOLDS, BADGE_NAMES):
+                if malicious_count == threshold:
+                    badge_just_unlocked = badge_name
+                    break
+        
+        return {
+            "report_id": report_id,
+            "counted_for_gamification": counted,
+            "dedupe_status": dedupe_status,
+            "employee": {
+                "email": email,
+                "reports_count_malicious": malicious_count,
+                "daily_streak": emp_final["daily_streak"] if emp_final else 0,
+                "badges_unlocked": badges_unlocked,
+                "badge_just_unlocked": badge_just_unlocked
+            }
+        }
+    except ValueError:
+        # ValueError expected dari aplikasi logic — propagate as-is
+        raise
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def get_reports_summary(email: str) -> dict:
+    """
+    Fetch gamification summary untuk dashboard: malicious count, total count,
+    daily streak, badges achieved, next badge.
+    """
+    conn = get_connection()
+    
+    try:
+        row = conn.execute(
+            'SELECT reports_count_malicious, reports_count_total, daily_streak, last_quiz_completed_at FROM user_history WHERE email = ?',
+            (email,)
+        ).fetchone()
+
+        if not row:
+            return None  # Employee tidak ditemukan
+        
+        malicious_count = row["reports_count_malicious"] or 0
+        total_count = row["reports_count_total"] or 0
+        daily_streak = row["daily_streak"] or 0
+        last_quiz_date = row["last_quiz_completed_at"]
+        
+        # Build badges array (reuse module-level config)
+        badges = []
+        next_badge = None
+        
+        for threshold, badge_name in zip(BADGE_THRESHOLDS, BADGE_NAMES):
+            achieved = malicious_count >= threshold
+            label = BADGE_LABELS.get(badge_name, badge_name)
+            badges.append({
+                "id": badge_name,
+                "label": label,
+                "threshold": threshold,
+                "achieved": achieved
+            })
+            
+            if not achieved and next_badge is None:
+                next_badge = {
+                    "id": badge_name,
+                    "threshold": threshold,
+                    "remaining": threshold - malicious_count
+                }
+        
+        return {
+            "email": email,
+            "reports_count_malicious": malicious_count,
+            "reports_count_total": total_count,
+            "daily_streak": daily_streak,
+            "last_quiz_completed_at": last_quiz_date,
+            "badges": badges,
+            "next_badge": next_badge
+        }
+    finally:
+        conn.close()
+
+
+def complete_daily_quiz(email: str) -> dict:
+    """
+    Handle quiz completion dengan Duolingo-style Daily Streak logic (Option A):
+    
+    Pseudocode dari spec:
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+        
+        if last_quiz_completed_at is None:
+            # completion pertama kali sepanjang sejarah user ini
+            new_streak = 1
+        elif last_quiz_completed_at == yesterday.isoformat():
+            # completion kemarin → lanjut streak
+            new_streak = current_streak + 1
+        else:
+            # last_quiz_completed_at < yesterday (bolong 1+ hari)
+            # atau kasus aneh last_quiz_completed_at > today (clock skew) → treat as reset juga
+            new_streak = 1
+    
+    Server side nentuin tanggal, bukan client — ini defense terhadap clock manipulation.
+    
+    Return: {"status": "completed" atau "already_completed", "daily_streak": X, ...}
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # 1. Cek employee ada
+        emp_row = cursor.execute(
+            'SELECT divisi, daily_streak, last_quiz_completed_at FROM user_history WHERE email = ?', (email,)
+        ).fetchone()
+        if not emp_row:
+            raise ValueError(f"Employee {email} tidak ditemukan")
+        
+        divisi = emp_row["divisi"] or "Unknown"
+        current_streak = emp_row["daily_streak"] or 0
+        last_quiz_date_str = emp_row["last_quiz_completed_at"]
+        
+        # 2. Cek sudah ada event quiz di hari ini (server-side date.today())
+        today_str = date.today().isoformat()
+        existing = cursor.execute('''
+            SELECT id FROM daily_events
+            WHERE email = ? AND event_type = 'quiz_completed' AND event_date = ?
+        ''', (email, today_str)).fetchone()
+        
+        if existing:
+            # Sudah completed hari ini
+            conn.commit()
+            return {
+                "status": "already_completed",
+                "daily_streak": current_streak,
+                "message": "Sudah Menyelesaikan Latihan Hari Ini - Streak Terjaga!"
+            }
+        
+        # 3. Tentukan streak logic berdasarkan last_quiz_completed_at (Duolingo style, Option A)
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+        
+        if last_quiz_date_str is None:
+            # Completion pertama kali sepanjang sejarah user ini
+            new_streak = 1
+        else:
+            try:
+                last_quiz_date = date.fromisoformat(last_quiz_date_str)
+            except (ValueError, TypeError):
+                # Parse error → treat as first time
+                new_streak = 1
+                last_quiz_date = None
+            
+            if last_quiz_date == yesterday:
+                # Completion kemarin → lanjut streak
+                new_streak = current_streak + 1
+            elif last_quiz_date is not None and (last_quiz_date < yesterday or last_quiz_date > today):
+                # last_quiz_completed_at < yesterday (bolong 1+ hari) ATAU clock skew → reset ke 1
+                new_streak = 1
+            else:
+                # Edge case aneh, treat as reset
+                new_streak = 1
+        
+        # 4. Record completion
+        cursor.execute('''
+            INSERT INTO daily_events (email, event_type, event_date)
+            VALUES (?, 'quiz_completed', ?)
+        ''', (email, today_str))
+        
+        cursor.execute('''
+            UPDATE user_history
+            SET daily_streak = ?, last_quiz_completed_at = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE email = ?
+        ''', (new_streak, today_str, email))
+        
+        conn.commit()
+        
+        # Award points (via adjust_points)
+        adjust_points(email, divisi, POINTS_QUIZ_COMPLETE)
+        
+        return {
+            "status": "completed",
+            "points_awarded": POINTS_QUIZ_COMPLETE,
+            "daily_streak": new_streak,
+            "last_quiz_completed_at": today_str
+        }
+    except ValueError:
+        # ValueError expected dari aplikasi logic — propagate as-is
+        raise
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -305,33 +703,35 @@ def get_user_history(email: str):
     return record default dengan click_count=0, BUKAN error — supaya n8n
     bisa langsung klasifikasi sebagai Tier 1 tanpa cabang error tambahan."""
     conn = get_connection()
-    row = conn.execute(
-        'SELECT * FROM user_history WHERE email = ?', (email,)
-    ).fetchone()
-    conn.close()
+    try:
+        row = conn.execute(
+            'SELECT * FROM user_history WHERE email = ?', (email,)
+        ).fetchone()
 
-    if row is None:
+        if row is None:
+            return {
+                "email": email,
+                "divisi": None,
+                "click_count": 0,
+                "viewed_training_count": 0,
+                "skipped_training_count": 0,
+                "last_clicked": None,
+                "telegram_chat_id": None,
+                "is_new_user": True
+            }
+
         return {
-            "email": email,
-            "divisi": None,
-            "click_count": 0,
-            "viewed_training_count": 0,
-            "skipped_training_count": 0,
-            "last_clicked": None,
-            "telegram_chat_id": None,
-            "is_new_user": True
+            "email": row["email"],
+            "divisi": row["divisi"],
+            "click_count": row["click_count"],
+            "viewed_training_count": row["viewed_training_count"],
+            "skipped_training_count": row["skipped_training_count"],
+            "last_clicked": row["last_clicked"],
+            "telegram_chat_id": row["telegram_chat_id"],
+            "is_new_user": False
         }
-
-    return {
-        "email": row["email"],
-        "divisi": row["divisi"],
-        "click_count": row["click_count"],
-        "viewed_training_count": row["viewed_training_count"],
-        "skipped_training_count": row["skipped_training_count"],
-        "last_clicked": row["last_clicked"],
-        "telegram_chat_id": row["telegram_chat_id"],
-        "is_new_user": False
-    }
+    finally:
+        conn.close()
 
 
 def classify_tier(click_count: int) -> str:
@@ -538,7 +938,6 @@ def verify_otp(telegram_chat_id: str, otp_code: str):
 
 def send_real_email(to_email: str, subject: str, body: str):
     """Kirim email asli menggunakan SMTP jika diaktifkan di .env."""
-    import os
     import smtplib
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
@@ -699,10 +1098,11 @@ def list_incidents(source_type: str = None, status: str = None):
 
     query += ' ORDER BY created_at DESC'
 
-    rows = conn.execute(query, params).fetchall()
-    conn.close()
-
-    return [dict(row) for row in rows]
+    try:
+        rows = conn.execute(query, params).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -715,68 +1115,69 @@ def get_dashboard_summary():
     memang ditaruh di Flask, bukan di n8n."""
     conn = get_connection()
 
-    # Human Risk Score sederhana per divisi:
-    # skor = -10 per klik, -15 tambahan kalau skip training, +5 kalau
-    # viewed training. Formula ini placeholder awal — bisa disesuaikan
-    # lagi, yang penting logic-nya terpusat di sini, bukan tersebar.
-    # Ambil data per user untuk menghitung skor personal yang di-clamp terlebih dahulu
-    user_rows = conn.execute('''
-        SELECT divisi, click_count, viewed_training_count, skipped_training_count
-        FROM user_history
-        WHERE divisi IS NOT NULL
-    ''').fetchall()
+    try:
+        # Human Risk Score sederhana per divisi:
+        # skor = -10 per klik, -15 tambahan kalau skip training, +5 kalau
+        # viewed training. Formula ini placeholder awal — bisa disesuaikan
+        # lagi, yang penting logic-nya terpusat di sini, bukan tersebar.
+        # Ambil data per user untuk menghitung skor personal yang di-clamp terlebih dahulu
+        user_rows = conn.execute('''
+            SELECT divisi, click_count, viewed_training_count, skipped_training_count
+            FROM user_history
+            WHERE divisi IS NOT NULL
+        ''').fetchall()
 
-    divisi_totals = {}
-    for row in user_rows:
-        d = row["divisi"]
-        # Hitung skor personal user (0-100)
-        score = 100
-        score -= (row["click_count"] or 0) * 10
-        score -= (row["skipped_training_count"] or 0) * 5
-        score += (row["viewed_training_count"] or 0) * 2
-        score = max(0, min(100, score))  # clamp per user
-        
-        divisi_totals.setdefault(d, []).append(score)
+        divisi_totals = {}
+        for row in user_rows:
+            d = row["divisi"]
+            # Hitung skor personal user (0-100)
+            score = 100
+            score -= (row["click_count"] or 0) * 10
+            score -= (row["skipped_training_count"] or 0) * 5
+            score += (row["viewed_training_count"] or 0) * 2
+            score = max(0, min(100, score))  # clamp per user
+            
+            divisi_totals.setdefault(d, []).append(score)
 
-    divisi_scores = []
-    for d, scores in divisi_totals.items():
-        # Ambil total klik divisi untuk metadata dashboard
-        clicks_row = conn.execute(
-            'SELECT SUM(click_count) as total_clicks FROM user_history WHERE divisi = ?', (d,)
-        ).fetchone()
-        total_clicks = clicks_row["total_clicks"] if clicks_row and clicks_row["total_clicks"] else 0
-        
-        avg_score = sum(scores) / len(scores)
-        divisi_scores.append({
-            "divisi": d,
-            "human_risk_score": round(avg_score, 1),
-            "total_users": len(scores),
-            "total_clicks": total_clicks
-        })
+        divisi_scores = []
+        for d, scores in divisi_totals.items():
+            # Ambil total klik divisi untuk metadata dashboard
+            clicks_row = conn.execute(
+                'SELECT SUM(click_count) as total_clicks FROM user_history WHERE divisi = ?', (d,)
+            ).fetchone()
+            total_clicks = clicks_row["total_clicks"] if clicks_row and clicks_row["total_clicks"] else 0
+            
+            avg_score = sum(scores) / len(scores)
+            divisi_scores.append({
+                "divisi": d,
+                "human_risk_score": round(avg_score, 1),
+                "total_users": len(scores),
+                "total_clicks": total_clicks
+            })
 
-    # Ringkasan incident untuk "Active Threat Tickets"
-    open_real_world = conn.execute('''
-        SELECT COUNT(*) as cnt FROM incidents
-        WHERE source_type = 'real_world_report' AND status = 'open'
-    ''').fetchone()["cnt"]
+        # Ringkasan incident untuk "Active Threat Tickets"
+        open_real_world = conn.execute('''
+            SELECT COUNT(*) as cnt FROM incidents
+            WHERE source_type = 'real_world_report' AND status = 'open'
+        ''').fetchone()["cnt"]
 
-    # Mean Time to Close (dalam menit) untuk ticket yang sudah closed
-    mttc_row = conn.execute('''
-        SELECT AVG(
-            (julianday(closed_at) - julianday(created_at)) * 24 * 60
-        ) as avg_minutes
-        FROM incidents
-        WHERE status = 'closed' AND closed_at IS NOT NULL
-    ''').fetchone()
+        # Mean Time to Close (dalam menit) untuk ticket yang sudah closed
+        mttc_row = conn.execute('''
+            SELECT AVG(
+                (julianday(closed_at) - julianday(created_at)) * 24 * 60
+            ) as avg_minutes
+            FROM incidents
+            WHERE status = 'closed' AND closed_at IS NOT NULL
+        ''').fetchone()
 
-    conn.close()
-
-    return {
-        "divisi_scores": divisi_scores,
-        "open_real_world_incidents": open_real_world,
-        "mean_time_to_close_minutes": round(mttc_row["avg_minutes"], 1)
-            if mttc_row["avg_minutes"] is not None else None
-    }
+        return {
+            "divisi_scores": divisi_scores,
+            "open_real_world_incidents": open_real_world,
+            "mean_time_to_close_minutes": round(mttc_row["avg_minutes"], 1)
+                if mttc_row["avg_minutes"] is not None else None
+        }
+    finally:
+        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -788,84 +1189,84 @@ def get_user_profile(email):
     Termasuk streak, posisi divisi, dan data gamifikasi."""
     conn = get_connection()
 
-    row = conn.execute(
-        'SELECT * FROM user_history WHERE email = ?', (email,)
-    ).fetchone()
-
-    if not row:
-        conn.close()
-        return {
-            "email": email,
-            "name": email.split('@')[0].replace('.', ' ').replace('_', ' ').title(),
-            "divisi": "Unknown",
-            "points": 100,
-            "badge": "Guardian",
-            "click_count": 0,
-            "viewed_training_count": 0,
-            "streak_weeks": 0,
-            "division_rank": 1,
-            "total_divisions": 1,
-            "division_avg_points": 100,
-            "is_new_user": True
-        }
-
-    user_dict = dict(row)
-    email_val = user_dict.get("email", email)
-    divisi = user_dict.get("divisi", "Unknown")
-    points = user_dict.get("points", 100)
-    badge = user_dict.get("badge", "Guardian")
-    click_count = user_dict.get("click_count", 0)
-    viewed = user_dict.get("viewed_training_count", 0)
-    last_clicked = user_dict.get("last_clicked")
-
-    # Hitung streak: berapa minggu sejak terakhir klik phishing
-    streak_weeks = 0
-    if last_clicked:
-        streak_row = conn.execute(
-            "SELECT CAST((julianday('now') - julianday(?)) / 7 AS INTEGER) as weeks",
-            (last_clicked,)
+    try:
+        row = conn.execute(
+            'SELECT * FROM user_history WHERE email = ?', (email,)
         ).fetchone()
-        streak_weeks = max(0, streak_row["weeks"]) if streak_row else 0
-    else:
-        # Belum pernah klik = streak sempurna (4 minggu default)
-        streak_weeks = 4
 
-    # Hitung posisi divisi di leaderboard
-    divisi_rows = conn.execute('''
-        SELECT divisi, AVG(points) as avg_pts
-        FROM user_history
-        WHERE divisi IS NOT NULL
-        GROUP BY divisi
-        ORDER BY avg_pts DESC
-    ''').fetchall()
+        if not row:
+            return {
+                "email": email,
+                "name": email.split('@')[0].replace('.', ' ').replace('_', ' ').title(),
+                "divisi": "Unknown",
+                "points": 100,
+                "badge": "Guardian",
+                "click_count": 0,
+                "viewed_training_count": 0,
+                "streak_weeks": 0,
+                "division_rank": 1,
+                "total_divisions": 1,
+                "division_avg_points": 100,
+                "is_new_user": True
+            }
 
-    total_divisions = len(divisi_rows) if divisi_rows else 1
-    division_rank = 1
-    division_avg_points = points
-    for i, d_row in enumerate(divisi_rows):
-        if d_row["divisi"] == divisi:
-            division_rank = i + 1
-            division_avg_points = round(d_row["avg_pts"], 1)
-            break
+        user_dict = dict(row)
+        email_val = user_dict.get("email", email)
+        divisi = user_dict.get("divisi", "Unknown")
+        points = user_dict.get("points", 100)
+        badge = user_dict.get("badge", "Guardian")
+        click_count = user_dict.get("click_count", 0)
+        viewed = user_dict.get("viewed_training_count", 0)
+        last_clicked = user_dict.get("last_clicked")
 
-    conn.close()
+        # Hitung streak: berapa minggu sejak terakhir klik phishing
+        streak_weeks = 0
+        if last_clicked:
+            streak_row = conn.execute(
+                "SELECT CAST((julianday('now') - julianday(?)) / 7 AS INTEGER) as weeks",
+                (last_clicked,)
+            ).fetchone()
+            streak_weeks = max(0, streak_row["weeks"]) if streak_row else 0
+        else:
+            # Belum pernah klik = streak sempurna (4 minggu default)
+            streak_weeks = 4
 
-    name = email_val.split('@')[0].replace('.', ' ').replace('_', ' ').title()
+        # Hitung posisi divisi di leaderboard
+        divisi_rows = conn.execute('''
+            SELECT divisi, AVG(points) as avg_pts
+            FROM user_history
+            WHERE divisi IS NOT NULL
+            GROUP BY divisi
+            ORDER BY avg_pts DESC
+        ''').fetchall()
 
-    return {
-        "email": email_val,
-        "name": name,
-        "divisi": divisi,
-        "points": points,
-        "badge": badge,
-        "click_count": click_count,
-        "viewed_training_count": viewed,
-        "streak_weeks": streak_weeks,
-        "division_rank": division_rank,
-        "total_divisions": total_divisions,
-        "division_avg_points": division_avg_points,
-        "is_new_user": False
-    }
+        total_divisions = len(divisi_rows) if divisi_rows else 1
+        division_rank = 1
+        division_avg_points = points
+        for i, d_row in enumerate(divisi_rows):
+            if d_row["divisi"] == divisi:
+                division_rank = i + 1
+                division_avg_points = round(d_row["avg_pts"], 1)
+                break
+
+        name = email_val.split('@')[0].replace('.', ' ').replace('_', ' ').title()
+
+        return {
+            "email": email_val,
+            "name": name,
+            "divisi": divisi,
+            "points": points,
+            "badge": badge,
+            "click_count": click_count,
+            "viewed_training_count": viewed,
+            "streak_weeks": streak_weeks,
+            "division_rank": division_rank,
+            "total_divisions": total_divisions,
+            "division_avg_points": division_avg_points,
+            "is_new_user": False
+        }
+    finally:
+        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -877,103 +1278,104 @@ def get_compliance_summary():
     Mengkorelasikan poin karyawan dengan metrik kepatuhan UU PDP & BSSN."""
     conn = get_connection()
 
-    # 1. Rata-rata klik per user & tingkat penyelesaian training
-    stats_row = conn.execute('''
-        SELECT 
-            AVG(click_count) as avg_clicks,
-            AVG(CASE WHEN viewed_training_count > 0 THEN 1.0 ELSE 0.0 END) as training_rate,
-            COUNT(*) as total_users
-        FROM user_history
-    ''').fetchone()
-    
-    avg_clicks = stats_row["avg_clicks"] if stats_row and stats_row["avg_clicks"] else 0
-    training_rate = stats_row["training_rate"] if stats_row and stats_row["training_rate"] else 0
-    total_users = stats_row["total_users"] if stats_row else 0
+    try:
+        # 1. Rata-rata klik per user & tingkat penyelesaian training
+        stats_row = conn.execute('''
+            SELECT 
+                AVG(click_count) as avg_clicks,
+                AVG(CASE WHEN viewed_training_count > 0 THEN 1.0 ELSE 0.0 END) as training_rate,
+                COUNT(*) as total_users
+            FROM user_history
+        ''').fetchone()
+        
+        avg_clicks = stats_row["avg_clicks"] if stats_row and stats_row["avg_clicks"] else 0
+        training_rate = stats_row["training_rate"] if stats_row and stats_row["training_rate"] else 0
+        total_users = stats_row["total_users"] if stats_row else 0
 
-    # 2. Insiden kebocoran kredensial (dari event 'submitted_data')
-    cred_incidents_row = conn.execute(
-        "SELECT COUNT(*) as cnt FROM events WHERE event_type = 'submitted_data'"
-    ).fetchone()
-    cred_incidents = cred_incidents_row["cnt"] if cred_incidents_row else 0
+        # 2. Insiden kebocoran kredensial (dari event 'submitted_data')
+        cred_incidents_row = conn.execute(
+            "SELECT COUNT(*) as cnt FROM events WHERE event_type = 'submitted_data'"
+        ).fetchone()
+        cred_incidents = cred_incidents_row["cnt"] if cred_incidents_row else 0
 
-    # Kalkulasi 3 Pilar GRC
-    # A. Phishing Resilience Rate (Bobot 40%) - Turun jika rata-rata klik naik
-    resilience_score = max(0, 100 - (avg_clicks * 20))
-    
-    # B. Training Completion Rate (Bobot 30%)
-    training_score = training_rate * 100
-    
-    # C. Credential Protection Rate (Bobot 30%) - Turun jika banyak kredensial bocor
-    cred_protection_score = max(0, 100 - ((cred_incidents / max(total_users, 1)) * 50))
+        # Kalkulasi 3 Pilar GRC
+        # A. Phishing Resilience Rate (Bobot 40%) - Turun jika rata-rata klik naik
+        resilience_score = max(0, 100 - (avg_clicks * 20))
+        
+        # B. Training Completion Rate (Bobot 30%)
+        training_score = training_rate * 100
+        
+        # C. Credential Protection Rate (Bobot 30%) - Turun jika banyak kredensial bocor
+        cred_protection_score = max(0, 100 - ((cred_incidents / max(total_users, 1)) * 50))
 
-    # Total Persentase Kepatuhan
-    compliance_pct = round((resilience_score * 0.4) + (training_score * 0.3) + (cred_protection_score * 0.3), 1)
+        # Total Persentase Kepatuhan
+        compliance_pct = round((resilience_score * 0.4) + (training_score * 0.3) + (cred_protection_score * 0.3), 1)
 
-    # Grade Audit
-    if compliance_pct >= 80:
-        compliance_grade = "A"
-    elif compliance_pct >= 65:
-        compliance_grade = "B"
-    elif compliance_pct >= 50:
-        compliance_grade = "C"
-    else:
-        compliance_grade = "D"
-
-    # Estimasi Kerugian Finansial yang Diselamatkan (ROI Awareness)
-    # Setiap insiden (closed) = dicegah potensi rugi Rp 75 juta
-    # Setiap user yang lulus training = avoided risk Rp 5 juta
-    closed_row = conn.execute("SELECT COUNT(*) as cnt FROM incidents WHERE status = 'closed'").fetchone()
-    incidents_prevented = closed_row["cnt"] if closed_row else 0
-
-    trained_users_row = conn.execute("SELECT COUNT(*) as cnt FROM user_history WHERE viewed_training_count > 0").fetchone()
-    trained_users = trained_users_row["cnt"] if trained_users_row else 0
-
-    estimated_savings = (incidents_prevented * 75_000_000) + (trained_users * 5_000_000)
-
-    total_inc_row = conn.execute("SELECT COUNT(*) as cnt FROM incidents").fetchone()
-    total_incidents = total_inc_row["cnt"] if total_inc_row else 0
-
-    # Peta risiko per divisi (tetap menggunakan rata-rata poin klasifikasi lama untuk perbandingan tim)
-    divisi_rows = conn.execute('''
-        SELECT divisi, AVG(points) as avg_pts, COUNT(*) as member_count
-        FROM user_history
-        WHERE divisi IS NOT NULL
-        GROUP BY divisi
-        ORDER BY avg_pts ASC
-    ''').fetchall()
-
-    divisi_risk_map = []
-    for d_row in divisi_rows:
-        avg_pts = round(d_row["avg_pts"], 1)
-        if avg_pts >= 120:
-            risk_level = "Low"
-        elif avg_pts >= 70:
-            risk_level = "Medium"
+        # Grade Audit
+        if compliance_pct >= 80:
+            compliance_grade = "A"
+        elif compliance_pct >= 65:
+            compliance_grade = "B"
+        elif compliance_pct >= 50:
+            compliance_grade = "C"
         else:
-            risk_level = "High"
-        divisi_risk_map.append({
-            "divisi": d_row["divisi"],
-            "avg_points": avg_pts,
-            "member_count": d_row["member_count"],
-            "risk_level": risk_level
-        })
+            compliance_grade = "D"
 
-    # Rata-rata poin general untuk display text
-    avg_row = conn.execute('SELECT AVG(points) as avg_pts FROM user_history').fetchone()
-    avg_points = round(avg_row["avg_pts"], 1) if avg_row and avg_row["avg_pts"] else 100
+        # Estimasi Kerugian Finansial yang Diselamatkan (ROI Awareness)
+        # Setiap insiden (closed) = dicegah potensi rugi Rp 75 juta
+        # Setiap user yang lulus training = avoided risk Rp 5 juta
+        closed_row = conn.execute("SELECT COUNT(*) as cnt FROM incidents WHERE status = 'closed'").fetchone()
+        incidents_prevented = closed_row["cnt"] if closed_row else 0
 
-    conn.close()
+        trained_users_row = conn.execute("SELECT COUNT(*) as cnt FROM user_history WHERE viewed_training_count > 0").fetchone()
+        trained_users = trained_users_row["cnt"] if trained_users_row else 0
 
-    return {
-        "avg_points_all": avg_points,
-        "compliance_pct": compliance_pct,
-        "compliance_grade": compliance_grade,
-        "total_users": total_users,
-        "total_incidents": total_incidents,
-        "total_incidents_prevented": incidents_prevented,
-        "estimated_savings_idr": estimated_savings,
-        "divisi_risk_map": divisi_risk_map
-    }
+        estimated_savings = (incidents_prevented * 75_000_000) + (trained_users * 5_000_000)
+
+        total_inc_row = conn.execute("SELECT COUNT(*) as cnt FROM incidents").fetchone()
+        total_incidents = total_inc_row["cnt"] if total_inc_row else 0
+
+        # Peta risiko per divisi (tetap menggunakan rata-rata poin klasifikasi lama untuk perbandingan tim)
+        divisi_rows = conn.execute('''
+            SELECT divisi, AVG(points) as avg_pts, COUNT(*) as member_count
+            FROM user_history
+            WHERE divisi IS NOT NULL
+            GROUP BY divisi
+            ORDER BY avg_pts ASC
+        ''').fetchall()
+
+        divisi_risk_map = []
+        for d_row in divisi_rows:
+            avg_pts = round(d_row["avg_pts"], 1)
+            if avg_pts >= 120:
+                risk_level = "Low"
+            elif avg_pts >= 70:
+                risk_level = "Medium"
+            else:
+                risk_level = "High"
+            divisi_risk_map.append({
+                "divisi": d_row["divisi"],
+                "avg_points": avg_pts,
+                "member_count": d_row["member_count"],
+                "risk_level": risk_level
+            })
+
+        # Rata-rata poin general untuk display text
+        avg_row = conn.execute('SELECT AVG(points) as avg_pts FROM user_history').fetchone()
+        avg_points = round(avg_row["avg_pts"], 1) if avg_row and avg_row["avg_pts"] else 100
+
+        return {
+            "avg_points_all": avg_points,
+            "compliance_pct": compliance_pct,
+            "compliance_grade": compliance_grade,
+            "total_users": total_users,
+            "total_incidents": total_incidents,
+            "total_incidents_prevented": incidents_prevented,
+            "estimated_savings_idr": estimated_savings,
+            "divisi_risk_map": divisi_risk_map
+        }
+    finally:
+        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -984,7 +1386,6 @@ def create_link_token(email: str, divisi: str = 'Unknown', ttl_minutes: int = 15
     """Generate a short-lived link token for Telegram deep link authentication.
     User visits /link, enters email, gets a token embedded in a Telegram deep
     link URL. Token expires after ttl_minutes."""
-    from datetime import timedelta
     token = secrets.token_urlsafe(16)
     expires_at = (datetime.utcnow() + timedelta(minutes=ttl_minutes)).isoformat()
 
@@ -1005,7 +1406,6 @@ def redeem_link_token(token: str, telegram_chat_id: str) -> dict:
     to the Telegram bot). If valid: links telegram_chat_id to email, marks token
     as used, creates a long-lived dashboard token, and returns it.
     Returns None if token is invalid, expired, or already used."""
-    from datetime import timedelta
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -1096,4 +1496,4 @@ def get_user_activity(email: str, limit: int = 20) -> list:
         ''', (email, limit)).fetchall()
         return [dict(row) for row in rows]
     finally:
-        conn.close()
+        conn.close()
