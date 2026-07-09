@@ -980,7 +980,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "=Bearer {{ $env.SECRET_KEY }}"
+              "value": "=Bearer {{ $env.SERVICE_API_KEY }}"
             }
           ]
         }

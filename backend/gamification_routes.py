@@ -22,7 +22,7 @@ gamification_bp = Blueprint("gamification", __name__, url_prefix="/api")
 # CATATAN AUTH:
 # - POST /reports: SENGAJA tidak dimasukkan ke PUBLIC_ROUTES di app.py,
 #   jadi otomatis kena guard global app.py yang mewajibkan
-#   "Authorization: Bearer <SECRET_KEY>" (server-to-server, dipanggil n8n).
+#   "Authorization: Bearer <SERVICE_API_KEY>" (server-to-server, dipanggil n8n).
 #
 # - GET /employee/<id>/reports-summary dan POST /quiz/complete: endpoint
 #   ini DIPANGGIL LANGSUNG dari browser employee (via Next.js dashboard),
@@ -93,7 +93,7 @@ def _authenticate_employee(requested_employee_id: str):
 def post_report():
     # Tidak butuh token check manual di sini — endpoint ini SENGAJA tidak
     # dimasukkan ke PUBLIC_ROUTES di app.py, jadi otomatis kena guard global
-    # yang mewajibkan "Authorization: Bearer <SECRET_KEY>" dari n8n.
+    # yang mewajibkan "Authorization: Bearer <SERVICE_API_KEY>" dari n8n.
 
     body = request.get_json(silent=True)
     if not body:

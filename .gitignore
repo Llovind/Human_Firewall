@@ -21,3 +21,9 @@ env/
 *.backup
 *.tmp
 
+# Debug logs that may contain secrets (auth headers, tokens, etc.)
+# backend/debug_auth.log was previously committed and leaked SECRET_KEY —
+# see git history purge. Never remove this line.
+*debug_auth.log
+backend/debug_auth.log
+

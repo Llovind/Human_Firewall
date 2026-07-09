@@ -14,10 +14,17 @@
 # Password buat login admin dashboard (session-based auth)
 ADMIN_PASSWORD=ganti_dengan_password_kuat_disini
 
-# Secret key Flask (dipakai buat sign session cookie, DAN dipakai sebagai
-# shared secret buat server-to-server auth via "Authorization: Bearer <SECRET_KEY>"
-# — dipakai n8n buat manggil endpoint yang protected kayak POST /api/reports)
+# Secret key Flask — HANYA dipakai buat sign session cookie admin.
+# BUKAN buat server-to-server auth lagi (lihat SERVICE_API_KEY di bawah).
 SECRET_KEY=ganti_dengan_random_string_panjang_disini
+
+# Shared secret buat server-to-server auth via
+# "Authorization: Bearer <SERVICE_API_KEY>" — dipakai Next.js dashboard
+# dan n8n buat manggil endpoint Flask yang protected (contoh: POST
+# /api/reports, GET /api/compliance-summary, GET /api/leaderboard, dll).
+# WAJIB diisi, Flask app REFUSE START kalau kosong. Generate dengan:
+#   python3 -c "import secrets; print(secrets.token_hex(32))"
+SERVICE_API_KEY=ganti_dengan_random_string_panjang_lainnya_disini
 
 # ---------------------------------------------------------------------------
 # CORS
