@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { usePolling } from '@/hooks/usePolling';
 import { useEffect, useState } from 'react';
 import Logo from '@/components/Logo';
+import ReportingBadgesWidget from '@/components/ReportingBadgesWidget';
 import { LayoutDashboard, Fish, Shield, ShieldCheck, Timer, Lightbulb, Search, Flame, BookOpen, Star, FileWarning, CheckCircle2, AlertTriangle, Trophy } from 'lucide-react';
 import './dashboard.css';
 
@@ -504,6 +505,9 @@ export default function EmployeeDashboardPage() {
                     })}
                   </div>
                 </div>
+
+                {/* Widget baru — Lencana Pelaporan (gamifikasi reporting, terpisah dari behavior score) */}
+                <ReportingBadgesWidget email={user.email} token={user.token} legacyBadges={myScore.badges || []} />
 
                 {/* Daily Tip Card */}
                 <div className="panel glass-card fade-up-2" style={{ marginTop: 'auto', position: 'relative' }}>

@@ -24,6 +24,7 @@ services:
       - URLSCAN_API_KEY=${URLSCAN_API_KEY}
       - SOC_CHAT_ID=${SOC_CHAT_ID}
       - SECRET_KEY=${SECRET_KEY}
+      - SERVICE_API_KEY=${SERVICE_API_KEY}
     volumes:
       - n8n_data:/home/node/.n8n
     restart: unless-stopped
@@ -73,6 +74,7 @@ services:
       - FLASK_DEBUG=0
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - SECRET_KEY=${SECRET_KEY}
+      - SERVICE_API_KEY=${SERVICE_API_KEY}
       - BOT_USERNAME=${BOT_USERNAME}
       - GOPHISH_API_KEY=${GOPHISH_API_KEY}
       - GOPHISH_API_URL=${GOPHISH_API_URL}
@@ -96,6 +98,7 @@ services:
       - NEXT_PUBLIC_API_URL=http://flask_api:5000
       - NEXT_PUBLIC_BOT_USERNAME=${BOT_USERNAME}
       - API_URL=http://flask_api:5000
+      - SERVICE_API_KEY=${SERVICE_API_KEY}
     depends_on:
       - flask_api
     restart: unless-stopped
