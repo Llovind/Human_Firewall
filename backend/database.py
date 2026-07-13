@@ -10,7 +10,10 @@ modul ini adalah satu-satunya pintu masuk ke database.
 import sqlite3
 import os
 import secrets
-from datetime import datetime
+import hashlib
+import json
+
+from datetime import datetime, timedelta
 
 DB_PATH = os.path.join('instance', 'human_firewall.db')
 
@@ -158,7 +161,31 @@ def init_db():
             expires_at TIMESTAMP NOT NULL
         )
     ''')
+    # ---------------------------------------------------------------------------
+    # THREAT INTELLIGENCE
+    # ---------------------------------------------------------------------------
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS threat_cache(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            indicator TEXT NOT NULL,
+            indicator_hash TEXT NOT NULL UNIQUE,
+            indicator_type TEXT NOT NULL,
+            source TEXT NOT NULL,
+            verdict TEXT NOT NULL,
+            confidence INTEGER NOT NULL DEFAULT 0,
+            severity TEXT NOT NULL DEFAULT 'unknown',
+            vt_score INTEGER DEFAULT 0,
+            urlscan_score INTEGER DEFAULT 0,
+            raw_json TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            expires_at TIMESTAMP NOT NULL
+        )
+    """)
 
+    cursor.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_threat_hash
+        ON threat_cache(indicator_hash)
+    """)
     conn.commit()
     conn.close()
 
@@ -1096,4 +1123,273 @@ def get_user_activity(email: str, limit: int = 20) -> list:
         ''', (email, limit)).fetchall()
         return [dict(row) for row in rows]
     finally:
-        conn.close()
+        conn.close()
+# ---------------------------------------------------------------------------
+# THREAT CACHE
+# ---------------------------------------------------------------------------
+def normalize_indicator(indicator: str) -> str:
+    if not indicator:
+        return ""
+
+    indicator = indicator.strip().lower()
+
+    if indicator.endswith("/"):
+        indicator = indicator[:-1]
+
+    return indicator
+def hash_indicator(indicator: str) -> str:
+    indicator = normalize_indicator(indicator)
+
+    return hashlib.sha256(
+        indicator.encode()
+    ).hexdigest()
+def get_cached_indicator(indicator: str):
+
+    indicator = normalize_indicator(indicator)
+
+    indicator_hash = hash_indicator(indicator)
+
+    conn = get_connection()
+
+    try:
+
+        row = conn.execute("""
+
+            SELECT *
+
+            FROM threat_cache
+
+            WHERE indicator_hash = ?
+
+            LIMIT 1
+
+        """, (indicator_hash,)).fetchone()
+
+        if row is None:
+            return None
+
+        row = dict(row)
+
+        expires_at = row.get("expires_at")
+
+        if expires_at:
+
+            try:
+
+                expires = datetime.fromisoformat(expires_at)
+
+                if datetime.utcnow() >= expires:
+
+                    conn.execute("""
+
+                        DELETE
+
+                        FROM threat_cache
+
+                        WHERE indicator_hash=?
+
+                    """, (indicator_hash,))
+
+                    conn.commit()
+
+                    return None
+
+            except Exception:
+
+                # Jika format tanggal rusak, abaikan cache
+                return None
+
+        return row
+
+    finally:
+
+        conn.close()
+def save_threat_cache(
+    indicator,
+    indicator_type,
+    analysis
+):
+
+    conn = get_connection()
+
+    try:
+
+        expires_at = datetime.utcnow() + timedelta(hours=24)
+
+        conn.execute("""
+
+        INSERT OR REPLACE INTO threat_cache(
+
+            indicator,
+            indicator_hash,
+            indicator_type,
+            source,
+            verdict,
+            confidence,
+            severity,
+            vt_score,
+            urlscan_score,
+            raw_json,
+            expires_at
+
+        )
+
+        VALUES(?,?,?,?,?,?,?,?,?,?,?)
+
+        """,(
+
+            normalize_indicator(indicator),
+
+            hash_indicator(indicator),
+
+            indicator_type,
+
+            ",".join(
+                analysis.get("providers", [])
+            ),
+
+            analysis.get("verdict","unknown"),
+
+            analysis.get("confidence",0),
+
+            analysis.get("severity","unknown"),
+
+            (
+                analysis["evidence"]["virustotal"]["vt_score"]
+                if analysis.get("evidence",{}).get("virustotal")
+                else 0
+            ),
+
+            (
+                analysis["evidence"]["urlscan"]["urlscan_score"]
+                if analysis.get("evidence",{}).get("urlscan")
+                else 0
+            ),
+
+            json.dumps(
+                analysis,
+                default=str
+            ),
+
+            expires_at.isoformat()
+
+        ))
+
+        conn.commit()
+
+    finally:
+
+        conn.close()
+
+def get_incident_count_today():
+
+    conn = get_connection()
+
+    try:
+
+        row = conn.execute("""
+
+        SELECT COUNT(*)
+
+        FROM incidents
+
+        WHERE DATE(created_at)=DATE('now')
+
+        """).fetchone()
+
+        return row[0]
+
+    finally:
+
+        conn.close()
+
+
+def insert_incident(
+
+    ticket_id,
+
+    source_type,
+
+    reported_url,
+
+    severity,
+
+    vt_verdict,
+
+    urlscan_verdict,
+
+    screenshot_url,
+
+    checklist,
+
+    file_hash,
+
+    original_filename
+
+):
+
+    conn = get_connection()
+
+    try:
+
+        conn.execute("""
+
+        INSERT INTO incidents(
+
+            ticket_id,
+
+            source_type,
+
+            reported_url,
+
+            severity,
+
+            vt_verdict,
+
+            urlscan_verdict,
+
+            screenshot_url,
+
+            checklist,
+
+            file_hash,
+
+            original_filename
+
+        )
+
+        VALUES(
+
+            ?,?,?,?,?,?,?,?,?,?
+
+        )
+
+        """, (
+
+            ticket_id,
+
+            source_type,
+
+            reported_url,
+
+            severity,
+
+            vt_verdict,
+
+            urlscan_verdict,
+
+            screenshot_url,
+
+            checklist,
+
+            file_hash,
+
+            original_filename
+
+        ))
+
+        conn.commit()
+
+    finally:
+
+        conn.close()

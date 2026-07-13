@@ -1,23 +1,48 @@
-# SQLite Database
+# ===========================
+# Database
+# ===========================
 backend/instance/
 *.db
 *.db-journal
 
-# Python Cache
+# ===========================
+# Python
+# ===========================
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
-# Environment & Virtual Env
+# ===========================
+# Environment
+# ===========================
 .env
+.env.local
+.env.production
+
+# Virtual Environment
 venv/
 .venv/
 env/
 
-# IDE files
+# ===========================
+# IDE
+# ===========================
 .vscode/
 .idea/
+
+# Temporary Files
 *.backup
 *.tmp
+*.log
 
+# ===========================
+# Cloudflare Tunnel
+# ===========================
+cloudflared.exe
+
+# ===========================
+# Windows
+# ===========================
+Thumbs.db
+Desktop.ini
