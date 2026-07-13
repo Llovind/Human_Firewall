@@ -38,3 +38,20 @@ export async function GET() {
     stats: dataStore.getStats(),
   });
 }
+
+/**
+ * PATCH /api/incident — Mark incident as resolved or updated.
+ */
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { id, status } = body;
+    if (!id || !status) {
+      return NextResponse.json({ error: 'id and status are required' }, { status: 400 });
+    }
+    dataStore.updateIncidentStatus(id, status);
+    return NextResponse.json({ success: true });
+  } catch {
+    return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
+  }
+}

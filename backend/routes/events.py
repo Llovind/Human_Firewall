@@ -86,8 +86,10 @@ def redirect_handler():
             tier_assigned=tier,
             campaign_id=rid or None
         )
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"ERROR: Failed to record clicked_link event: {e}")
+        import traceback
+        traceback.print_exc()
 
     notify_n8n({
         "email": email,
@@ -291,13 +293,13 @@ def api_user_eligibility():
         points = row["points"] if row else 100
 
         clicked_row = conn.execute(
-            "SELECT count(*) as count FROM events WHERE email = ? AND event_type = 'phishing_click'",
+            "SELECT count(*) as count FROM events WHERE email = ? AND event_type = 'clicked_link'",
             (email,)
         ).fetchone()
         has_clicked = clicked_row["count"] > 0 if clicked_row else False
 
         behavior_score = points / 2.0
-        if behavior_score >= 70 and not has_clicked:
+        if behavior_score >= 70:
             return jsonify({
                 "eligible": False,
                 "reason": "safe",

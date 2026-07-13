@@ -259,6 +259,24 @@ def init_db():
             ON daily_events(email, event_date)
         ''')
 
+        # Migration: is_active column for employee enable/disable
+        try:
+            cursor.execute('ALTER TABLE user_history ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1')
+        except sqlite3.OperationalError:
+            pass
+
+        # Tabel divisions
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS divisions (
+                name TEXT PRIMARY KEY
+            )
+        ''')
+
+        # Seed default divisions
+        default_divs = ['Network Engineering', 'Performance & Shared Service', 'Network Operations', 'Sales Support', 'IT']
+        for div in default_divs:
+            cursor.execute('INSERT OR IGNORE INTO divisions (name) VALUES (?)', (div,))
+
         conn.commit()
     finally:
         conn.close()
@@ -1495,5 +1513,100 @@ def get_user_activity(email: str, limit: int = 20) -> list:
             LIMIT ?
         ''', (email, limit)).fetchall()
         return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
+def list_employees():
+    conn = get_connection()
+    try:
+        rows = conn.execute('''
+            SELECT email, divisi, click_count, viewed_training_count,
+                   skipped_training_count, telegram_chat_id, points, badge,
+                   reports_count_malicious, reports_count_total, daily_streak,
+                   is_active
+            FROM user_history
+            ORDER BY email ASC
+        ''').fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
+def add_employee(email: str, divisi: str, is_active: int = 1):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        if divisi:
+            cursor.execute('INSERT OR IGNORE INTO divisions (name) VALUES (?)', (divisi,))
+            
+        cursor.execute('''
+            INSERT INTO user_history (email, divisi, click_count, is_active, points, badge)
+            VALUES (?, ?, 0, ?, 100, 'Guardian')
+        ''', (email, divisi, is_active))
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def update_employee(old_email: str, email: str, divisi: str, is_active: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        if divisi:
+            cursor.execute('INSERT OR IGNORE INTO divisions (name) VALUES (?)', (divisi,))
+
+        cursor.execute('''
+            UPDATE user_history
+            SET email = ?, divisi = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE email = ?
+        ''', (email, divisi, is_active, old_email))
+        
+        if old_email != email:
+            cursor.execute('UPDATE events SET email = ? WHERE email = ?', (email, old_email))
+            cursor.execute('UPDATE registration_otp SET email = ? WHERE email = ?', (email, old_email))
+            cursor.execute('UPDATE link_tokens SET email = ? WHERE email = ?', (email, old_email))
+            cursor.execute('UPDATE dashboard_tokens SET email = ? WHERE email = ?', (email, old_email))
+            cursor.execute('UPDATE threat_reports SET email = ? WHERE email = ?', (email, old_email))
+            cursor.execute('UPDATE daily_events SET email = ? WHERE email = ?', (email, old_email))
+
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def list_divisions():
+    conn = get_connection()
+    try:
+        rows = conn.execute('''
+            SELECT d.name, COUNT(u.email) as employee_count
+            FROM divisions d
+            LEFT JOIN user_history u ON d.name = u.divisi AND u.is_active = 1
+            GROUP BY d.name
+            ORDER BY d.name ASC
+        ''').fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
+def create_division(name: str):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('INSERT INTO divisions (name) VALUES (?)', (name,))
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()

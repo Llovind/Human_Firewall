@@ -130,7 +130,7 @@ const typeIcon: Record<string, React.ReactNode> = {
 export default function SOCAdminDashboard() {
   const { user, isAuthenticated, isLoading: authLoading, logout } = useAuth();
   const [clock, setClock] = useState('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'threats' | 'leaderboard' | 'policy' | 'gophish' | 'webmail'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'threats' | 'leaderboard' | 'policy' | 'gophish' | 'webmail' | 'employees'>('overview');
 
   // ── Polling basic data sources ───
   const { data: incidentData, hasUpdated: incidentUpdated } = usePolling<{ incidents: Incident[]; stats: Stats }>('/api/incident', 3000);
@@ -146,8 +146,31 @@ export default function SOCAdminDashboard() {
   const [loginHistory, setLoginHistory] = useState<AdminLoginEvent[]>([]);
   const [emails, setEmails] = useState<MockEmail[]>([]);
   const [selectedEmail, setSelectedEmail] = useState<MockEmail | null>(null);
+  const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
   const [isLaunchModalOpen, setIsLaunchModalOpen] = useState(false);
   const [resources, setResources] = useState<GoPhishResource | null>(null);
+
+  // ── Employees & Divisions State ───
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [divisions, setDivisions] = useState<any[]>([]);
+  const [isEmpModalOpen, setIsEmpModalOpen] = useState(false);
+  const [empModalMode, setEmpModalMode] = useState<'add' | 'edit'>('add');
+  const [empModalEmail, setEmpModalEmail] = useState('');
+  const [empModalOldEmail, setEmpModalOldEmail] = useState('');
+  const [empModalDivision, setEmpModalDivision] = useState('');
+  const [empModalNewDivision, setEmpModalNewDivision] = useState('');
+  const [empModalIsActive, setEmpModalIsActive] = useState(true);
+  const [isCreatingNewDiv, setIsCreatingNewDiv] = useState(false);
+
+  // Division Tab quick create
+  const [isDivModalOpen, setIsDivModalOpen] = useState(false);
+  const [divModalName, setDivModalName] = useState('');
+
+  // Selected Target Employees for Campaign Orchestration
+  const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
+  const [gpEmployeeFilter, setGpEmployeeFilter] = useState('ALL');
+  const [employeeSearchText, setEmployeeSearchText] = useState('');
+  const [employeeDivisionFilter, setEmployeeDivisionFilter] = useState('ALL');
 
   // ── Client-side Filters State ───
   const [threatTypeFilter, setThreatTypeFilter] = useState<string>('ALL');
@@ -164,6 +187,122 @@ export default function SOCAdminDashboard() {
   const [launchPage, setLaunchPage] = useState('');
   const [launchUrl, setLaunchUrl] = useState('http://localhost:8080');
   const [isLaunching, setIsLaunching] = useState(false);
+
+  // ── Load Helpers for Employees & Divisions ───
+  const loadEmployees = async () => {
+    try {
+      const res = await fetch('/api/admin/employees');
+      if (res.ok) {
+        const data = await res.json();
+        setEmployees(data.employees || []);
+      }
+    } catch (err) {
+      console.error('Error loading employees:', err);
+    }
+  };
+
+  const loadDivisions = async () => {
+    try {
+      const res = await fetch('/api/admin/divisions');
+      if (res.ok) {
+        const data = await res.json();
+        setDivisions(data.divisions || []);
+      }
+    } catch (err) {
+      console.error('Error loading divisions:', err);
+    }
+  };
+
+  const handleSaveEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!empModalEmail) {
+      alert('Email wajib diisi');
+      return;
+    }
+    const divisionToSave = isCreatingNewDiv ? empModalNewDivision : empModalDivision;
+    if (!divisionToSave) {
+      alert('Divisi wajib ditentukan');
+      return;
+    }
+
+    const payload = {
+      email: empModalEmail,
+      divisi: divisionToSave,
+      is_active: empModalIsActive ? 1 : 0,
+      old_email: empModalOldEmail
+    };
+
+    try {
+      const url = '/api/admin/employees';
+      const method = empModalMode === 'add' ? 'POST' : 'PUT';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        setIsEmpModalOpen(false);
+        setEmpModalEmail('');
+        setEmpModalDivision('');
+        setEmpModalNewDivision('');
+        setIsCreatingNewDiv(false);
+        loadEmployees();
+        loadDivisions();
+      } else {
+        const data = await res.json();
+        alert(`Gagal menyimpan: ${data.error || 'Unknown error'}`);
+      }
+    } catch {
+      alert('Gagal menghubungi backend.');
+    }
+  };
+
+  const handleCreateDivision = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!divModalName) {
+      alert('Nama divisi wajib diisi');
+      return;
+    }
+    try {
+      const res = await fetch('/api/admin/divisions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: divModalName })
+      });
+      if (res.ok) {
+        setIsDivModalOpen(false);
+        setDivModalName('');
+        loadDivisions();
+      } else {
+        const data = await res.json();
+        alert(`Gagal membuat divisi: ${data.error}`);
+      }
+    } catch {
+      alert('Gagal menghubungi backend.');
+    }
+  };
+
+  const handleOpenAddEmp = () => {
+    setEmpModalMode('add');
+    setEmpModalEmail('');
+    setEmpModalOldEmail('');
+    setEmpModalDivision(divisions.length > 0 ? divisions[0].name : '');
+    setEmpModalNewDivision('');
+    setEmpModalIsActive(true);
+    setIsCreatingNewDiv(false);
+    setIsEmpModalOpen(true);
+  };
+
+  const handleOpenEditEmp = (emp: any) => {
+    setEmpModalMode('edit');
+    setEmpModalEmail(emp.email);
+    setEmpModalOldEmail(emp.email);
+    setEmpModalDivision(emp.divisi);
+    setEmpModalNewDivision('');
+    setEmpModalIsActive(emp.is_active === 1);
+    setIsCreatingNewDiv(false);
+    setIsEmpModalOpen(true);
+  };
 
   // ── Clock ───
   useEffect(() => {
@@ -225,9 +364,14 @@ export default function SOCAdminDashboard() {
     }
   };
 
-  // Sync campaigns when focused on GoPhish, Webmail, or Threats
+  // Sync campaigns when focused on GoPhish, Webmail, Threats, or Employees
   useEffect(() => {
-    if (activeTab === 'gophish') {
+    if (activeTab === 'employees') {
+      loadEmployees();
+      loadDivisions();
+    } else if (activeTab === 'gophish') {
+      loadEmployees();
+      loadDivisions();
       loadGoPhishCampaigns();
     } else if (activeTab === 'webmail') {
       loadEmails();
@@ -236,7 +380,7 @@ export default function SOCAdminDashboard() {
     }
   }, [activeTab]);
 
-  // Periodic polling for GoPhish, Webmail, and Threats when active
+  // Periodic polling for GoPhish, Webmail, Threats, and Employees when active
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (activeTab === 'gophish') {
@@ -245,6 +389,11 @@ export default function SOCAdminDashboard() {
       interval = setInterval(loadEmails, 10000);
     } else if (activeTab === 'threats') {
       interval = setInterval(loadLoginHistory, 10000);
+    } else if (activeTab === 'employees') {
+      interval = setInterval(() => {
+        loadEmployees();
+        loadDivisions();
+      }, 10000);
     }
     return () => {
       if (interval) clearInterval(interval);
@@ -252,12 +401,32 @@ export default function SOCAdminDashboard() {
   }, [activeTab]);
 
   const handleSyncUsers = async () => {
-    if (!confirm("Sinkronisasi semua user ke GoPhish group 'HFL_Target_Group'?")) return;
+    if (selectedEmails.length === 0) {
+      if (!confirm("Tidak ada karyawan terpilih. Sinkronisasi SEMUA karyawan aktif ke GoPhish group 'HFL_Target_Group'?")) return;
+      try {
+        const res = await fetch('/api/admin/gophish/sync', { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          alert(`Sukses! ${data.message || 'Semua karyawan aktif disinkronisasi.'}`);
+        } else {
+          alert(`Gagal: ${data.error}`);
+        }
+      } catch {
+        alert("Koneksi gagal.");
+      }
+      return;
+    }
+
+    if (!confirm(`Sinkronisasi ${selectedEmails.length} karyawan terpilih ke GoPhish group 'HFL_Target_Group'?`)) return;
     try {
-      const res = await fetch('/api/admin/gophish/sync', { method: 'POST' });
+      const res = await fetch('/api/admin/gophish/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emails: selectedEmails })
+      });
       const data = await res.json();
       if (res.ok) {
-        alert(`Sukses! ${data.message || 'Data disinkronisasi.'}`);
+        alert(`Sukses! ${data.message || 'Target terpilih disinkronisasi.'}`);
       } else {
         alert(`Gagal: ${data.error}`);
       }
@@ -267,6 +436,10 @@ export default function SOCAdminDashboard() {
   };
 
   const handleOpenLaunchModal = () => {
+    if (selectedEmails.length === 0) {
+      alert('Silakan pilih minimal 1 target karyawan di daftar target sebelum meluncurkan simulasi.');
+      return;
+    }
     setIsLaunchModalOpen(true);
     loadGoPhishResources();
   };
@@ -278,8 +451,25 @@ export default function SOCAdminDashboard() {
       return;
     }
 
+    if (selectedEmails.length === 0) {
+      alert('Silakan pilih minimal 1 target karyawan.');
+      return;
+    }
+
     setIsLaunching(true);
     try {
+      // 1. Sync selected targets first
+      const syncRes = await fetch('/api/admin/gophish/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emails: selectedEmails })
+      });
+      if (!syncRes.ok) {
+        const syncData = await syncRes.json();
+        throw new Error(syncData.error || 'Gagal sinkronisasi target ke GoPhish.');
+      }
+
+      // 2. Launch campaign
       const res = await fetch('/api/admin/gophish/launch', {
         method: 'POST',
         headers: {
@@ -297,17 +487,35 @@ export default function SOCAdminDashboard() {
 
       const data = await res.json();
       if (res.ok) {
-        alert('Kampanye berhasil diluncurkan!');
+        alert(`Kampanye "${launchName}" berhasil diluncurkan ke ${selectedEmails.length} target!`);
         setIsLaunchModalOpen(false);
         setLaunchName('');
         loadGoPhishCampaigns();
       } else {
         alert(`Gagal meluncurkan: ${data.error}`);
       }
-    } catch {
-      alert('Gagal menghubungi backend.');
+    } catch (err: any) {
+      alert(`Error: ${err.message || 'Gagal menghubungi backend.'}`);
     } finally {
       setIsLaunching(false);
+    }
+  };
+
+  const handleResolveIncident = async (id: string) => {
+    try {
+      const res = await fetch('/api/incident', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status: 'resolved' })
+      });
+      if (res.ok) {
+        setSelectedIncident(null);
+      } else {
+        alert('Gagal mengupdate status insiden');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Terjadi kesalahan koneksi');
     }
   };
 
@@ -380,7 +588,7 @@ export default function SOCAdminDashboard() {
         {/* ── Topbar ─────────────────────────────────────────── */}
         <header className="topbar-slim" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
           <div>
-            <h1 style={{ fontSize: '20px', fontWeight: 600 }}>SOC Command Center</h1>
+            <h1 style={{ fontSize: '20px', fontWeight: 600 }}>Security Culture & Threat Triage Platform</h1>
           </div>
           <div className="topbar-right" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <div className="live-indicator">
@@ -494,7 +702,7 @@ export default function SOCAdminDashboard() {
                           contentStyle={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '8px' }}
                           itemStyle={{ color: 'var(--text-primary)' }}
                         />
-                        <Legend verticalAlign="bottom" height={36} iconType="circle" iconSize={8} />
+                        <Legend verticalAlign="bottom" height={36} iconType="circle" iconSize={8} formatter={(value) => <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{value}</span>} />
                       </PieChart>
                     </ResponsiveContainer>
                   ) : (
@@ -551,7 +759,7 @@ export default function SOCAdminDashboard() {
                 <div className="incident-list">
                   {incidents.length > 0 ? (
                     incidents.slice(0, 5).map(inc => (
-                      <div key={inc.id} className="incident-row">
+                      <div key={inc.id} className="incident-row" onClick={() => setSelectedIncident(inc)} style={{ cursor: 'pointer' }}>
                         <div className="incident-icon">{typeIcon[inc.type] || <FileWarning size={16} />}</div>
                         <div className="incident-info">
                           <div className="incident-title">{inc.description}</div>
@@ -881,7 +1089,7 @@ export default function SOCAdminDashboard() {
                   { divisi: 'Sales Support', avg_points: 35, member_count: 1 }
                 ]).filter(row => leaderboardDivisiFilter === 'ALL' || row.divisi === leaderboardDivisiFilter);
 
-                const itemsPerPage = 4;
+                const itemsPerPage = 5;
                 const totalPages = Math.max(1, Math.ceil(filteredDivisions.length / itemsPerPage));
                 const activePage = Math.min(divisionPage, totalPages);
                 const paginatedDivisions = filteredDivisions.slice((activePage - 1) * itemsPerPage, activePage * itemsPerPage);
@@ -897,10 +1105,10 @@ export default function SOCAdminDashboard() {
                         <table className="threat-table" style={{ width: '100%' }}>
                           <thead>
                             <tr>
-                              <th style={{ width: '15%', textAlign: 'left' }}>Rank</th>
-                              <th style={{ width: '45%', textAlign: 'left' }}>Divisi</th>
-                              <th style={{ width: '20%', textAlign: 'left' }}>Anggota</th>
-                              <th style={{ width: '20%', textAlign: 'left' }}>Poin</th>
+                              <th style={{ width: '15%', textAlign: 'left', padding: '14px 10px' }}>Rank</th>
+                              <th style={{ width: '45%', textAlign: 'left', padding: '14px 10px' }}>Divisi</th>
+                              <th style={{ width: '20%', textAlign: 'left', padding: '14px 10px' }}>Anggota</th>
+                              <th style={{ width: '20%', textAlign: 'left', padding: '14px 10px' }}>Poin</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -908,10 +1116,10 @@ export default function SOCAdminDashboard() {
                               const actualRank = (activePage - 1) * itemsPerPage + idx + 1;
                               return (
                                 <tr key={idx}>
-                                  <td className="mono" style={{ width: '15%', fontWeight: 600, textAlign: 'left' }}>#{actualRank}</td>
-                                  <td style={{ width: '45%', fontWeight: 600, textAlign: 'left' }}>{row.divisi}</td>
-                                  <td style={{ width: '20%', textAlign: 'left' }}>{row.member_count}</td>
-                                  <td className="mono" style={{ width: '20%', textAlign: 'left', fontWeight: 600, color: 'var(--accent)' }}>{row.avg_points} pts</td>
+                                  <td className="mono" style={{ width: '15%', fontWeight: 600, textAlign: 'left', padding: '14px 10px' }}>#{actualRank}</td>
+                                  <td style={{ width: '45%', fontWeight: 600, textAlign: 'left', padding: '14px 10px' }}>{row.divisi}</td>
+                                  <td style={{ width: '20%', textAlign: 'left', padding: '14px 10px' }}>{row.member_count}</td>
+                                  <td className="mono" style={{ width: '20%', textAlign: 'left', fontWeight: 600, color: 'var(--accent)', padding: '14px 10px' }}>{row.avg_points} pts</td>
                                 </tr>
                               );
                             })}
@@ -1010,7 +1218,7 @@ export default function SOCAdminDashboard() {
                   return matchesDivisi && matchesBadge;
                 });
 
-                const itemsPerPage = 5;
+                const itemsPerPage = 6;
                 const totalPages = Math.max(1, Math.ceil(filteredIndividual.length / itemsPerPage));
                 const activePage = Math.min(leaderboardPage, totalPages);
                 const paginatedIndividual = filteredIndividual.slice((activePage - 1) * itemsPerPage, activePage * itemsPerPage);
@@ -1026,27 +1234,27 @@ export default function SOCAdminDashboard() {
                         <table className="threat-table" style={{ width: '100%' }}>
                           <thead>
                             <tr>
-                              <th style={{ width: '10%' }}>Rank</th>
-                              <th style={{ width: '38%' }}>Email</th>
-                              <th style={{ width: '22%' }}>Divisi</th>
-                              <th style={{ width: '15%' }}>Badge</th>
-                              <th style={{ width: '10%' }}>Poin</th>
-                              <th style={{ width: '5%', textAlign: 'right' }}>Klik</th>
+                              <th style={{ width: '10%', padding: '14px 10px' }}>Rank</th>
+                              <th style={{ width: '38%', padding: '14px 10px' }}>Email</th>
+                              <th style={{ width: '22%', padding: '14px 10px' }}>Divisi</th>
+                              <th style={{ width: '15%', padding: '14px 10px' }}>Badge</th>
+                              <th style={{ width: '10%', padding: '14px 10px' }}>Poin</th>
+                              <th style={{ width: '5%', textAlign: 'right', padding: '14px 10px' }}>Klik</th>
                             </tr>
                           </thead>
                           <tbody>
                             {paginatedIndividual.map((row, idx) => (
                               <tr key={idx}>
-                                <td className="mono" style={{ fontWeight: 600 }}>#{row.rank}</td>
-                                <td className="mono" style={{ fontSize: '12px' }}>{row.email}</td>
-                                <td style={{ fontSize: '13px' }}>{row.divisi}</td>
-                                <td>
+                                <td className="mono" style={{ fontWeight: 600, padding: '14px 10px' }}>#{row.rank}</td>
+                                <td className="mono" style={{ fontSize: '12px', padding: '14px 10px' }}>{row.email}</td>
+                                <td style={{ fontSize: '13px', padding: '14px 10px' }}>{row.divisi}</td>
+                                <td style={{ padding: '14px 10px' }}>
                                   <span className={`badge badge-${row.badge === 'Sentinel' ? 'low' : row.badge === 'Guardian' ? 'notify_soc' : 'critical'}`}>
                                     {row.badge}
                                   </span>
                                 </td>
-                                <td className="mono" style={{ fontWeight: 600, color: 'var(--success)' }}>{row.points}</td>
-                                <td className="mono" style={{ textAlign: 'right', color: row.click_count > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>{row.click_count}</td>
+                                <td className="mono" style={{ fontWeight: 600, color: 'var(--success)', padding: '14px 10px' }}>{row.points}</td>
+                                <td className="mono" style={{ textAlign: 'right', color: row.click_count > 0 ? 'var(--danger)' : 'var(--text-muted)', padding: '14px 10px' }}>{row.click_count}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -1210,6 +1418,82 @@ export default function SOCAdminDashboard() {
               </div>
             </div>
 
+            {/* Target Selection panel for orchestration */}
+            <div style={{ background: 'rgba(0,0,0,0.15)', border: '1px solid var(--border)', borderRadius: '8px', padding: '20px', marginBottom: '24px', marginLeft: '24px', marginRight: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <div>
+                  <h3 style={{ fontSize: '14px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}><Users size={16} /> Target Selection ({selectedEmails.length} terpilih)</h3>
+                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>Pilih target karyawan untuk kampanye simulasi berikutnya.</p>
+                </div>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  {/* Division Filter */}
+                  <select
+                    value={gpEmployeeFilter}
+                    onChange={(e) => setGpEmployeeFilter(e.target.value)}
+                    style={{ padding: '6px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '4px', color: 'white', fontSize: '12px', outline: 'none' }}
+                  >
+                    <option value="ALL">Semua Divisi</option>
+                    {divisions.map(d => <option key={d.name} value={d.name}>{d.name}</option>)}
+                  </select>
+                  <button
+                    onClick={() => {
+                      const activeEmps = employees.filter(e => e.is_active === 1 && (gpEmployeeFilter === 'ALL' || e.divisi === gpEmployeeFilter));
+                      setSelectedEmails(activeEmps.map(e => e.email));
+                    }}
+                    style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-primary)', padding: '5px 10px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
+                  >
+                    Pilih Semua
+                  </button>
+                  <button
+                    onClick={() => setSelectedEmails([])}
+                    style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-primary)', padding: '5px 10px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
+                  >
+                    Bersihkan
+                  </button>
+                </div>
+              </div>
+
+              {/* Target checklist grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px', maxHeight: '160px', overflowY: 'auto', padding: '6px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.02)' }}>
+                {employees.filter(emp => emp.is_active === 1).filter(emp => gpEmployeeFilter === 'ALL' || emp.divisi === gpEmployeeFilter).map(emp => {
+                  const isChecked = selectedEmails.includes(emp.email);
+                  return (
+                    <label
+                      key={emp.email}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px 10px',
+                        background: isChecked ? 'rgba(111, 217, 168, 0.05)' : 'rgba(255,255,255,0.01)',
+                        border: isChecked ? '1px solid var(--accent)' : '1px solid var(--border)',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedEmails([...selectedEmails, emp.email]);
+                          } else {
+                            setSelectedEmails(selectedEmails.filter(email => email !== emp.email));
+                          }
+                        }}
+                        style={{ accentColor: 'var(--accent)' }}
+                      />
+                      <span title={emp.email} style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{emp.email}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Ringkasan horizontal — sebelumnya cuma judul + tabel doang */}
             <div className="gophish-summary-strip">
               <div className="policy-summary-item">
@@ -1333,6 +1617,123 @@ export default function SOCAdminDashboard() {
             </div>
           </div>
         )}
+
+        {/* ── EMPLOYEES TAB ──────────────────────────────── */}
+        {activeTab === 'employees' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', width: '100%', marginBottom: '48px' }}>
+            {/* Top Horizontal Filter Bar */}
+            <div className="glass-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderRadius: '12px', width: '100%', gap: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>
+                <Sliders size={16} /> Directory Filters
+              </div>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <select 
+                  className="filter-select" 
+                  value={employeeDivisionFilter} 
+                  onChange={(e) => setEmployeeDivisionFilter(e.target.value)}
+                  style={{ padding: '6px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', outline: 'none', fontSize: '12px' }}
+                >
+                  <option value="ALL">SEMUA DIVISI</option>
+                  {divisions.map((div) => (
+                    <option key={div.name} value={div.name}>{div.name.toUpperCase()}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Left: Employees List (Full Width) */}
+            <div className="panel glass-card" style={{ marginBottom: 0 }}>
+              <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h2 className="panel-title"><Users size={20} style={{ marginRight: '8px', verticalAlign: 'text-bottom' }} /> Employee Directory</h2>
+                  <p className="panel-desc" style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '4px' }}>
+                    Tambah, edit, dan kelola status aktif karyawan.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button
+                    className="btn-action"
+                    onClick={() => setIsDivModalOpen(true)}
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', color: 'var(--text-primary)', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <Plus size={16} /> Add Division
+                  </button>
+                  <button
+                    className="btn-action"
+                    onClick={handleOpenAddEmp}
+                    style={{ background: 'var(--accent)', border: 'none', color: 'white', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <Plus size={16} /> Add Employee
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '16px', display: 'flex', gap: '12px' }}>
+                <input
+                  type="text"
+                  placeholder="Cari karyawan berdasarkan email..."
+                  value={employeeSearchText}
+                  onChange={(e) => setEmployeeSearchText(e.target.value)}
+                  style={{ flex: 1, padding: '8px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'white', fontSize: '13px', outline: 'none' }}
+                />
+              </div>
+
+              <div className="threat-table-wrap">
+                <table className="threat-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '40%' }}>Email</th>
+                      <th style={{ width: '25%' }}>Divisi</th>
+                      <th style={{ width: '12%', textAlign: 'center' }}>Poin</th>
+                      <th style={{ width: '13%', textAlign: 'center' }}>Status</th>
+                      <th style={{ width: '10%', textAlign: 'right' }}>Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const filtered = employees.filter(emp => {
+                        const matchesSearch = emp.email.toLowerCase().includes(employeeSearchText.toLowerCase());
+                        const matchesDivision = employeeDivisionFilter === 'ALL' || emp.divisi === employeeDivisionFilter;
+                        return matchesSearch && matchesDivision;
+                      });
+                      if (filtered.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={5} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+                              Tidak ada karyawan ditemukan.
+                            </td>
+                          </tr>
+                        );
+                      }
+                      return filtered.map((emp) => (
+                        <tr key={emp.email}>
+                          <td className="mono" style={{ fontWeight: 600 }}>{emp.email}</td>
+                          <td>{emp.divisi}</td>
+                          <td style={{ textAlign: 'center', fontWeight: 'bold', color: emp.points >= 130 ? 'var(--success)' : emp.points >= 60 ? 'var(--info)' : 'var(--danger)' }}>
+                            {emp.points}
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <span className={`badge ${emp.is_active === 1 ? 'badge-allow' : 'badge-danger'}`}>
+                              {emp.is_active === 1 ? 'ACTIVE' : 'DISABLED'}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <button
+                              onClick={() => handleOpenEditEmp(emp)}
+                              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', color: 'var(--text-primary)', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}
+                            >
+                              Edit
+                            </button>
+                          </td>
+                        </tr>
+                      ));
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* ── Dialog Launch campaign ── */}
@@ -1429,10 +1830,230 @@ export default function SOCAdminDashboard() {
           </div>
         </div>
       )}
+      {/* ── Dialog Add/Edit Employee ── */}
+      {isEmpModalOpen && (
+        <div className="dialog-overlay">
+          <div className="dialog-box fade-up">
+            <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Users size={20} /> {empModalMode === 'add' ? 'Add New Employee' : 'Edit Employee'}
+            </h3>
+            <form onSubmit={handleSaveEmployee} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                  Email Karyawan
+                </label>
+                <input
+                  type="email"
+                  placeholder="name@company.local"
+                  required
+                  value={empModalEmail}
+                  onChange={(e) => setEmpModalEmail(e.target.value)}
+                  style={{ width: '100%', padding: '10px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'white', outline: 'none' }}
+                />
+              </div>
+
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
+                    Divisi
+                  </label>
+                  <label style={{ fontSize: '11px', color: 'var(--accent)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <input
+                      type="checkbox"
+                      checked={isCreatingNewDiv}
+                      onChange={(e) => setIsCreatingNewDiv(e.target.checked)}
+                      style={{ accentColor: 'var(--accent)' }}
+                    />
+                    Buat Divisi Baru
+                  </label>
+                </div>
+                {isCreatingNewDiv ? (
+                  <input
+                    type="text"
+                    placeholder="Masukkan nama divisi baru..."
+                    required
+                    value={empModalNewDivision}
+                    onChange={(e) => setEmpModalNewDivision(e.target.value)}
+                    style={{ width: '100%', padding: '10px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'white', outline: 'none' }}
+                  />
+                ) : (
+                  <select
+                    value={empModalDivision}
+                    onChange={(e) => setEmpModalDivision(e.target.value)}
+                    style={{ width: '100%', padding: '10px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'white', outline: 'none' }}
+                  >
+                    {divisions.map(d => <option key={d.name} value={d.name}>{d.name}</option>)}
+                  </select>
+                )}
+              </div>
+
+              <div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
+                  <input
+                    type="checkbox"
+                    checked={empModalIsActive}
+                    onChange={(e) => setEmpModalIsActive(e.target.checked)}
+                    style={{ accentColor: 'var(--accent)' }}
+                  />
+                  <span>Status Karyawan Aktif</span>
+                </label>
+                <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  Karyawan non-aktif tidak akan menerima kiriman email simulasi phishing.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsEmpModalOpen(false)}
+                  style={{ padding: '8px 16px', background: 'transparent', border: '1px solid var(--border)', color: 'white', borderRadius: '6px', cursor: 'pointer' }}
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  style={{ padding: '8px 16px', background: 'var(--accent)', border: 'none', color: 'white', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+                >
+                  Simpan Karyawan
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Dialog Add Division ── */}
+      {isDivModalOpen && (
+        <div className="dialog-overlay">
+          <div className="dialog-box fade-up" style={{ maxWidth: '400px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Plus size={20} /> Create New Division
+            </h3>
+            <form onSubmit={handleCreateDivision} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                  Nama Divisi
+                </label>
+                <input
+                  type="text"
+                  placeholder="Misal: Cyber Security Operations"
+                  required
+                  value={divModalName}
+                  onChange={(e) => setDivModalName(e.target.value)}
+                  style={{ width: '100%', padding: '10px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'white', outline: 'none' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsDivModalOpen(false)}
+                  style={{ padding: '8px 16px', background: 'transparent', border: '1px solid var(--border)', color: 'white', borderRadius: '6px', cursor: 'pointer' }}
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  style={{ padding: '8px 16px', background: 'var(--accent)', border: 'none', color: 'white', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+                >
+                  Buat Divisi
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Dialog Detail Incident ── */}
+      {selectedIncident && (
+        <div className="dialog-overlay" onClick={() => setSelectedIncident(null)}>
+          <div className="dialog-box fade-up glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '550px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-primary)' }}>
+                <AlertTriangle size={20} style={{ color: selectedIncident.severity === 'critical' || selectedIncident.severity === 'high' ? 'var(--danger)' : 'var(--warning)' }} />
+                Detail Insiden {selectedIncident.id}
+              </h3>
+              <button 
+                onClick={() => setSelectedIncident(null)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '22px', fontWeight: 600, outline: 'none' }}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '13px' }}>
+              <div>
+                <span style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Deskripsi / Aktivitas</span>
+                <p style={{ fontWeight: 600, fontSize: '15px', color: 'var(--text-primary)', marginTop: '4px', lineHeight: 1.4 }}>{selectedIncident.description}</p>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Tingkat Kerawanan (Severity)</span>
+                  <div style={{ marginTop: '6px' }}>
+                    <span className={`badge badge-${selectedIncident.severity === 'critical' ? 'critical' : selectedIncident.severity === 'high' ? 'high' : selectedIncident.severity === 'medium' ? 'medium' : 'low'}`}>
+                      {selectedIncident.severity.toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Status Penanganan</span>
+                  <div style={{ marginTop: '6px' }}>
+                    <span className={`badge badge-${selectedIncident.status === 'resolved' ? 'allow' : 'warning'}`}>
+                      {selectedIncident.status ? selectedIncident.status.toUpperCase() : 'OPEN'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Sumber Deteksi Telemetri</span>
+                  <p style={{ fontWeight: 500, color: 'var(--text-primary)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Server size={14} style={{ color: 'var(--accent)' }} /> {selectedIncident.source}
+                  </p>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Karyawan Terkait (Target)</span>
+                  <p style={{ fontWeight: 500, color: 'var(--text-primary)', marginTop: '4px', wordBreak: 'break-all', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Users size={14} style={{ color: 'var(--accent)' }} /> {selectedIncident.target || '-'}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <span style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Waktu Kejadian (Timestamp)</span>
+                <p style={{ fontWeight: 500, color: 'var(--text-primary)', marginTop: '4px', fontFamily: 'var(--font-mono)' }}>
+                  {new Date(selectedIncident.timestamp).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'medium' })}
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '28px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => setSelectedIncident(null)}
+                style={{ padding: '8px 16px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}
+              >
+                Batal
+              </button>
+              {selectedIncident.status !== 'resolved' && (
+                <button 
+                  className="btn btn-primary" 
+                  onClick={() => handleResolveIncident(selectedIncident.id)}
+                  style={{ padding: '8px 16px', background: 'var(--accent)', border: 'none', borderRadius: '6px', color: 'var(--bg-deep)', fontWeight: 700, cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <CheckCircle2 size={14} /> Tandai Selesai (Resolve)
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Footer ────────────────────────────────────────── */}
       <footer className="dashboard-footer">
-        Human Firewall · SOC Command Center · Live data updates automatically
+        Human Firewall · Security Culture & Threat Triage Platform · Live data updates automatically
       </footer>
       </div>
     </div>

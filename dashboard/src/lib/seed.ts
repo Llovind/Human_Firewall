@@ -266,17 +266,5 @@ export function seedIfEmpty() {
   ];
   decisions.forEach(d => dataStore.addPolicyDecision(d));
 
-  // ── Pre-seed a demo auth token for testing ──
-  const demoToken: AuthToken = {
-    token: 'demo-magic-link-2026',
-    email: 'lovind@netengineering-dummy.local',
-    userName: 'Lovind',
-    division: 'IT',
-    telegramId: '123456789',
-    createdAt: Date.now(),
-    expiresAt: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
-  };
-  dataStore.createAuthToken(demoToken);
-
   seeded = true;
 }

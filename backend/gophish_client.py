@@ -27,7 +27,8 @@ def _request(method, endpoint, payload=None):
         url=url, 
         json=payload, 
         headers=headers, 
-        verify=False
+        verify=False,
+        timeout=5
     )
     
     response.raise_for_status()

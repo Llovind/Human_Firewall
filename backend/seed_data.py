@@ -19,6 +19,10 @@ def seed_database(telegram_id=None):
     cursor.execute("DELETE FROM user_history")
     cursor.execute("DELETE FROM events")
     cursor.execute("DELETE FROM incidents")
+    try:
+        cursor.execute("DELETE FROM divisions")
+    except sqlite3.OperationalError:
+        pass
 
     print("Menyuntikkan data karyawan baru (user_history)...")
     
@@ -40,12 +44,37 @@ def seed_database(telegram_id=None):
         ("siti.nurhaliza@salessupport-dummy.local", "Sales Support", 1, 2, 0, None)
     ]
 
+    # Seed divisions table first
+    default_divs = ["Network Engineering", "Performance & Shared Service", "Network Operations", "Sales Support", "IT"]
+    for div in default_divs:
+        cursor.execute("INSERT OR IGNORE INTO divisions (name) VALUES (?)", (div,))
+
     for email, divisi, clicks, viewed, skipped, chat_id in users:
+        # Insert division if it is not already seeded
+        cursor.execute("INSERT OR IGNORE INTO divisions (name) VALUES (?)", (divisi,))
+        
+        # Calculate points based on clicked (-10), viewed (+2), skipped (-5)
+        # points = max(0, min(200, 100 - clicks*10 - skipped*5 + viewed*2))
+        points = 100
+        points -= clicks * 10
+        points -= skipped * 5
+        points += viewed * 2
+        points = max(0, min(200, points))
+        
+        # Determine badge
+        if points >= 130:
+            badge = "Sentinel"
+        elif points >= 60:
+            badge = "Guardian"
+        else:
+            badge = "Vulnerable"
+
         cursor.execute('''
-            INSERT INTO user_history (email, divisi, click_count, viewed_training_count, skipped_training_count, telegram_chat_id, last_clicked)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO user_history (email, divisi, click_count, viewed_training_count, skipped_training_count, telegram_chat_id, last_clicked, points, badge)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (email, divisi, clicks, viewed, skipped, chat_id, 
-              (datetime.utcnow() - timedelta(days=random.randint(1, 10))).isoformat() if clicks > 0 else None))
+              (datetime.utcnow() - timedelta(days=random.randint(1, 10))).isoformat() if clicks > 0 else None,
+              points, badge))
 
     print("Menyuntikkan log event 30 hari ke belakang...")
     # 2. Tambah data event simulasi historis
@@ -88,7 +117,7 @@ def seed_database(telegram_id=None):
 
     conn.commit()
     conn.close()
-    print("Database seeding selesai dengan sukses! 🎉")
+    print("Database seeding selesai dengan sukses! [OK]")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Seed Human Firewall SQLite database.")

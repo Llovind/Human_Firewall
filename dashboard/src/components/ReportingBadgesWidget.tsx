@@ -217,7 +217,7 @@ export default function ReportingBadgesWidget({ email, token, legacyBadges }: { 
   const achievedCount = badges.filter(b => b.achieved).length;
 
   return (
-    <div className="panel glass-card fade-up">
+    <div className="panel glass-card">
       <div className="panel-header">
         <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Shield size={18} /> Pencapaian Keamanan

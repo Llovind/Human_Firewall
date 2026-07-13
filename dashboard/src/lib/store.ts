@@ -100,6 +100,12 @@ class DataStore {
   getIncidents(): Incident[] {
     return [...this.incidents];
   }
+  updateIncidentStatus(id: string, status: 'open' | 'investigating' | 'resolved' | 'escalated') {
+    const idx = this.incidents.findIndex(i => i.id === id);
+    if (idx >= 0) {
+      this.incidents[idx].status = status;
+    }
+  }
 
   // ── Threat Cache ──
   addThreatCache(entry: ThreatCacheEntry) {

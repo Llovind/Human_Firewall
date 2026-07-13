@@ -31,7 +31,11 @@ interface EligibilityResponse {
 
 /* ── Helper: Time ago ─────────────────────────────────────── */
 function timeAgo(ts: string): string {
-  const diff = Date.now() - new Date(ts).getTime();
+  let dateStr = ts;
+  if (dateStr && !dateStr.endsWith('Z') && !dateStr.includes('+')) {
+    dateStr = dateStr.replace(' ', 'T') + 'Z';
+  }
+  const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'Baru saja';
   if (mins < 60) return `${mins} menit lalu`;
@@ -304,279 +308,234 @@ export default function EmployeeDashboardPage() {
         {activeTab === 'dashboard' && (
           <>
             <div className="employee-dashboard-layout">
-            <div className="employee-left-col">
-              {/* Hero Card */}
-              {myScore ? (
-                <div className={`my-score-card glass-card fade-up ${behaviorUpdated ? 'value-flash' : ''}`} style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                  <div className="my-score-header">
-                    <div className="my-score-avatar">{myScore.userName.charAt(0)}</div>
-                    <div className="my-score-info">
-                      <h3>{myScore.userName}</h3>
-                      <span className="my-score-division">{myScore.division}</span>
-                    </div>
-                    <span className={`badge badge-${myScore.risk}`} style={{ fontSize: '12px', padding: '6px 12px' }}>
-                      {myScore.risk === 'low' ? '✅ SECURE' : myScore.risk === 'medium' ? '⚠️ MEDIUM RISK' : '🚨 CRITICAL RISK'}
-                    </span>
-                  </div>
-                  <div className="my-score-body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', margin: 'auto 0' }}>
-                    <div className="score-ring-container">
-                      <svg className="score-ring" viewBox="0 0 120 120" style={{ width: '150px', height: '150px' }}>
-                        <circle className="score-ring-bg" cx="60" cy="60" r="52" />
-                        <circle
-                          className="score-ring-fill"
-                          cx="60" cy="60" r="52"
-                          style={{
-                            strokeDasharray: `${(myScore.score / 100) * 326.73} 326.73`,
-                            stroke: myScore.score >= 70 ? 'var(--success)' : myScore.score >= 40 ? 'var(--warning)' : 'var(--danger)',
-                          }}
-                        />
-                      </svg>
-                      <div className="score-ring-value">
-                        <span className="score-number" style={{ fontSize: '32px' }}>{myScore.score}</span>
-                        <span className="score-label">Risk Rating</span>
-                      </div>
-                    </div>
-                    <div className="my-score-stats" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                      <div className="mini-stat">
-                        <span className="mini-stat-icon"><Trophy size={14} /></span>
-                        <span className="mini-stat-value">#{myScore.rank}</span>
-                        <span className="mini-stat-label">Rank</span>
-                      </div>
-                      <div className="mini-stat">
-                        <span className="mini-stat-icon"><Flame size={14} /></span>
-                        <span className="mini-stat-value">{myScore.streak} minggu</span>
-                        <span className="mini-stat-label">Bebas Klik</span>
-                      </div>
-                      <div className="mini-stat">
-                        <span className="mini-stat-icon"><Star size={14} /></span>
-                        <span className="mini-stat-value">{myScore.totalPoints} pts</span>
-                        <span className="mini-stat-label">Points</span>
-                      </div>
-                      <div className="mini-stat">
-                        <span className="mini-stat-icon"><BookOpen size={14} /></span>
-                        <span className="mini-stat-value">{myScore.trainingCompleted} kali</span>
-                        <span className="mini-stat-label">Latihan</span>
-                      </div>
-                    </div>
-                  </div>
-                  {(myScore.badges || []).length > 0 && (
-                    <div className="my-score-badges" style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      {(myScore.badges || []).map(b => (
-                        <span key={b} className="badge-chip" style={{ background: 'rgba(129,140,248,0.1)', border: '1px solid rgba(129,140,248,0.2)', padding: '4px 10px', borderRadius: '20px', fontSize: '11px', color: 'var(--accent)' }}>
-                          🛡️ {b}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="panel glass-card fade-up" style={{ height: '100%' }}>
-                  Memuat skor Anda...
-                </div>
-              )}
-            </div>
-
-            <div className="employee-right-col">
-              {/* Timeline Activity Feed */}
-              <div className="panel glass-card fade-up-1">
-                <div className="panel-header">
-                  <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Shield size={18} /> Log Aktivitas Keamanan Anda</h2>
-                  <span className="panel-count">{activities.length} aktivitas</span>
-                </div>
-                <div className="timeline" style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '16px', position: 'relative', paddingLeft: '24px', borderLeft: '2px solid var(--border)' }}>
-                  {activities.length === 0 ? (
-                    <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Belum ada log aktivitas keamanan tercatat.</p>
-                  ) : (
-                    activities.map((act, i) => {
-                      const details = eventLabels[act.event_type] || { label: act.event_type, icon: <FileWarning size={14} />, color: 'var(--text-muted)' };
-                      return (
-                        <div key={i} className="timeline-item" style={{ position: 'relative' }}>
-                          <span className="timeline-dot" style={{ position: 'absolute', left: '-33px', top: '2px', background: details.color, border: '4px solid var(--bg-surface)', width: '16px', height: '16px', borderRadius: '50%', boxShadow: `0 0 8px ${details.color}` }} />
-                          <div className="timeline-content">
-                            <div className="timeline-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                              <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)' }}>
-                                {details.icon} {details.label}
-                              </span>
-                              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                                {timeAgo(act.created_at)}
-                              </span>
-                            </div>
-                            <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                              Aksi dicatat pada portal simulasi/ Telegram Bot.{' '}
-                              {act.campaign_id ? `Kampanye ID: ${act.campaign_id}` : ''}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-
-              {/* Division Leaderboard Widget */}
-              <div className="panel glass-card fade-up-2" style={{ marginTop: '24px' }}>
-                <div className="panel-header">
-                  <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Trophy size={18} /> Peringkat Kompetisi Divisi</h2>
-                </div>
-                <div style={{ marginTop: '16px' }}>
-                  {myScore && myDivRank && (
-                    <div style={{
-                      background: 'rgba(111, 217, 168, 0.05)',
-                      border: '1px dashed var(--border)',
-                      borderRadius: '8px',
-                      padding: '12px',
-                      marginBottom: '16px',
-                      fontSize: '12px',
-                      color: 'var(--text-primary)',
-                      textAlign: 'left'
-                    }}>
-                      IT Security Alert: Divisi Anda <strong>{myScore.division}</strong> saat ini berada di peringkat <strong>#{myDivRank}</strong> dari <strong>{divisionAverages.length}</strong> divisi dengan rata-rata <strong>{divisionAverages[myDivRankIdx]?.avg} pts</strong>.
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {divisionAverages.slice(0, 3).map((div, idx) => (
-                      <div key={div.division} style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '8px 12px',
-                        background: div.division === myScore?.division ? 'rgba(111, 217, 168, 0.1)' : 'rgba(255, 255, 255, 0.02)',
-                        border: div.division === myScore?.division ? '1px solid var(--accent-dim)' : '1px solid rgba(255,255,255,0.05)',
-                        borderRadius: '8px',
-                        fontSize: '13px'
-                      }}>
-                        <span style={{ fontWeight: 600, textAlign: 'left', flex: 1, paddingRight: '8px' }}>
-                          {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'} {div.division}
-                          {div.division === myScore?.division && ' (Divisi Anda)'}
-                        </span>
-                        <span className="mono" style={{ color: 'var(--success)', fontWeight: 600, flexShrink: 0 }}>{div.avg} pts</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Row 2: Achievements & Daily Tip vs How to Improve Score */}
-          {myScore && (
-            <div className="employee-dashboard-layout" style={{ marginTop: '24px' }}>
               <div className="employee-left-col" style={{ display: 'flex', flexDirection: 'column' }}>
-                {/* Achievements Showcase */}
-                <div className="panel glass-card fade-up-1" style={{ marginTop: 0 }}>
-                  <div className="panel-header">
-                    <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Star size={18} /> Koleksi Lencana Keamanan</h2>
-                    <span className="panel-count">{(myScore.badges || []).length} / 5</span>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '16px', marginTop: '20px', textAlign: 'center' }}>
-                    {[
-                      { key: 'First Report', name: 'First Report', desc: 'Melaporkan phishing pertama kali', icon: '🥇', color: 'rgba(52, 211, 153, 0.15)', borderColor: 'var(--success)' },
-                      { key: 'Streak Master', name: 'Streak Master', desc: '4+ minggu bebas insiden', icon: '🔥', color: 'rgba(251, 191, 36, 0.15)', borderColor: 'var(--warning)' },
-                      { key: 'Guardian', name: 'Guardian', desc: 'Skor perilaku >= 60', icon: '🛡️', color: 'rgba(96, 165, 250, 0.15)', borderColor: 'var(--info)' },
-                      { key: 'Quiz Champion', name: 'Quiz Champion', desc: 'Menang Spot the Fake', icon: <Trophy size={20} />, color: 'rgba(139, 92, 246, 0.15)', borderColor: '#8b5cf6' },
-                      { key: 'Sentinel', name: 'Sentinel', desc: 'Skor perilaku >= 130', icon: '⚡', color: 'rgba(236, 72, 153, 0.15)', borderColor: '#ec4899' },
-                    ].map(badge => {
-                      const isUnlocked = (myScore.badges || []).includes(badge.key);
-                      return (
-                        <div key={badge.key} style={{
-                          padding: '16px 12px',
-                          background: isUnlocked ? 'rgba(11, 17, 32, 0.5)' : 'rgba(11, 17, 32, 0.15)',
-                          border: '1px solid',
-                          borderColor: isUnlocked ? badge.borderColor : 'rgba(255, 255, 255, 0.05)',
-                          borderRadius: '12px',
-                          opacity: isUnlocked ? 1 : 0.4,
-                          transition: 'all 0.3s ease',
-                          boxShadow: isUnlocked ? `0 0 10px ${badge.borderColor}20` : 'none',
-                          position: 'relative'
-                        }} title={badge.desc}>
-                          <div style={{
-                            width: '48px', height: '48px',
-                            borderRadius: '50%',
-                            background: isUnlocked ? badge.color : 'rgba(255, 255, 255, 0.05)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '24px', margin: '0 auto 10px',
-                          }}>
-                            {badge.icon}
-                          </div>
-                          <div style={{ fontSize: '11px', fontWeight: 600, color: isUnlocked ? 'var(--text-primary)' : 'var(--text-muted)' }}>{badge.name}</div>
-                          <div style={{ fontSize: '9px', color: 'var(--text-secondary)', marginTop: '4px', lineHeight: '1.2' }}>{badge.desc}</div>
+                {/* Hero Card */}
+                {myScore ? (
+                  <div className={`my-score-card glass-card ${behaviorUpdated ? 'value-flash' : ''}`} style={{ width: '100%', height: 'auto', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <div className="my-score-header">
+                      <div className="my-score-avatar">{myScore.userName.charAt(0)}</div>
+                      <div className="my-score-info">
+                        <h3>{myScore.userName}</h3>
+                        <span className="my-score-division">{myScore.division}</span>
+                      </div>
+                      <span className={`badge badge-${myScore.risk}`} style={{ fontSize: '12px', padding: '6px 12px' }}>
+                        {myScore.risk === 'low' ? '✅ SECURE' : myScore.risk === 'medium' ? '⚠️ MEDIUM RISK' : '🚨 CRITICAL RISK'}
+                      </span>
+                    </div>
+                    <div className="my-score-body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', margin: '24px 0' }}>
+                      <div className="score-ring-container">
+                        <svg className="score-ring" viewBox="0 0 120 120" style={{ width: '150px', height: '150px' }}>
+                          <circle className="score-ring-bg" cx="60" cy="60" r="52" />
+                          <circle
+                            className="score-ring-fill"
+                            cx="60" cy="60" r="52"
+                            style={{
+                              strokeDasharray: `${(myScore.score / 100) * 326.73} 326.73`,
+                              stroke: myScore.score >= 70 ? 'var(--success)' : myScore.score >= 40 ? 'var(--warning)' : 'var(--danger)',
+                            }}
+                          />
+                        </svg>
+                        <div className="score-ring-value">
+                          <span className="score-number" style={{ fontSize: '32px' }}>{myScore.score}</span>
+                          <span className="score-label">Risk Rating</span>
                         </div>
-                      );
-                    })}
+                      </div>
+                      <div className="my-score-stats" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                        <div className="mini-stat">
+                          <span className="mini-stat-icon"><Trophy size={14} /></span>
+                          <span className="mini-stat-value">#{myScore.rank}</span>
+                          <span className="mini-stat-label">Rank</span>
+                        </div>
+                        <div className="mini-stat">
+                          <span className="mini-stat-icon"><Flame size={14} /></span>
+                          <span className="mini-stat-value">{myScore.streak} minggu</span>
+                          <span className="mini-stat-label">Bebas Klik</span>
+                        </div>
+                        <div className="mini-stat">
+                          <span className="mini-stat-icon"><Star size={14} /></span>
+                          <span className="mini-stat-value">{myScore.totalPoints} pts</span>
+                          <span className="mini-stat-label">Points</span>
+                        </div>
+                        <div className="mini-stat">
+                          <span className="mini-stat-icon"><BookOpen size={14} /></span>
+                          <span className="mini-stat-value">{myScore.trainingCompleted} kali</span>
+                          <span className="mini-stat-label">Latihan</span>
+                        </div>
+                      </div>
+                    </div>
+                    {(myScore.badges || []).length > 0 && (
+                      <div className="my-score-badges" style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        {(myScore.badges || []).map(b => (
+                          <span key={b} className="badge-chip" style={{ background: 'rgba(129,140,248,0.1)', border: '1px solid rgba(129,140,248,0.2)', padding: '4px 10px', borderRadius: '20px', fontSize: '11px', color: 'var(--accent)' }}>
+                            🛡️ {b}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
+                ) : (
+                  <div className="panel glass-card" style={{ height: 'auto' }}>
+                    Memuat skor Anda...
+                  </div>
+                )}
 
-                {/* Widget baru — Lencana Pelaporan (gamifikasi reporting, terpisah dari behavior score) */}
-                <ReportingBadgesWidget email={user.email} token={user.token} legacyBadges={myScore.badges || []} />
+                {/* Achievements Showcase (Combined Widget) */}
+                {myScore && (
+                  <ReportingBadgesWidget email={user.email} token={user.token} legacyBadges={myScore.badges || []} />
+                )}
 
                 {/* Daily Tip Card */}
-                <div className="panel glass-card fade-up-2" style={{ marginTop: 'auto', position: 'relative' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', padding: '8px' }}>
-                    <div style={{
-                      width: '40px', height: '40px',
-                      borderRadius: '10px',
-                      background: 'rgba(251, 191, 36, 0.12)',
-                      color: 'var(--warning)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      flexShrink: 0
-                    }}>
-                      <Lightbulb size={18} />
-                    </div>
-                    <div style={{ textAlign: 'left' }}>
-                      <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>Tip Keamanan Hari Ini</h3>
-                      <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
-                        "{currentTip}"
-                      </p>
+                {myScore && (
+                  <div className="panel glass-card" style={{ marginTop: 0, position: 'relative' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', padding: '8px' }}>
+                      <div style={{
+                        width: '40px', height: '40px',
+                        borderRadius: '10px',
+                        background: 'rgba(251, 191, 36, 0.12)',
+                        color: 'var(--warning)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        flexShrink: 0
+                      }}>
+                        <Lightbulb size={18} />
+                      </div>
+                      <div style={{ textAlign: 'left' }}>
+                        <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>Tip Keamanan Hari Ini</h3>
+                        <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
+                          "{currentTip}"
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
 
               <div className="employee-right-col" style={{ display: 'flex', flexDirection: 'column' }}>
-                {/* How to Improve Score Guide */}
-                <div className="panel glass-card fade-up-3" style={{ marginTop: 0, height: '100%' }}>
+                {/* Timeline Activity Feed */}
+                <div className="panel glass-card">
                   <div className="panel-header">
-                    <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><ShieldCheck size={18} /> Bagaimana Cara Menaikkan Skor?</h2>
+                    <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Shield size={18} /> Log Aktivitas Keamanan Anda</h2>
+                    <span className="panel-count">{activities.length} aktivitas</span>
                   </div>
-                  <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px', textAlign: 'left', lineHeight: '1.4' }}>
-                      Skor Anda mencerminkan tingkat kewaspadaan siber Anda. Ikuti aturan di bawah ini untuk meningkatkan skor:
-                    </p>
-                    {[
-                      { action: 'Laporkan Email Phishing (Telegram)', change: '+10', color: 'var(--success)', desc: 'Melalui tombol Lapor di Bot' },
-                      { action: 'Menang Game "Spot the Fake"', change: '+5', color: 'var(--success)', desc: 'Identifikasi situs phishing tiruan' },
-                      { action: 'Menyelesaikan Pelatihan Ulang', change: '+10', color: 'var(--success)', desc: 'Modul pelatihan setelah klik simulasi' },
-                      { action: 'Terjebak Klik Link Phishing', change: '-20', color: 'var(--danger)', desc: 'Simulasi phishing bulanan' },
-                      { action: 'Membocorkan Kredensial Form', change: '-30', color: 'var(--danger)', desc: 'Memasukkan sandi pada form palsu' },
-                    ].map((rule, idx) => (
-                      <div key={idx} style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '10px 12px',
-                        background: 'rgba(255, 255, 255, 0.01)',
-                        border: '1px solid rgba(255, 255, 255, 0.03)',
-                        borderRadius: '8px',
-                        fontSize: '12px',
-                      }}>
-                        <div style={{ textAlign: 'left' }}>
-                          <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{rule.action}</div>
-                          <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>{rule.desc}</div>
-                        </div>
-                        <span className="mono" style={{ color: rule.color, fontWeight: 700, fontSize: '14px', marginLeft: '12px', flexShrink: 0 }}>{rule.change}</span>
-                      </div>
-                    ))}
+                   <div style={{ maxHeight: '340px', overflowY: 'auto', paddingRight: '8px', paddingBottom: '24px' }} className="timeline-scroll-container">
+                    <div className="timeline" style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '16px', position: 'relative', paddingLeft: '32px', borderLeft: '2px solid var(--border)', marginLeft: '16px' }}>
+                      {activities.length === 0 ? (
+                        <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginLeft: '-32px' }}>Belum ada log aktivitas keamanan tercatat.</p>
+                      ) : (
+                        activities.map((act, i) => {
+                          const details = eventLabels[act.event_type] || { label: act.event_type, icon: <FileWarning size={14} />, color: 'var(--text-muted)' };
+                          return (
+                            <div key={i} className="timeline-item" style={{ position: 'relative' }}>
+                              <span className="timeline-dot" style={{ position: 'absolute', left: '-41px', top: '2px', background: details.color, border: '4px solid var(--bg-surface)', width: '16px', height: '16px', borderRadius: '50%', boxShadow: `0 0 8px ${details.color}` }} />
+                              <div className="timeline-content">
+                                <div className="timeline-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                  <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)' }}>
+                                    {details.icon} {details.label}
+                                  </span>
+                                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                    {timeAgo(act.created_at)}
+                                  </span>
+                                </div>
+                                <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                  Aksi dicatat pada portal simulasi/ Telegram Bot.{' '}
+                                  {act.campaign_id ? `Kampanye ID: ${act.campaign_id}` : ''}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
                 </div>
+
+                {/* Division Leaderboard Widget */}
+                <div className="panel glass-card">
+                  <div className="panel-header">
+                    <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Trophy size={18} /> Peringkat Kompetisi Divisi</h2>
+                  </div>
+                  <div style={{ marginTop: '16px' }}>
+                    {myScore && myDivRank && (
+                      <div style={{
+                        background: 'rgba(111, 217, 168, 0.05)',
+                        border: '1px dashed var(--border)',
+                        borderRadius: '8px',
+                        padding: '12px',
+                        marginBottom: '16px',
+                        fontSize: '12px',
+                        color: 'var(--text-primary)',
+                        textAlign: 'left'
+                      }}>
+                        IT Security Alert: Divisi Anda <strong>{myScore.division}</strong> saat ini berada di peringkat <strong>#{myDivRank}</strong> dari <strong>{divisionAverages.length}</strong> divisi dengan rata-rata <strong>{divisionAverages[myDivRankIdx]?.avg} pts</strong>.
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {divisionAverages.slice(0, 3).map((div, idx) => (
+                        <div key={div.division} style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '8px 12px',
+                          background: div.division === myScore?.division ? 'rgba(111, 217, 168, 0.1)' : 'rgba(255, 255, 255, 0.02)',
+                          border: div.division === myScore?.division ? '1px solid var(--accent-dim)' : '1px solid rgba(255,255,255,0.05)',
+                          borderRadius: '8px',
+                          fontSize: '13px'
+                        }}>
+                          <span style={{ fontWeight: 600, textAlign: 'left', flex: 1, paddingRight: '8px' }}>
+                            {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'} {div.division}
+                            {div.division === myScore?.division && ' (Divisi Anda)'}
+                          </span>
+                          <span className="mono" style={{ color: 'var(--success)', fontWeight: 600, flexShrink: 0 }}>{div.avg} pts</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* How to Improve Score Guide */}
+                {myScore && (
+                  <div className="panel glass-card" style={{ height: 'auto', marginBottom: 0 }}>
+                    <div className="panel-header">
+                      <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><ShieldCheck size={18} /> Bagaimana Cara Menaikkan Skor?</h2>
+                    </div>
+                    <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px', textAlign: 'left', lineHeight: '1.4' }}>
+                        Skor Anda mencerminkan tingkat kewaspadaan siber Anda. Ikuti aturan di bawah ini untuk meningkatkan skor:
+                      </p>
+                      {[
+                        { action: 'Laporkan Email Phishing (Telegram)', change: '+10', color: 'var(--success)', desc: 'Melalui tombol Lapor di Bot' },
+                        { action: 'Menang Game "Spot the Fake"', change: '+5', color: 'var(--success)', desc: 'Identifikasi situs phishing tiruan' },
+                        { action: 'Menyelesaikan Pelatihan Ulang', change: '+10', color: 'var(--success)', desc: 'Modul pelatihan setelah klik simulasi' },
+                        { action: 'Terjebak Klik Link Phishing', change: '-20', color: 'var(--danger)', desc: 'Simulasi phishing bulanan' },
+                        { action: 'Membocorkan Kredensial Form', change: '-30', color: 'var(--danger)', desc: 'Memasukkan sandi pada form palsu' },
+                      ].map((rule, idx) => (
+                        <div key={idx} style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '10px 12px',
+                          background: 'rgba(255, 255, 255, 0.01)',
+                          border: '1px solid rgba(255, 255, 255, 0.03)',
+                          borderRadius: '8px',
+                          fontSize: '12px',
+                        }}>
+                          <div style={{ textAlign: 'left' }}>
+                            <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{rule.action}</div>
+                            <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>{rule.desc}</div>
+                          </div>
+                          <span className="mono" style={{ color: rule.color, fontWeight: 700, fontSize: '14px', marginLeft: '12px', flexShrink: 0 }}>{rule.change}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-          )}
-        </>
-      )}
+          </>
+        )}
 
         {/* ── SPOT THE FAKE TAB ─────────────────────────────── */}
         {activeTab === 'game' && (
-          <div className="panel glass-card fade-up" style={{ minHeight: '500px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="panel glass-card" style={{ minHeight: '500px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {eligibility === null ? (
               <div style={{ textAlign: 'center' }}>
                 <div className="loading-spinner" style={{ margin: '0 auto var(--space-4)' }} />

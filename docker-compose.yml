@@ -18,7 +18,7 @@ services:
       # butuh ini supaya VT_API_KEY & URLSCAN_API_KEY bisa dibaca dari
       # environment variable, bukan hardcoded di JSON workflow.
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
-      - N8N_ALLOW_ENV_VARIABLES=true
+      - N8N_ALLOW_ENV_VARIABLES=*
       - NODE_FUNCTION_ALLOW_BUILTIN=crypto
       - VT_API_KEY=${VT_API_KEY}
       - URLSCAN_API_KEY=${URLSCAN_API_KEY}
