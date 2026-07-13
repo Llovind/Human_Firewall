@@ -1,0 +1,357 @@
+[1mdiff --git a/.gitignore b/.gitignore[m
+[1mindex 66ac620..c922f49 100644[m
+[1m--- a/.gitignore[m
+[1m+++ b/.gitignore[m
+[36m@@ -21,3 +21,9 @@[m [menv/[m
+ *.backup[m
+ *.tmp[m
+ [m
+[32m+[m[32m# Debug logs that may contain secrets (auth headers, tokens, etc.)[m
+[32m+[m[32m# backend/debug_auth.log was previously committed and leaked SECRET_KEY —[m
+[32m+[m[32m# see git history purge. Never remove this line.[m
+[32m+[m[32m*debug_auth.log[m
+[32m+[m[32mbackend/debug_auth.log[m
+[32m+[m
+[1mdiff --git a/backend/debug_auth.log b/backend/debug_auth.log[m
+[1mdeleted file mode 100644[m
+[1mindex 9ad64f5..0000000[m
+[1m--- a/backend/debug_auth.log[m
+[1m+++ /dev/null[m
+[36m@@ -1,15 +0,0 @@[m
+[31m-Path: /api/telegram/user[m
+[31m-Auth Header: None[m
+[31m-Configured SECRET_KEY: a3f8c2e1d7b94f6a0e5c3d8b1f7a2e9c[m
+[31m-Match: False[m
+[31m-[m
+[31m-Path: /api/telegram/user[m
+[31m-Auth Header: None[m
+[31m-Configured SECRET_KEY: a3f8c2e1d7b94f6a0e5c3d8b1f7a2e9c[m
+[31m-Match: False[m
+[31m-[m
+[31m-Path: /api/telegram/user[m
+[31m-Auth Header: Bearer a3f8c2e1d7b94f6a0e5c3d8b1f7a2e9c[m
+[31m-Configured SECRET_KEY: a3f8c2e1d7b94f6a0e5c3d8b1f7a2e9c[m
+[31m-Match: True[m
+[31m-[m
+[1mdiff --git a/backend/gamification_routes.py b/backend/gamification_routes.py[m
+[1mindex 89bedc7..447be48 100644[m
+[1m--- a/backend/gamification_routes.py[m
+[1m+++ b/backend/gamification_routes.py[m
+[36m@@ -22,7 +22,7 @@[m [mgamification_bp = Blueprint("gamification", __name__, url_prefix="/api")[m
+ # CATATAN AUTH:[m
+ # - POST /reports: SENGAJA tidak dimasukkan ke PUBLIC_ROUTES di app.py,[m
+ #   jadi otomatis kena guard global app.py yang mewajibkan[m
+[31m-#   "Authorization: Bearer <SECRET_KEY>" (server-to-server, dipanggil n8n).[m
+[32m+[m[32m#   "Authorization: Bearer <SERVICE_API_KEY>" (server-to-server, dipanggil n8n).[m
+ #[m
+ # - GET /employee/<id>/reports-summary dan POST /quiz/complete: endpoint[m
+ #   ini DIPANGGIL LANGSUNG dari browser employee (via Next.js dashboard),[m
+[36m@@ -93,7 +93,7 @@[m [mdef _authenticate_employee(requested_employee_id: str):[m
+ def post_report():[m
+     # Tidak butuh token check manual di sini — endpoint ini SENGAJA tidak[m
+     # dimasukkan ke PUBLIC_ROUTES di app.py, jadi otomatis kena guard global[m
+[31m-    # yang mewajibkan "Authorization: Bearer <SECRET_KEY>" dari n8n.[m
+[32m+[m[32m    # yang mewajibkan "Authorization: Bearer <SERVICE_API_KEY>" dari n8n.[m
+ [m
+     body = request.get_json(silent=True)[m
+     if not body:[m
+[1mdiff --git a/dashboard/src/app/api/admin/compliance-summary/route.ts b/dashboard/src/app/api/admin/compliance-summary/route.ts[m
+[1mindex 68df394..ed939d8 100644[m
+[1m--- a/dashboard/src/app/api/admin/compliance-summary/route.ts[m
+[1m+++ b/dashboard/src/app/api/admin/compliance-summary/route.ts[m
+[36m@@ -3,12 +3,18 @@[m [mimport { NextRequest, NextResponse } from 'next/server';[m
+ export async function GET(request: NextRequest) {[m
+   try {[m
+     const apiUrl = (process.env.API_URL || process.env.NEXT_PUBLIC_API_URL) || 'http://flask_api:5000';[m
+[31m-    const secretKey = process.env.SECRET_KEY || 'dev-fallback-key-change-in-production';[m
+[32m+[m[32m    const serviceApiKey = process.env.SERVICE_API_KEY;[m
+[32m+[m[32m    if (!serviceApiKey) {[m
+[32m+[m[32m      // Fail fast: no insecure fallback credential. A missing key is a[m
+[32m+[m[32m      // deployment misconfiguration, not something to paper over.[m
+[32m+[m[32m      console.error('[admin proxy] SERVICE_API_KEY is not set; refusing to call Flask backend.');[m
+[32m+[m[32m      return NextResponse.json({ error: 'Server misconfigured: SERVICE_API_KEY is not set' }, { status: 500 });[m
+[32m+[m[32m    }[m
+ [m
+     const res = await fetch(`${apiUrl}/api/compliance-summary`, {[m
+       method: 'GET',[m
+       headers: {[m
+[31m-        'Authorization': `Bearer ${secretKey}`,[m
+[32m+[m[32m        'Authorization': `Bearer ${serviceApiKey}`,[m
+       },[m
+     });[m
+ [m
+[1mdiff --git a/dashboard/src/app/api/admin/emails/route.ts b/dashboard/src/app/api/admin/emails/route.ts[m
+[1mindex b354ffc..ca2495e 100644[m
+[1m--- a/dashboard/src/app/api/admin/emails/route.ts[m
+[1m+++ b/dashboard/src/app/api/admin/emails/route.ts[m
+[36m@@ -3,12 +3,18 @@[m [mimport { NextRequest, NextResponse } from 'next/server';[m
+ export async function GET(request: NextRequest) {[m
+   try {[m
+     const apiUrl = (process.env.API_URL || process.env.NEXT_PUBLIC_API_URL) || 'http://flask_api:5000';[m
+[31m-    const secretKey = process.env.SECRET_KEY || 'dev-fallback-key-change-in-production';[m
+[32m+[m[32m    const serviceApiKey = process.env.SERVICE_API_KEY;[m
+[32m+[m[32m    if (!serviceApiKey) {[m
+[32m+[m[32m      // Fail fast: no insecure fallback credential. A missing key is a[m
+[32m+[m[32m      // deployment misconfiguration, not something to paper over.[m
+[32m+[m[32m      console.error('[admin proxy] SERVICE_API_KEY is not set; refusing to call Flask backend.');[m
+[32m+[m[32m      return NextResponse.json({ error: 'Server misconfigured: SERVICE_API_KEY is not set' }, { status: 500 });[m
+[32m+[m[32m    }[m
+ [m
+     const res = await fetch(`${apiUrl}/api/emails`, {[m
+       method: 'GET',[m
+       headers: {[m
+[31m-        'Authorization': `Bearer ${secretKey}`,[m
+[32m+[m[32m        'Authorization': `Bearer ${serviceApiKey}`,[m
+       },[m
+     });[m
+ [m
+[1mdiff --git a/dashboard/src/app/api/admin/gophish/campaigns/route.ts b/dashboard/src/app/api/admin/gophish/campaigns/route.ts[m
+[1mindex 6447f8f..5a0f667 100644[m
+[1m--- a/dashboard/src/app/api/admin/gophish/campaigns/route.ts[m
+[1m+++ b/dashboard/src/app/api/admin/gophish/campaigns/route.ts[m
+[36m@@ -3,12 +3,18 @@[m [mimport { NextRequest, NextResponse } from 'next/server';[m
+ export async function GET(request: NextRequest) {[m
+   try {[m
+     const apiUrl = (process.env.API_URL || process.env.NEXT_PUBLIC_API_URL) || 'http://flask_api:5000';[m
+[31m-    const secretKey = process.env.SECRET_KEY || 'dev-fallback-key-change-in-production';[m
+[32m+[m[32m    const serviceApiKey = process.env.SERVICE_API_KEY;[m
+[32m+[m[32m    if (!serviceApiKey) {[m
+[32m+[m[32m      // Fail fast: no insecure fallback credential. A missing key is a[m
+[32m+[m[32m      // deployment misconfiguration, not something to paper over.[m
+[32m+[m[32m      console.error('[admin proxy] SERVICE_API_KEY is not set; refusing to call Flask backend.');[m
+[32m+[m[32m      return NextResponse.json({ error: 'Server misconfigured: SERVICE_API_KEY is not set' }, { status: 500 });[m
+[32m+[m[32m    }[m
+ [m
+     const res = await fetch(`${apiUrl}/api/admin/gophish/campaigns`, {[m
+       method: 'GET',[m
+       headers: {[m
+[31m-        'Authorization': `Bearer ${secretKey}`,[m
+[32m+[m[32m        'Authorization': `Bearer ${serviceApiKey}`,[m
+       },[m
+     });[m
+ [m
+[1mdiff --git a/dashboard/src/app/api/admin/gophish/launch/route.ts b/dashboard/src/app/api/admin/gophish/launch/route.ts[m
+[1mindex 75aefba..9433fe5 100644[m
+[1m--- a/dashboard/src/app/api/admin/gophish/launch/route.ts[m
+[1m+++ b/dashboard/src/app/api/admin/gophish/launch/route.ts[m
+[36m@@ -4,12 +4,18 @@[m [mexport async function POST(request: NextRequest) {[m
+   try {[m
+     const body = await request.json();[m
+     const apiUrl = (process.env.API_URL || process.env.NEXT_PUBLIC_API_URL) || 'http://flask_api:5000';[m
+[31m-    const secretKey = process.env.SECRET_KEY || 'dev-fallback-key-change-in-production';[m
+[32m+[m[32m    const serviceApiKey = process.env.SERVICE_API_KEY;[m
+[32m+[m[32m    if (!serviceApiKey) {[m
+[32m+[m[32m      // Fail fast: no insecure fallback credential. A missing key is a[m
+[32m+[m[32m      // deployment misconfiguration, not something to paper over.[m
+[32m+[m[32m      console.error('[admin proxy] SERVICE_API_KEY is not set; refusing to call Flask backend.');[m
+[32m+[m[32m      return NextResponse.json({ error: 'Server misconfigured: SERVICE_API_KEY is not set' }, { status: 500 });[m
+[32m+[m[32m    }[m
+ [m
+     const res = await fetch(`${apiUrl}/api/admin/gophish/launch`, {[m
+       method: 'POST',[m
+       headers: {[m
+[31m-        'Authorization': `Bearer ${secretKey}`,[m
+[32m+[m[32m        'Authorization': `Bearer ${serviceApiKey}`,[m
+         'Content-Type': 'application/json',[m
+       },[m
+       body: JSON.stringify(body),[m
+[1mdiff --git a/dashboard/src/app/api/admin/gophish/resources/route.ts b/dashboard/src/app/api/admin/gophish/resources/route.ts[m
+[1mindex 656c289..b928dc4 100644[m
+[1m--- a/dashboard/src/app/api/admin/gophish/resources/route.ts[m
+[1m+++ b/dashboard/src/app/api/admin/gophish/resources/route.ts[m
+[36m@@ -3,12 +3,18 @@[m [mimport { NextRequest, NextResponse } from 'next/server';[m
+ export async function GET(request: NextRequest) {[m
+   try {[m
+     const apiUrl = (process.env.API_URL || process.env.NEXT_PUBLIC_API_URL) || 'http://flask_api:5000';[m
+[31m-    const secretKey = process.env.SECRET_KEY || 'dev-fallback-key-change-in-production';[m
+[32m+[m[32m    const serviceApiKey = process.env.SERVICE_API_KEY;[m
+[32m+[m[32m    if (!serviceApiKey) {[m
+[32m+[m[32m      // Fail fast: no insecure fallback credential. A missing key is a[m
+[32m+[m[32m      // deployment misconfiguration, not something to paper over.[m
+[32m+[m[32m      console.error('[admin proxy] SERVICE_API_KEY is not set; refusing to call Flask backend.');[m
+[32m+[m[32m      return NextResponse.json({ error: 'Server misconfigured: SERVICE_API_KEY is not set' }, { status: 500 });[m
+[32m+[m[32m    }[m
+ [m
+     const res = await fetch(`${apiUrl}/api/admin/gophish/resources`, {[m
+       method: 'GET',[m
+       headers: {[m
+[31m-        'Authorization': `Bearer ${secretKey}`,[m
+[32m+[m[32m        'Authorization': `Bearer ${serviceApiKey}`,[m
+       },[m
+     });[m
+ [m
+[1mdiff --git a/dashboard/src/app/api/admin/gophish/sync/route.ts b/dashboard/src/app/api/admin/gophish/sync/route.ts[m
+[1mindex 093836f..2940dcb 100644[m
+[1m--- a/dashboard/src/app/api/admin/gophish/sync/route.ts[m
+[1m+++ b/dashboard/src/app/api/admin/gophish/sync/route.ts[m
+[36m@@ -3,12 +3,18 @@[m [mimport { NextRequest, NextResponse } from 'next/server';[m
+ export async function POST(request: NextRequest) {[m
+   try {[m
+     const apiUrl = (process.env.API_URL || process.env.NEXT_PUBLIC_API_URL) || 'http://flask_api:5000';[m
+[31m-    const secretKey = process.env.SECRET_KEY || 'dev-fallback-key-change-in-production';[m
+[32m+[m[32m    const serviceApiKey = process.env.SERVICE_API_KEY;[m
+[32m+[m[32m    if (!serviceApiKey) {[m
+[32m+[m[32m      // Fail fast: no insecure fallback credential. A missing key is a[m
+[32m+[m[32m      // deployment misconfiguration, not something to paper over.[m
+[32m+[m[32m      console.error('[admin proxy] SERVICE_API_KEY is not set; refusing to call Flask backend.');[m
+[32m+[m[32m      return NextResponse.json({ error: 'Server misconfigured: SERVICE_API_KEY is not set' }, { status: 500 });[m
+[32m+[m[32m    }[m
+ [m
+     const res = await fetch(`${apiUrl}/api/admin/gophish/sync`, {[m
+       method: 'POST',[m
+       headers: {[m
+[31m-        'Authorization': `Bearer ${secretKey}`,[m
+[32m+[m[32m        'Authorization': `Bearer ${serviceApiKey}`,[m
+         'Content-Type': 'application/json',[m
+       },[m
+     });[m
+[1mdiff --git a/dashboard/src/app/api/admin/leaderboard/route.ts b/dashboard/src/app/api/admin/leaderboard/route.ts[m
+[1mindex f522fea..0576547 100644[m
+[1m--- a/dashboard/src/app/api/admin/leaderboard/route.ts[m
+[1m+++ b/dashboard/src/app/api/admin/leaderboard/route.ts[m
+[36m@@ -3,12 +3,18 @@[m [mimport { NextRequest, NextResponse } from 'next/server';[m
+ export async function GET(request: NextRequest) {[m
+   try {[m
+     const apiUrl = (process.env.API_URL || process.env.NEXT_PUBLIC_API_URL) || 'http://flask_api:5000';[m
+[31m-    const secretKey = process.env.SECRET_KEY || 'dev-fallback-key-change-in-production';[m
+[32m+[m[32m    const serviceApiKey = process.env.SERVICE_API_KEY;[m
+[32m+[m[32m    if (!serviceApiKey) {[m
+[32m+[m[32m      // Fail fast: no insecure fallback credential. A missing key is a[m
+[32m+[m[32m      // deployment misconfiguration, not something to paper over.[m
+[32m+[m[32m      console.error('[admin proxy] SERVICE_API_KEY is not set; refusing to call Flask backend.');[m
+[32m+[m[32m      return NextResponse.json({ error: 'Server misconfigured: SERVICE_API_KEY is not set' }, { status: 500 });[m
+[32m+[m[32m    }[m
+ [m
+     const res = await fetch(`${apiUrl}/api/leaderboard`, {[m
+       method: 'GET',[m
+       headers: {[m
+[31m-        'Authorization': `Bearer ${secretKey}`,[m
+[32m+[m[32m        'Authorization': `Bearer ${serviceApiKey}`,[m
+       },[m
+     });[m
+ [m
+[1mdiff --git a/dashboard/src/app/api/auth/magic-link/route.ts b/dashboard/src/app/api/auth/magic-link/route.ts[m
+[1mindex 54e5954..20dfa82 100644[m
+[1m--- a/dashboard/src/app/api/auth/magic-link/route.ts[m
+[1m+++ b/dashboard/src/app/api/auth/magic-link/route.ts[m
+[36m@@ -19,20 +19,56 @@[m [mexport async function POST(request: NextRequest) {[m
+       expiresAt: Date.now() + 15 * 60 * 1000, // 15 minutes[m
+     });[m
+ [m
+[31m-    // Notify Flask backend about this token to allow server-side validations[m
+[31m-    try {[m
+[31m-      const apiUrl = (process.env.API_URL || process.env.NEXT_PUBLIC_API_URL) || 'http://flask_api:5000';[m
+[31m-      await fetch(`${apiUrl}/api/auth/register-token`, {[m
+[31m-        method: 'POST',[m
+[31m-        headers: { 'Content-Type': 'application/json' },[m
+[31m-        body: JSON.stringify({[m
+[31m-          token,[m
+[31m-          email: body.email,[m
+[31m-          expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000, // Extend Flask validation life to 30 days for convenience[m
+[31m-        }),[m
+[31m-      });[m
+[31m-    } catch (err) {[m
+[31m-      console.error('Failed to register token with backend:', err);[m
+[32m+[m[32m    // Notify Flask backend about this token so server-side validations[m
+[32m+[m[32m    // (user-eligibility, user-activity, gamification endpoints) can[m
+[32m+[m[32m    // resolve it via database.validate_dashboard_token(). This call is[m
+[32m+[m[32m    // REQUIRED for the employee dashboard to work — if it fails, every[m
+[32m+[m[32m    // subsequent Flask call made with this token will 403.[m
+[32m+[m[32m    const serviceApiKey = process.env.SERVICE_API_KEY;[m
+[32m+[m[32m    let backendSync: 'ok' | 'failed' | 'skipped' = 'skipped';[m
+[32m+[m
+[32m+[m[32m    if (!serviceApiKey) {[m
+[32m+[m[32m      // Fail loudly instead of silently sending an unauthenticated request[m
+[32m+[m[32m      // that Flask will reject anyway. This is a deployment misconfiguration.[m
+[32m+[m[32m      console.error([m
+[32m+[m[32m        '[magic-link] SERVICE_API_KEY is not set. Skipping backend token registration — ' +[m
+[32m+[m[32m        `the dashboard token for ${body.email} will NOT be recognized by Flask, and ` +[m
+[32m+[m[32m        'user-eligibility/user-activity/gamification calls for this user will 403.'[m
+[32m+[m[32m      );[m
+[32m+[m[32m      backendSync = 'skipped';[m
+[32m+[m[32m    } else {[m
+[32m+[m[32m      try {[m
+[32m+[m[32m        const apiUrl = (process.env.API_URL || process.env.NEXT_PUBLIC_API_URL) || 'http://flask_api:5000';[m
+[32m+[m[32m        const res = await fetch(`${apiUrl}/api/auth/register-token`, {[m
+[32m+[m[32m          method: 'POST',[m
+[32m+[m[32m          headers: {[m
+[32m+[m[32m            'Content-Type': 'application/json',[m
+[32m+[m[32m            Authorization: `Bearer ${serviceApiKey}`,[m
+[32m+[m[32m          },[m
+[32m+[m[32m          body: JSON.stringify({[m
+[32m+[m[32m            token,[m
+[32m+[m[32m            email: body.email,[m
+[32m+[m[32m            expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000, // Extend Flask validation life to 30 days for convenience[m
+[32m+[m[32m          }),[m
+[32m+[m[32m        });[m
+[32m+[m
+[32m+[m[32m        if (!res.ok) {[m
+[32m+[m[32m          const detail = await res.text().catch(() => '<no body>');[m
+[32m+[m[32m          console.error([m
+[32m+[m[32m            `[magic-link] Backend token registration failed for ${body.email}: ` +[m
+[32m+[m[32m            `HTTP ${res.status} — ${detail}. This token will NOT authenticate against Flask.`[m
+[32m+[m[32m          );[m
+[32m+[m[32m          backendSync = 'failed';[m
+[32m+[m[32m        } else {[m
+[32m+[m[32m          backendSync = 'ok';[m
+[32m+[m[32m        }[m
+[32m+[m[32m      } catch (err) {[m
+[32m+[m[32m        console.error([m
+[32m+[m[32m          `[magic-link] Backend token registration threw for ${body.email}:`, err,[m
+[32m+[m[32m          '— this token will NOT authenticate against Flask.'[m
+[32m+[m[32m        );[m
+[32m+[m[32m        backendSync = 'failed';[m
+[32m+[m[32m      }[m
+     }[m
+ [m
+     // The bot would send this URL to the user in Telegram[m
+[36m@@ -43,6 +79,10 @@[m [mexport async function POST(request: NextRequest) {[m
+       token,[m
+       url: dashboardUrl,[m
+       expiresIn: '15 minutes',[m
+[32m+[m[32m      // Surfaces degraded state instead of hiding it: if this isn't "ok",[m
+[32m+[m[32m      // the employee dashboard will authenticate locally but Flask-backed[m
+[32m+[m[32m      // calls (eligibility, activity, gamification) will fail with 403.[m
+[32m+[m[32m      backendSync,[m
+     }, { status: 201 });[m
+   } catch {[m
+     return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });[m
+[1mdiff --git a/env (1).example b/env (1).example[m
+[1mindex 3dc8cad..a81d5bf 100644[m
+[1m--- a/env (1).example[m	
+[1m+++ b/env (1).example[m	
+[36m@@ -14,11 +14,18 @@[m
+ # Password buat login admin dashboard (session-based auth)[m
+ ADMIN_PASSWORD=ganti_dengan_password_kuat_disini[m
+ [m
+[31m-# Secret key Flask (dipakai buat sign session cookie, DAN dipakai sebagai[m
+[31m-# shared secret buat server-to-server auth via "Authorization: Bearer <SECRET_KEY>"[m
+[31m-# — dipakai n8n buat manggil endpoint yang protected kayak POST /api/reports)[m
+[32m+[m[32m# Secret key Flask — HANYA dipakai buat sign session cookie admin.[m
+[32m+[m[32m# BUKAN buat server-to-server auth lagi (lihat SERVICE_API_KEY di bawah).[m
+ SECRET_KEY=ganti_dengan_random_string_panjang_disini[m
+ [m
+[32m+[m[32m# Shared secret buat server-to-server auth via[m
+[32m+[m[32m# "Authorization: Bearer <SERVICE_API_KEY>" — dipakai Next.js dashboard[m
+[32m+[m[32m# dan n8n buat manggil endpoint Flask yang protected (contoh: POST[m
+[32m+[m[32m# /api/reports, GET /api/compliance-summary, GET /api/leaderboard, dll).[m
+[32m+[m[32m# WAJIB diisi, Flask app REFUSE START kalau kosong. Generate dengan:[m
+[32m+[m[32m#   python3 -c "import secrets; print(secrets.token_hex(32))"[m
+[32m+[m[32mSERVICE_API_KEY=ganti_dengan_random_string_panjang_lainnya_disini[m
+[32m+[m
+ # ---------------------------------------------------------------------------[m
+ # CORS[m
+ # ---------------------------------------------------------------------------[m
+[1mdiff --git "a/n8n-workflows/Flow B \342\200\224 Threat Reporting (Fully Configured).json" "b/n8n-workflows/Flow B \342\200\224 Threat Reporting (Fully Configured).json"[m
+[1mindex 59ad7a6..98742ee 100644[m
+[1m--- "a/n8n-workflows/Flow B \342\200\224 Threat Reporting (Fully Configured).json"[m	
+[1m+++ "b/n8n-workflows/Flow B \342\200\224 Threat Reporting (Fully Configured).json"[m	
+[36m@@ -980,7 +980,7 @@[m
+           "parameters": [[m
+             {[m
+               "name": "Authorization",[m
+[31m-              "value": "=Bearer {{ $env.SECRET_KEY }}"[m
+[32m+[m[32m              "value": "=Bearer {{ $env.SERVICE_API_KEY }}"[m
+             }[m
+           ][m
+         }[m

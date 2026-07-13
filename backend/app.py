@@ -61,8 +61,7 @@ def require_admin_for_protected_routes():
         # 1. Cek dedicated service API key untuk server-to-server (Next.js / n8n)
         if auth_header and auth_header.startswith('Bearer '):
             token = auth_header.split(' ')[1]
-            print(f"[AUTH DEBUG] Path: {request.path}, Received token: {token!r}, Expected: {SERVICE_API_KEY!r}", flush=True)
-            if token == SERVICE_API_KEY or token == SECRET_KEY:
+            if token == SERVICE_API_KEY:
                 return
 
         # 2. Cek session cookie for legacy admin dashboard

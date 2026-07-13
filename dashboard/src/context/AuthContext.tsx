@@ -52,6 +52,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     setUser(null);
     localStorage.removeItem('hf_user');
+    // Revoke the server-side admin session cookie too — clearing localStorage
+    // alone only affects this browser tab's UI state, it doesn't invalidate
+    // the httpOnly session the middleware actually checks.
+    fetch('/api/auth/admin-logout', { method: 'POST' }).catch(() => {
+      // Best-effort: even if this fails, the cookie will expire on its own.
+    });
   };
 
   return (
