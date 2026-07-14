@@ -6,6 +6,8 @@ from flask import Flask, request, jsonify, render_template, session, redirect, u
 from flask_cors import CORS
 import database
 import os
+from routes.threat import threat_bp
+from routes.proxy import proxy_bp
 
 # Admin password, Flask session secret, and internal service key checks on startup
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
@@ -38,7 +40,9 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(events_bp)
 app.register_blueprint(incidents_bp)
 app.register_blueprint(admin_api_bp)
-app.register_blueprint(gamification_bp) 
+app.register_blueprint(gamification_bp)
+app.register_blueprint(threat_bp)
+app.register_blueprint(proxy_bp)
 
 # Public endpoints whitelisting (matching blueprint endpoint paths)
 # /api/telegram/user is deliberately excluded to prevent sensitive data exposure
@@ -49,6 +53,7 @@ PUBLIC_ROUTES = {
     'static', 'auth.api_auth_admin', 'events.api_user_eligibility', 'events.api_user_activity',
     'gamification.get_employee_reports_summary',
     'gamification.post_quiz_complete',
+    'proxy.visit', 'proxy.go', 'proxy.blocked'
 }
 
 @app.before_request

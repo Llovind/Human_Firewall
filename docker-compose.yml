@@ -25,6 +25,7 @@ services:
       - SOC_CHAT_ID=${SOC_CHAT_ID}
       - SECRET_KEY=${SECRET_KEY}
       - SERVICE_API_KEY=${SERVICE_API_KEY}
+      - N8N_PROXY_HOPS=1
     volumes:
       - n8n_data:/home/node/.n8n
     restart: unless-stopped
@@ -72,13 +73,21 @@ services:
       - FLASK_APP=app.py
       - FLASK_ENV=production
       - FLASK_DEBUG=0
+
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - SECRET_KEY=${SECRET_KEY}
       - SERVICE_API_KEY=${SERVICE_API_KEY}
       - BOT_USERNAME=${BOT_USERNAME}
+
       - GOPHISH_API_KEY=${GOPHISH_API_KEY}
       - GOPHISH_API_URL=${GOPHISH_API_URL}
+
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+
+      - VT_API_KEY=${VT_API_KEY}
+      - URLSCAN_API_KEY=${URLSCAN_API_KEY}
+      - SOC_CHAT_ID=${SOC_CHAT_ID}
+      - WEBHOOK_URL=${WEBHOOK_URL}
     restart: unless-stopped
     networks:
       - hfl_network
