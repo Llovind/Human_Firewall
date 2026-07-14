@@ -1,30 +1,288 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="id">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Access Blocked — Secure Gateway</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
 
-<title>Blocked</title>
+        body {
+            background: #110f14;
+            background-image:
+                radial-gradient(ellipse at 50% 10%, rgba(220, 38, 38, 0.08) 0%, transparent 60%),
+                radial-gradient(ellipse at 50% 90%, rgba(30, 20, 40, 0.5) 0%, transparent 50%);
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            color: #d4d4d8;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
 
+        .container {
+            width: 100%;
+            max-width: 520px;
+        }
+
+        /* ── Icon Stack ── */
+        .icon-stack {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 28px;
+        }
+
+        .shield-icon {
+            width: 52px; height: 52px;
+            border-radius: 14px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .shield-icon.green {
+            background: rgba(16, 185, 129, 0.12);
+            border: 1.5px solid rgba(16, 185, 129, 0.25);
+        }
+        .shield-icon.red {
+            background: rgba(220, 38, 38, 0.12);
+            border: 1.5px solid rgba(220, 38, 38, 0.3);
+        }
+        .shield-icon svg { width: 26px; height: 26px; }
+
+        /* ── Heading ── */
+        h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.55rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: #fafafa;
+            text-align: center;
+            margin-bottom: 12px;
+        }
+
+        .desc {
+            text-align: center;
+            font-size: 0.88rem;
+            line-height: 1.65;
+            color: #a1a1aa;
+            margin-bottom: 32px;
+            max-width: 420px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .desc strong { color: #fca5a5; font-weight: 600; }
+
+        /* ── Details Card ── */
+        .details-card {
+            background: rgba(24, 20, 30, 0.65);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 16px;
+            padding: 28px;
+            margin-bottom: 24px;
+        }
+
+        .card-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+            font-weight: 500;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #10b981;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .card-label::before {
+            content: "";
+            width: 7px; height: 7px;
+            background: #10b981;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .field-label {
+            font-size: 0.75rem;
+            color: #71717a;
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+
+        .url-block {
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 10px;
+            padding: 12px 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: #e4e4e7;
+            word-break: break-all;
+            margin-bottom: 20px;
+        }
+
+        .detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+        }
+
+        .detail-item .detail-value {
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #fafafa;
+        }
+
+        /* ── Score Bar ── */
+        .score-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .score-bar {
+            flex: 1;
+            height: 7px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .score-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.8s ease;
+        }
+        .score-fill.high { background: #ef4444; }
+        .score-fill.medium { background: #f59e0b; }
+        .score-fill.low { background: #10b981; }
+
+        .score-number {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            font-weight: 500;
+            min-width: 48px;
+            text-align: right;
+        }
+        .score-number.high { color: #ef4444; }
+        .score-number.medium { color: #f59e0b; }
+        .score-number.low { color: #10b981; }
+
+        /* ── Buttons ── */
+        .btn-primary {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            padding: 14px;
+            background: #dc2626;
+            border: none;
+            border-radius: 12px;
+            color: #fff;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.2s, transform 0.15s;
+            margin-bottom: 12px;
+        }
+        .btn-primary:hover { background: #b91c1c; transform: translateY(-1px); }
+        .btn-primary:active { transform: translateY(1px); }
+
+        .btn-ghost {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            padding: 13px;
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            color: #a1a1aa;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            transition: border-color 0.2s, color 0.2s;
+        }
+        .btn-ghost:hover { border-color: rgba(255, 255, 255, 0.15); color: #d4d4d8; }
+    </style>
 </head>
-
 <body>
 
-<h1>🚫 HUMAN FIREWALL</h1>
+<div class="container">
+    <!-- Icon Stack -->
+    <div class="icon-stack">
+        <div class="shield-icon green">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                <path d="M9 12l2 2 4-4"/>
+            </svg>
+        </div>
+        <div class="shield-icon red">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+        </div>
+    </div>
 
-<h2>Website berhasil diblok.</h2>
+    <h1>Access Blocked by Secure Gateway</h1>
+    <p class="desc">
+        Adaptive Secure Gateway mendeteksi ancaman tingkat tinggi (<strong>HIGH Risk</strong>) pada URL yang Anda coba akses. Akses dibatalkan demi keamanan data perusahaan.
+    </p>
 
-<p>
+    <!-- Details Card -->
+    {% if threat %}
+    <div class="details-card">
+        <div class="card-label">Threat Intelligence Cache Details</div>
 
-Threat Intelligence mendeteksi website ini berbahaya.
+        <div class="field-label">Blocked Source (URL):</div>
+        <div class="url-block">{{ threat.url or '—' }}</div>
 
-</p>
+        <div class="detail-grid">
+            <div class="detail-item">
+                <div class="field-label">Detection Engine:</div>
+                <div class="detail-value">{{ threat.engine or 'Threat Intelligence' }}</div>
+            </div>
+            <div class="detail-item">
+                <div class="field-label">Threat Type:</div>
+                <div class="detail-value">{{ threat.threat_type or 'Suspicious' }}</div>
+            </div>
+            <div class="detail-item">
+                <div class="field-label">Cache ID:</div>
+                <div class="detail-value">{{ threat.cache_id or '—' }}</div>
+            </div>
+            <div class="detail-item">
+                <div class="field-label">Threat Score:</div>
+                {% set score = threat.threat_score|default(0)|int %}
+                {% set level = 'high' if score >= 70 else 'medium' if score >= 40 else 'low' %}
+                <div class="score-row">
+                    <div class="score-bar">
+                        <div class="score-fill {{ level }}" style="width: {{ score }}%"></div>
+                    </div>
+                    <div class="score-number {{ level }}">{{ score }}/100</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
-<a href="/visit">
-
-Kembali
-
-</a>
+    <a href="javascript:history.back()" class="btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        Kembali ke Halaman Aman
+    </a>
+    <a href="#" class="btn-ghost" onclick="alert('Laporan false positive telah dicatat. Tim keamanan akan meninjau dalam 24 jam.'); return false;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Laporkan Salah Deteksi (False Positive)
+    </a>
+</div>
 
 </body>
-
 </html>

@@ -1597,10 +1597,26 @@ export default function SOCAdminDashboard() {
                     </div>
                   </div>
                   <div className="webmail-body">
-                    {/* Render email safely via iframe with srcDoc to isolate custom phishing link styles */}
+                    {/* Render email safely via iframe with srcDoc to isolate custom phishing link styles.
+                         onLoad intercepts all <a> clicks and routes them through Secure Gateway /go?url=... */}
                     <iframe
                       srcDoc={selectedEmail.body}
                       title="Webmail Body"
+                      onLoad={(e) => {
+                        const iframeDoc = (e.target as HTMLIFrameElement).contentDocument;
+                        if (!iframeDoc) return;
+                        iframeDoc.querySelectorAll('a').forEach((a) => {
+                          a.addEventListener('click', (evt) => {
+                            evt.preventDefault();
+                            const href = a.getAttribute('href');
+                            if (href && href !== '#') {
+                              // Route through Secure Gateway proxy for threat check
+                              const gatewayUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/go?url=${encodeURIComponent(href)}`;
+                              window.open(gatewayUrl, '_blank', 'noopener,noreferrer');
+                            }
+                          });
+                        });
+                      }}
                     />
                   </div>
                 </>
