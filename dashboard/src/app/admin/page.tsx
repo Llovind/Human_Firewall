@@ -131,14 +131,6 @@ export default function SOCAdminDashboard() {
   const { user, isAuthenticated, isLoading: authLoading, logout } = useAuth();
   const [clock, setClock] = useState('');
   const [activeTab, setActiveTab] = useState<'overview' | 'threats' | 'leaderboard' | 'policy' | 'gophish' | 'webmail' | 'employees'>('overview');
-  const [animateChart, setAnimateChart] = useState(true);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setAnimateChart(false);
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, []);
 
   // ── Polling basic data sources ───
   const { data: incidentData, hasUpdated: incidentUpdated } = usePolling<{ incidents: Incident[]; stats: Stats }>('/api/incident', 3000);
@@ -586,8 +578,9 @@ export default function SOCAdminDashboard() {
   }, { 'Critical': 0, 'High': 0, 'Medium': 0, 'Low': 0 });
 
   const severityChartData = Object.entries(severityCounts)
-    .map(([name, value]) => ({ name, value: value as number }))
-    .filter(item => item.value > 0);
+    .map(([name, value]) => ({ name, value: value as number }));
+
+  const totalSeverityCount = severityChartData.reduce((sum, item) => sum + item.value, 0);
 
   return (
     <div className="app-shell">
@@ -663,7 +656,7 @@ export default function SOCAdminDashboard() {
                           contentStyle={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '8px' }}
                           itemStyle={{ color: 'var(--text-primary)' }}
                         />
-                        <Bar dataKey="score" radius={[0, 4, 4, 0]} barSize={16} isAnimationActive={animateChart} animationDuration={500} animationEasing="ease-out">
+                        <Bar dataKey="score" radius={[0, 4, 4, 0]} barSize={16} isAnimationActive={true} animationDuration={250} animationEasing="ease-out">
                           {divisionChartData.map((entry, index) => (
                             <Cell
                               key={`cell-${index}`}
@@ -686,7 +679,7 @@ export default function SOCAdminDashboard() {
                   <span className="chart-badge">{incidents.length} tiket</span>
                 </div>
                 <div className="chart-container doughnut-chart">
-                  {severityChartData.length > 0 ? (
+                  {totalSeverityCount > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
@@ -697,8 +690,8 @@ export default function SOCAdminDashboard() {
                           outerRadius="85%"
                           paddingAngle={3}
                           dataKey="value"
-                          isAnimationActive={animateChart}
-                          animationDuration={500}
+                          isAnimationActive={true}
+                          animationDuration={250}
                           animationEasing="ease-out"
                         >
                           {severityChartData.map((entry, index) => {
@@ -922,7 +915,7 @@ export default function SOCAdminDashboard() {
                       contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px' }}
                       itemStyle={{ color: 'var(--accent-bright)' }}
                     />
-                    <Bar dataKey="deteksi" fill="var(--accent)" radius={[4, 4, 0, 0]} barSize={32} isAnimationActive={animateChart} animationDuration={500} animationEasing="ease-out" />
+                    <Bar dataKey="deteksi" fill="var(--accent)" radius={[4, 4, 0, 0]} barSize={32} isAnimationActive={true} animationDuration={250} animationEasing="ease-out" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
