@@ -27,29 +27,26 @@
             max-width: 520px;
         }
 
-        /* ── Icon Stack ── */
-        .icon-stack {
+        /* ── Glowing Human Firewall Logo ── */
+        .hfl-logo-container {
             display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 12px;
+            justify-content: center;
             margin-bottom: 28px;
         }
-
-        .shield-icon {
-            width: 52px; height: 52px;
-            border-radius: 14px;
-            display: flex; align-items: center; justify-content: center;
+        .hfl-logo {
+            filter: drop-shadow(0 0 12px rgba(239, 68, 68, 0.45));
+            animation: pulse-glow 2.5s infinite ease-in-out;
         }
-        .shield-icon.green {
-            background: rgba(16, 185, 129, 0.12);
-            border: 1.5px solid rgba(16, 185, 129, 0.25);
+        @keyframes pulse-glow {
+            0%, 100% { 
+                filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.35));
+                transform: scale(1);
+            }
+            50% { 
+                filter: drop-shadow(0 0 20px rgba(239, 68, 68, 0.65));
+                transform: scale(1.03);
+            }
         }
-        .shield-icon.red {
-            background: rgba(220, 38, 38, 0.12);
-            border: 1.5px solid rgba(220, 38, 38, 0.3);
-        }
-        .shield-icon svg { width: 26px; height: 26px; }
 
         /* ── Heading ── */
         h1 {
@@ -216,21 +213,46 @@
 <body>
 
 <div class="container">
-    <!-- Icon Stack -->
-    <div class="icon-stack">
-        <div class="shield-icon green">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                <path d="M9 12l2 2 4-4"/>
-            </svg>
-        </div>
-        <div class="shield-icon red">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                <line x1="12" y1="8" x2="12" y2="12"/>
-                <line x1="12" y1="16" x2="12.01" y2="16"/>
-            </svg>
-        </div>
+    <!-- Glowing Human Firewall Logo -->
+    <div class="hfl-logo-container">
+        <svg class="hfl-logo" width="84" height="84" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Shield Outer Path with red glow -->
+            <path 
+              d="M50 6 L90 22 L90 55 C90 78 50 94 50 94 C50 94 10 78 10 55 L10 22 Z" 
+              stroke="#ef4444" 
+              stroke-width="6" 
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              fill="rgba(220, 38, 38, 0.08)"
+            />
+            <!-- Circuit lines inside the shield -->
+            <path 
+              d="M50 28 L50 48 L32 48 L32 64" 
+              stroke="#fca5a5" 
+              stroke-width="4" 
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path 
+              d="M50 48 L68 48 L68 64" 
+              stroke="#fca5a5" 
+              stroke-width="4" 
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path 
+              d="M50 48 L50 78" 
+              stroke="#fca5a5" 
+              stroke-width="4" 
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <!-- Circuit Nodes (Dots) -->
+            <circle cx="50" cy="28" r="5" fill="#ef4444" />
+            <circle cx="32" cy="64" r="5" fill="#ef4444" />
+            <circle cx="68" cy="64" r="5" fill="#ef4444" />
+            <circle cx="50" cy="78" r="5" fill="#ef4444" />
+        </svg>
     </div>
 
     <h1>Access Blocked by Secure Gateway</h1>
