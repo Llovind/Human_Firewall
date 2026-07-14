@@ -161,7 +161,16 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"source_type\": \"real_world_report\",\n  \"divisi\": \"User Report\",\n  \"severity\": \"{{ $json.severity }}\",\n  \"reported_url\": \"{{ $json.reported_url }}\",\n  \"vt_verdict\": \"{{ $json.vt_verdict }}\",\n  \"urlscan_verdict\": \"{{ $json.urlscan_verdict }}\",\n  \"screenshot_url\": \"{{ $json.screenshot_url }}\"\n}",
-        "options": {}
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SERVICE_API_KEY}}"
+            }
+          ]
+        }
       },
       "id": "ab010924-e24c-410e-acfb-8bbe12e20585",
       "name": "Create URL Incident",
@@ -396,7 +405,16 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"source_type\": \"real_world_report\",\n  \"divisi\": \"User Report\",\n  \"severity\": \"{{ $json.severity }}\",\n  \"vt_verdict\": \"{{ $json.vt_verdict }}\",\n  \"file_hash\": \"{{ $json.file_hash }}\",\n  \"original_filename\": \"{{ $json.file_name }}\"\n}",
-        "options": {}
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SERVICE_API_KEY}}"
+            }
+          ]
+        }
       },
       "id": "e5df4b72-5d8f-4e4d-aa00-43603de95ccc",
       "name": "Create File Incident",
