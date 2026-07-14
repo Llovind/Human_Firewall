@@ -131,6 +131,14 @@ export default function SOCAdminDashboard() {
   const { user, isAuthenticated, isLoading: authLoading, logout } = useAuth();
   const [clock, setClock] = useState('');
   const [activeTab, setActiveTab] = useState<'overview' | 'threats' | 'leaderboard' | 'policy' | 'gophish' | 'webmail' | 'employees'>('overview');
+  const [animateChart, setAnimateChart] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setAnimateChart(false);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // ── Polling basic data sources ───
   const { data: incidentData, hasUpdated: incidentUpdated } = usePolling<{ incidents: Incident[]; stats: Stats }>('/api/incident', 3000);
@@ -655,7 +663,7 @@ export default function SOCAdminDashboard() {
                           contentStyle={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '8px' }}
                           itemStyle={{ color: 'var(--text-primary)' }}
                         />
-                        <Bar dataKey="score" radius={[0, 4, 4, 0]} barSize={16}>
+                        <Bar dataKey="score" radius={[0, 4, 4, 0]} barSize={16} isAnimationActive={animateChart} animationDuration={500} animationEasing="ease-out">
                           {divisionChartData.map((entry, index) => (
                             <Cell
                               key={`cell-${index}`}
@@ -689,6 +697,9 @@ export default function SOCAdminDashboard() {
                           outerRadius="85%"
                           paddingAngle={3}
                           dataKey="value"
+                          isAnimationActive={animateChart}
+                          animationDuration={500}
+                          animationEasing="ease-out"
                         >
                           {severityChartData.map((entry, index) => {
                             let color = 'var(--success)';
@@ -911,7 +922,7 @@ export default function SOCAdminDashboard() {
                       contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px' }}
                       itemStyle={{ color: 'var(--accent-bright)' }}
                     />
-                    <Bar dataKey="deteksi" fill="var(--accent)" radius={[4, 4, 0, 0]} barSize={32} />
+                    <Bar dataKey="deteksi" fill="var(--accent)" radius={[4, 4, 0, 0]} barSize={32} isAnimationActive={animateChart} animationDuration={500} animationEasing="ease-out" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
