@@ -94,6 +94,21 @@ def redirect_handler():
     if not email:
         return jsonify({"error": "parameter 'email' wajib diisi"}), 400
 
+    # ── SECURE GATEWAY CHECK ──
+    # Check if this simulation link has already been reported and blocked by the proxy
+    scheme = request.scheme
+    host = request.host
+    reconstructed_url = f"{scheme}://{host}/redirect-handler?rid={rid}"
+    
+    from services.threat_service import analyze_indicator
+    try:
+        result = analyze_indicator(reconstructed_url)
+        if result["policy"]["action"] == "block":
+            from urllib.parse import quote
+            return redirect(f"/blocked?url={quote(reconstructed_url, safe='')}")
+    except Exception as e:
+        print(f"ERROR in redirect-handler secure gateway check: {e}")
+
     history = database.get_user_history(email)
     tier = database.classify_tier(history["click_count"])
     divisi = history.get("divisi") or derive_divisi_from_email(email)
