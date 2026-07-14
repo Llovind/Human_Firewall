@@ -160,7 +160,7 @@
         "url": "http://flask_api:5000/api/incidents",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"source_type\": \"real_world_report\",\n  \"divisi\": \"User Report\",\n  \"severity\": \"{{ $json.severity }}\",\n  \"reported_url\": \"{{ $json.reported_url }}\",\n  \"vt_verdict\": \"{{ $json.vt_verdict }}\",\n  \"urlscan_verdict\": \"{{ $json.urlscan_verdict }}\",\n  \"screenshot_url\": \"{{ $json.screenshot_url }}\"\n}",
+        "jsonBody": "={\n  \"source_type\": \"real_world_report\",\n  \"divisi\": \"User Report\",\n  \"severity\": \"{{ $json.policy.severity }}\",\n  \"reported_url\": \"{{ $json.reported_url }}\",\n  \"vt_verdict\": \"{{ $json.policy.verdict }}\",\n  \"urlscan_verdict\": \"\",\n  \"screenshot_url\": \"\"\n}",
         "options": {},
         "sendHeaders": true,
         "headerParameters": {
