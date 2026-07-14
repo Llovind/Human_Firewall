@@ -184,7 +184,7 @@
     {
       "parameters": {
         "chatId": "2019216831",
-        "text": "=\ud83d\udd0d THREAT REPORT \u2014 URL\n\n\ud83d\udccb {{ $json.ticket_id }}\n\ud83d\udd17 {{ $('Evaluate URL').item.json.reported_url }}\n\u26a0\ufe0f Severity: {{ $json.severity }}\n\n\ud83d\udee1\ufe0f VT: {{ $('Evaluate URL').item.json.vt_verdict }}\n\ud83c\udf10 urlscan: {{ $('Evaluate URL').item.json.urlscan_verdict }}\n\n\ud83d\udc64 Dilaporkan oleh: {{ $('Evaluate URL').item.json.reporter_name }}",
+        "text": "=\ud83d\udd0d THREAT REPORT \u2014 URL\n\n\ud83d\udccb {{ $json.ticket_id }}\n\ud83d\udd17 {{ $('Threat Intelligence API').item.json.reported_url }}\n\u26a0\ufe0f Severity: {{ $('Threat Intelligence API').item.json.policy.severity }}\n\n\ud83d\udee1\ufe0f VT/URLScan: {{ $('Threat Intelligence API').item.json.policy.verdict }}\n\ud83d\udcdd Alasan: {{ $('Threat Intelligence API').item.json.policy.reason }}\n\n\ud83d\udc64 Dilaporkan oleh: {{ $('Telegram Trigger').item.json.message.from.first_name }}",
         "additionalFields": {}
       },
       "id": "a3f7e21d-5fdc-46eb-8ab1-135dd66777a8",
@@ -205,8 +205,8 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $('Evaluate URL').item.json.chat_id }}",
-        "text": "=\u26a0\ufe0f URL yang Anda laporkan terdeteksi BERBAHAYA.\n\n\ud83d\udd17 {{ $('Evaluate URL').item.json.reported_url }}\n\u26a0\ufe0f Severity: {{ $('Evaluate URL').item.json.severity }}\n\ud83d\udee1\ufe0f VT: {{ $('Evaluate URL').item.json.vt_verdict }}\n\nTiket insiden sudah dibuat dan tim SOC telah diberitahu.\nTerima kasih atas laporan Anda! \ud83d\ude4f",
+        "chatId": "={{ $('Threat Intelligence API').item.json.chat_id }}",
+        "text": "=\u26a0\ufe0f URL yang Anda laporkan terdeteksi BERBAHAYA.\n\n\ud83d\udd17 {{ $('Threat Intelligence API').item.json.reported_url }}\n\u26a0\ufe0f Severity: {{ $('Threat Intelligence API').item.json.policy.severity }}\n\ud83d\udee1\ufe0f Status: {{ $('Threat Intelligence API').item.json.policy.verdict }}\n\nTiket insiden sudah dibuat dan tim SOC telah diberitahu.\nTerima kasih atas laporan Anda! \ud83d\ude4f",
         "additionalFields": {
           "appendAttribution": false
         }
