@@ -160,7 +160,7 @@
         "url": "http://flask_api:5000/api/incidents",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"source_type\": \"real_world_report\",\n  \"divisi\": \"User Report\",\n  \"severity\": \"{{ $json.policy.severity }}\",\n  \"reported_url\": \"{{ $json.reported_url }}\",\n  \"vt_verdict\": \"{{ $json.policy.verdict }}\",\n  \"urlscan_verdict\": \"\",\n  \"screenshot_url\": \"\"\n}",
+        "jsonBody": "={\n  \"source_type\": \"real_world_report\",\n  \"divisi\": \"User Report\",\n  \"severity\": \"{{ $json.policy.severity }}\",\n  \"reported_url\": \"{{ $json.reported_url }}\",\n  \"vt_verdict\": \"{{ $json.policy.verdict }}\",\n  \"urlscan_verdict\": \"\",\n  \"screenshot_url\": \"\",\n  \"reporter_chat_id\": \"{{ $('Threat Intelligence API').item.json.chat_id }}\"\n}",
         "options": {},
         "sendHeaders": true,
         "headerParameters": {
@@ -184,7 +184,7 @@
     {
       "parameters": {
         "chatId": "2019216831",
-        "text": "=\ud83d\udd0d THREAT REPORT \u2014 URL\n\n\ud83d\udccb {{ $json.ticket_id }}\n\ud83d\udd17 {{ $('Threat Intelligence API').item.json.reported_url }}\n\u26a0\ufe0f Severity: {{ $('Threat Intelligence API').item.json.policy.severity }}\n\n\ud83d\udee1\ufe0f VT/URLScan: {{ $('Threat Intelligence API').item.json.policy.verdict }}\n\ud83d\udcdd Alasan: {{ $('Threat Intelligence API').item.json.policy.reason }}\n\n\ud83d\udc64 Dilaporkan oleh: {{ $('Telegram Trigger').item.json.message.from.first_name }}",
+        "text": "={{ $('Threat Intelligence API').item.json.analysis.providers.includes('Infranexia Phishing Simulator') ? '\ud83d\udd14 [SOC ALERT] \u2014 LAPORAN SIMULASI\\n\\n\ud83d\udccb ' + $json.ticket_id + '\\n\ud83d\udd17 ' + $('Threat Intelligence API').item.json.reported_url + '\\n\ud83d\udc64 Pelapor: ' + $('Telegram Trigger').item.json.message.from.first_name + ' (Berhasil dideteksi - Poin diberikan!)' : '\ud83d\udd14 [SOC ALERT] \u2014 LAPORAN ANCAMAN URL\\n\\n\ud83d\udccb ' + $json.ticket_id + '\\n\ud83d\udd17 ' + $('Threat Intelligence API').item.json.reported_url + '\\n\u26a0\ufe0f Severity: ' + $('Threat Intelligence API').item.json.policy.severity + '\\n\ud83d\udee1\ufe0f VT/URLScan: ' + $('Threat Intelligence API').item.json.policy.verdict + '\\n\ud83d\udcdd Alasan: ' + $('Threat Intelligence API').item.json.policy.reason + '\\n\ud83d\udc64 Pelapor: ' + $('Telegram Trigger').item.json.message.from.first_name }}",
         "additionalFields": {}
       },
       "id": "a3f7e21d-5fdc-46eb-8ab1-135dd66777a8",
@@ -206,7 +206,7 @@
     {
       "parameters": {
         "chatId": "={{ $('Threat Intelligence API').item.json.chat_id }}",
-        "text": "=\u26a0\ufe0f URL yang Anda laporkan terdeteksi BERBAHAYA.\n\n\ud83d\udd17 {{ $('Threat Intelligence API').item.json.reported_url }}\n\u26a0\ufe0f Severity: {{ $('Threat Intelligence API').item.json.policy.severity }}\n\ud83d\udee1\ufe0f Status: {{ $('Threat Intelligence API').item.json.policy.verdict }}\n\nTiket insiden sudah dibuat dan tim SOC telah diberitahu.\nTerima kasih atas laporan Anda! \ud83d\ude4f",
+        "text": "={{ $('Threat Intelligence API').item.json.analysis.providers.includes('Infranexia Phishing Simulator') ? '\ud83c\udf89 Wah keren! Anda berhasil mendeteksi dan melaporkan link simulasi phishing dari Tim Security IR.\\n\\nPoin reputasi Anda telah ditambahkan! Tetap waspada! \ud83d\udee1\ufe0f' : '\u26a0\ufe0f [USER NOTIFICATION] URL yang Anda laporkan terdeteksi BERBAHAYA.\\n\\n\ud83d\udd17 ' + $('Threat Intelligence API').item.json.reported_url + '\\n\u26a0\ufe0f Severity: ' + $('Threat Intelligence API').item.json.policy.severity + '\\n\ud83d\udee1\ufe0f Status: ' + $('Threat Intelligence API').item.json.policy.verdict + '\\n\\nTiket insiden sudah dibuat dan tim SOC telah diberitahu.\\nTerima kasih atas laporan Anda! \ud83d\ude4f' }}",
         "additionalFields": {
           "appendAttribution": false
         }
@@ -404,7 +404,7 @@
         "url": "http://flask_api:5000/api/incidents",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"source_type\": \"real_world_report\",\n  \"divisi\": \"User Report\",\n  \"severity\": \"{{ $json.severity }}\",\n  \"vt_verdict\": \"{{ $json.vt_verdict }}\",\n  \"file_hash\": \"{{ $json.file_hash }}\",\n  \"original_filename\": \"{{ $json.file_name }}\"\n}",
+        "jsonBody": "={\n  \"source_type\": \"real_world_report\",\n  \"divisi\": \"User Report\",\n  \"severity\": \"{{ $json.severity }}\",\n  \"vt_verdict\": \"{{ $json.vt_verdict }}\",\n  \"file_hash\": \"{{ $json.file_hash }}\",\n  \"original_filename\": \"{{ $json.file_name }}\",\n  \"reporter_chat_id\": \"{{ $('Telegram Trigger').item.json.message.chat.id }}\"\n}",
         "options": {},
         "sendHeaders": true,
         "headerParameters": {
@@ -428,7 +428,7 @@
     {
       "parameters": {
         "chatId": "2019216831",
-        "text": "=\ud83d\udd0d THREAT REPORT \u2014 FILE\n\n\ud83d\udccb {{ $json.ticket_id }}\n\ud83d\udcce {{ $('Evaluate File').item.json.file_name }}\n\u26a0\ufe0f Severity: {{ $json.severity }}\n\ud83d\udd11 SHA256: {{ $('Evaluate File').item.json.file_hash }}\n\n\ud83d\udee1\ufe0f VT: {{ $('Evaluate File').item.json.vt_verdict }}\n\n\ud83d\udc64 Dilaporkan oleh: {{ $('Evaluate File').item.json.reporter_name }}",
+        "text": "=\ud83d\udd14 [SOC ALERT] \u2014 LAPORAN ANCAMAN FILE\n\n\ud83d\udccb {{ $json.ticket_id }}\n\ud83d\udcce {{ $('Evaluate File').item.json.file_name }}\n\u26a0\ufe0f Severity: {{ $json.severity }}\n\ud83d\udd11 SHA256: {{ $('Evaluate File').item.json.file_hash }}\n\ud83d\udee1\ufe0f VT: {{ $('Evaluate File').item.json.vt_verdict }}\n\ud83d\\c64 Pelapor: {{ $('Evaluate File').item.json.reporter_name }}",
         "additionalFields": {}
       },
       "id": "adfd4273-42b6-4124-a72b-60b1603af4cc",
@@ -450,7 +450,7 @@
     {
       "parameters": {
         "chatId": "={{ $('Evaluate File').item.json.chat_id }}",
-        "text": "=\u26a0\ufe0f File yang Anda laporkan terdeteksi BERBAHAYA.\n\n\ud83d\udcce {{ $('Evaluate File').item.json.file_name }}\n\u26a0\ufe0f Severity: {{ $('Evaluate File').item.json.severity }}\n\ud83d\udee1\ufe0f VT: {{ $('Evaluate File').item.json.vt_verdict }}\n\nTiket insiden sudah dibuat dan tim SOC telah diberitahu.\nTerima kasih atas laporan Anda! \ud83d\ude4f",
+        "text": "=\u26a0\ufe0f [USER NOTIFICATION] File yang Anda laporkan terdeteksi BERBAHAYA.\n\n\ud83d\udcce {{ $('Evaluate File').item.json.file_name }}\n\u26a0\ufe0f Severity: {{ $('Evaluate File').item.json.severity }}\n\ud83d\udee1\ufe0f VT: {{ $('Evaluate File').item.json.vt_verdict }}\n\nTiket insiden sudah dibuat dan tim SOC telah diberitahu.\nTerima kasih atas laporan Anda! \ud83d\ude4f",
         "additionalFields": {
           "appendAttribution": false
         }
