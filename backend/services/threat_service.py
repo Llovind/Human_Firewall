@@ -66,7 +66,7 @@ def _build_gophish_analysis(indicator: str) -> dict:
     }
 
 
-def analyze_indicator(indicator):
+def analyze_indicator(indicator, is_scan=False):
 
     indicator = database.normalize_indicator(indicator)
 
@@ -105,8 +105,10 @@ def analyze_indicator(indicator):
     # If the URL is from our own GoPhish simulation, we skip
     # external API calls (VT/URLScan would return clean anyway)
     # and directly mark it as malicious + cache it.
+    # ONLY run this during active scan/report actions. Normal visits
+    # should NOT be blocked unless they are a cache hit (reported).
 
-    if _is_gophish_simulation(indicator):
+    if is_scan and _is_gophish_simulation(indicator):
         result = _build_gophish_analysis(indicator)
 
         # Save to cache so future clicks are instantly blocked

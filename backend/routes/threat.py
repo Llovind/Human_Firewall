@@ -24,7 +24,7 @@ def analyze_threat():
             "error": "Field 'indicator' wajib diisi."
         }), 400
     chat_id = body.get("chat_id")
-    result = analyze_indicator(indicator)
+    result = analyze_indicator(indicator, is_scan=True)
 
     return jsonify({
 
