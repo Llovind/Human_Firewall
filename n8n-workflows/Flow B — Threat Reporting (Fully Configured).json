@@ -6,7 +6,9 @@
         "updates": [
           "message"
         ],
-        "additionalFields": {}
+        "additionalFields": {
+          "appendAttribution": false
+        }
       },
       "id": "6d0e531a-12de-4b9d-844e-0f9cacc23e51",
       "name": "Telegram Trigger",
@@ -185,7 +187,9 @@
       "parameters": {
         "chatId": "2019216831",
         "text": "={{ $('Threat Intelligence API').item.json.analysis.providers.includes('Infranexia Phishing Simulator') ? '\ud83d\udd14 [SOC ALERT] \u2014 LAPORAN SIMULASI\\n\\n\ud83d\udccb ' + $json.ticket_id + '\\n\ud83d\udd17 ' + $('Threat Intelligence API').item.json.reported_url + '\\n\ud83d\udc64 Pelapor: ' + $('Telegram Trigger').item.json.message.from.first_name + ' (Berhasil dideteksi - Poin diberikan!)' : '\ud83d\udd14 [SOC ALERT] \u2014 LAPORAN ANCAMAN URL\\n\\n\ud83d\udccb ' + $json.ticket_id + '\\n\ud83d\udd17 ' + $('Threat Intelligence API').item.json.reported_url + '\\n\u26a0\ufe0f Severity: ' + $('Threat Intelligence API').item.json.policy.severity + '\\n\ud83d\udee1\ufe0f VT/URLScan: ' + $('Threat Intelligence API').item.json.policy.verdict + '\\n\ud83d\udcdd Alasan: ' + $('Threat Intelligence API').item.json.policy.reason + '\\n\ud83d\udc64 Pelapor: ' + $('Telegram Trigger').item.json.message.from.first_name }}",
-        "additionalFields": {}
+        "additionalFields": {
+          "appendAttribution": false
+        }
       },
       "id": "a3f7e21d-5fdc-46eb-8ab1-135dd66777a8",
       "name": "SOC Alert URL",
@@ -429,7 +433,9 @@
       "parameters": {
         "chatId": "2019216831",
         "text": "=\ud83d\udd14 [SOC ALERT] \u2014 LAPORAN ANCAMAN FILE\n\n\ud83d\udccb {{ $json.ticket_id }}\n\ud83d\udcce {{ $('Evaluate File').item.json.file_name }}\n\u26a0\ufe0f Severity: {{ $json.severity }}\n\ud83d\udd11 SHA256: {{ $('Evaluate File').item.json.file_hash }}\n\ud83d\udee1\ufe0f VT: {{ $('Evaluate File').item.json.vt_verdict }}\n\ud83d\\c64 Pelapor: {{ $('Evaluate File').item.json.reporter_name }}",
-        "additionalFields": {}
+        "additionalFields": {
+          "appendAttribution": false
+        }
       },
       "id": "adfd4273-42b6-4124-a72b-60b1603af4cc",
       "name": "SOC Alert File",
@@ -523,7 +529,9 @@
       "parameters": {
         "chatId": "={{ $('Parse Input').item.json.chat_id }}",
         "text": "\ud83d\udd0d Laporan file Anda telah diterima. Sedang mengunduh dan menganalisis menggunakan VirusTotal... Mohon tunggu sekitar 30 detik untuk hasil analisis.",
-        "additionalFields": {}
+        "additionalFields": {
+          "appendAttribution": false
+        }
       },
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
