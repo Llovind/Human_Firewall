@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from services import integrations
+import integrations
 from services.threat_service import analyze_indicator
 
 threat_bp = Blueprint("threat", __name__)
