@@ -201,7 +201,10 @@ def init_db():
             'reports_count_malicious INTEGER NOT NULL DEFAULT 0',
             'reports_count_total INTEGER NOT NULL DEFAULT 0',
             'daily_streak INTEGER NOT NULL DEFAULT 0',
-            'last_quiz_completed_at DATE'
+            'last_quiz_completed_at DATE',
+            'quiz_revives_remaining INTEGER NOT NULL DEFAULT 3',
+            "quiz_revives_month TEXT NOT NULL DEFAULT '2026-07'",
+            'streak_before_break INTEGER NOT NULL DEFAULT 0'
         ]
         for col_def in gamification_cols:
             col_name = col_def.split()[0]
@@ -301,6 +304,244 @@ def init_db():
             CREATE UNIQUE INDEX IF NOT EXISTS idx_threat_hash
             ON threat_cache(indicator_hash)
         ''')
+
+        # Create quiz_questions table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS quiz_questions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                question_text TEXT NOT NULL,
+                options TEXT NOT NULL,
+                correct_answer_index INTEGER NOT NULL,
+                category TEXT NOT NULL,
+                difficulty TEXT NOT NULL
+            )
+        ''')
+
+        # Auto-seed if empty
+        row = cursor.execute('SELECT COUNT(*) FROM quiz_questions').fetchone()
+        if row and row[0] == 0:
+            import json
+            questions_to_seed = [
+                # Phishing (10 questions)
+                {
+                    "question_text": "Anda menerima email dari HRD meminta Anda segera memverifikasi nomor rekening bank Anda lewat tautan terlampir karena ada bonus tahunan. Apa tindakan paling aman?",
+                    "options": ["Langsung klik tautan karena bonus tahunan penting", "Menghubungi HRD langsung lewat nomor telepon resmi kantor untuk verifikasi", "Membalas email tersebut dengan menanyakan apakah itu asli", "Meneruskan email ke rekan kerja lainnya"],
+                    "correct_answer_index": 1,
+                    "category": "phishing",
+                    "difficulty": "easy"
+                },
+                {
+                    "question_text": "Apa tanda utama email phishing yang memanfaatkan urgensi emosional (Urgency)?",
+                    "options": ["Menggunakan bahasa yang santai dan ramah", "Memaksa tindakan cepat (misal: 'Akun akan ditutup dalam 24 jam')", "Menyertakan tanda tangan lengkap pengirim", "Mengirim email pada jam kerja resmi"],
+                    "correct_answer_index": 1,
+                    "category": "phishing",
+                    "difficulty": "easy"
+                },
+                {
+                    "question_text": "Jika Anda menerima email mencurigakan dari alamat internal yang meminta verifikasi data kuota email, tindakan paling aman yang sebaiknya Anda lakukan adalah:",
+                    "options": ["Mengecek apakah link tersebut memuat password lama Anda", "Mengabaikan saja karena email penyimpanan penuh tidak mungkin terjadi", "Mengklik link tersebut lalu memasukkan sandi acak", "Meneruskan ke Telegram Bot Security untuk verifikasi"],
+                    "correct_answer_index": 3,
+                    "category": "phishing",
+                    "difficulty": "medium"
+                },
+                {
+                    "question_text": "Apa yang dimaksud dengan 'Spear Phishing'?",
+                    "options": ["Serangan phishing massal acak menggunakan email robot", "Serangan phishing bertarget khusus yang dirancang untuk korban/perusahaan tertentu", "Serangan phishing via SMS atau telepon suara", "Pemasangan banner phishing di situs web resmi"],
+                    "correct_answer_index": 1,
+                    "category": "phishing",
+                    "difficulty": "medium"
+                },
+                {
+                    "question_text": "Anda menerima email simulasi phishing. Anda mendeteksi bahwa tautannya palsu. Apa langkah terbaik?",
+                    "options": ["Klik tautannya untuk memastikan isinya palsu", "Laporkan tautan tersebut melalui Telegram Bot Security Awareness", "Biarkan saja di kotak masuk Anda", "Hapus email tanpa melapor"],
+                    "correct_answer_index": 1,
+                    "category": "phishing",
+                    "difficulty": "easy"
+                },
+                {
+                    "question_text": "Mengapa taktik 'Teachable Moment' penting setelah karyawan tidak sengaja mengklik link simulasi phishing?",
+                    "options": ["Untuk memberikan hukuman disiplin kepada karyawan", "Memberikan edukasi langsung di saat kesadaran akan kesalahan sedang tinggi", "Mengekspos kesalahan karyawan ke departemen lain", "Mengunci laptop karyawan sementara waktu"],
+                    "correct_answer_index": 1,
+                    "category": "phishing",
+                    "difficulty": "easy"
+                },
+                {
+                    "question_text": "Anda menerima email yang mengaku dari rekan setim Anda, namun alamat email pengirimnya adalah budi.santoso@netops-dumy.local (kurang huruf 'm'). Taktik apa yang digunakan?",
+                    "options": ["Domain Spoofing", "Typosquatting", "Credential Harvesting", "Ransomware"],
+                    "correct_answer_index": 1,
+                    "category": "phishing",
+                    "difficulty": "medium"
+                },
+                {
+                    "question_text": "Apa risiko terbesar dari mengklik gambar di dalam email spam dari pengirim tidak dikenal?",
+                    "options": ["Mengurangi kuota internet laptop Anda", "Dapat memicu unduhan malware otomatis latar belakang (Drive-by download)", "Mengubah resolusi layar monitor", "Mengirim email spam ke semua kontak Anda"],
+                    "correct_answer_index": 1,
+                    "category": "phishing",
+                    "difficulty": "medium"
+                },
+                {
+                    "question_text": "Jika Anda tidak sengaja memasukkan password akun kantor ke form login dari link email mencurigakan, apa langkah pertama yang wajib diambil?",
+                    "options": ["Menunggu email simulasi berakhir", "Segera mengubah password akun kantor Anda dan lapor tim SOC", "Menghapus browser history Anda", "Mematikan laptop dan pulang"],
+                    "correct_answer_index": 1,
+                    "category": "phishing",
+                    "difficulty": "easy"
+                },
+                {
+                    "question_text": "Teknik manipulasi psikologis apa yang biasa digunakan penyerang agar korban tidak berpikir kritis saat menerima email phishing?",
+                    "options": ["Menciptakan urgensi, kepanikan, otoritas palsu, atau iming-iming hadiah", "Menyediakan manual teknis enkripsi file", "Menghubungi korban hanya di hari libur nasional", "Menggunakan bahasa pemrograman tingkat tinggi"],
+                    "correct_answer_index": 0,
+                    "category": "phishing",
+                    "difficulty": "medium"
+                },
+                # Social Engineering (7 questions)
+                {
+                    "question_text": "Seseorang menelepon Anda mengaku dari tim IT Dukungan Pusat dan meminta Anda membacakan kode OTP yang baru masuk ke ponsel Anda. Tindakan Anda?",
+                    "options": ["Memberikannya karena dia mengaku dari IT Pusat", "Menolak dan menegaskan bahwa IT resmi tidak pernah meminta OTP", "Memberikan nomor OTP yang salah untuk mengetesnya", "Menyuruhnya menelepon atasan Anda"],
+                    "correct_answer_index": 1,
+                    "category": "social-engineering",
+                    "difficulty": "easy"
+                },
+                {
+                    "question_text": "Taktik 'Baiting' dalam rekayasa sosial sering kali melibatkan:",
+                    "options": ["Meninggalkan USB drive terinfeksi malware di tempat parkir kantor dengan harapan ada yang mencoloknya", "Mengirim email penawaran kerja sama legal", "Membuat situs tiruan bank resmi", "Mengirim survei kepuasan pelanggan tahunan"],
+                    "correct_answer_index": 0,
+                    "category": "social-engineering",
+                    "difficulty": "medium"
+                },
+                {
+                    "question_text": "Apa yang dimaksud dengan rekayasa sosial (Social Engineering)?",
+                    "options": ["Rekayasa perangkat lunak untuk membuat media sosial baru", "Manipulasi psikologis agar korban membocorkan informasi rahasia", "Pengaturan kabel server di ruang data center", "Pembuatan kebijakan tata tertib organisasi"],
+                    "correct_answer_index": 1,
+                    "category": "social-engineering",
+                    "difficulty": "easy"
+                },
+                {
+                    "question_text": "Seseorang tak dikenal mengikuti Anda di belakang melewati pintu masuk kantor tanpa menempelkan kartu akses (Tailgating). Apa yang harus Anda lakukan?",
+                    "options": ["Membiarkannya karena mungkin kartunya tertinggal", "Memintanya menempelkan kartu akses di mesin scanner atau melapor ke sekuriti", "Tersenyum dan menyapanya dengan ramah", "Menawarkan bantuan membawakan barangnya"],
+                    "correct_answer_index": 1,
+                    "category": "social-engineering",
+                    "difficulty": "medium"
+                },
+                {
+                    "question_text": "Penyerang rekayasa sosial sering kali berpura-pura menjadi figur otoritas (seperti Direktur atau Auditor). Mengapa taktik ini efektif?",
+                    "options": ["Figur otoritas selalu memiliki akses ke server", "Penyerang memiliki foto kartu identitas Direktur", "Direktur sering mengirim email simulasi", "Korban cenderung patuh dan enggan mempertanyakan perintah otoritas"],
+                    "correct_answer_index": 3,
+                    "category": "social-engineering",
+                    "difficulty": "medium"
+                },
+                {
+                    "question_text": "Metode 'Pretexting' dalam social engineering melibatkan:",
+                    "options": ["Pembuatan skenario bohong yang meyakinkan agar korban percaya (misal: konfirmasi audit eksternal)", "Pengiriman file PDF berbahaya via chat bot", "Pencurian password dari database yang bocor", "Pencadangan data server kantor"],
+                    "correct_answer_index": 0,
+                    "category": "social-engineering",
+                    "difficulty": "hard"
+                },
+                {
+                    "question_text": "Apa arti 'Vishing' dalam variasi rekayasa sosial?",
+                    "options": ["Phishing yang dilakukan melalui panggilan telepon suara (voice phishing)", "Phishing melalui kode QR (QR phishing)", "Phishing melalui pesan teks SMS", "Impersonasi profil media sosial"],
+                    "correct_answer_index": 0,
+                    "category": "social-engineering",
+                    "difficulty": "easy"
+                },
+                # Password Hygiene (7 questions)
+                {
+                    "question_text": "Karakteristik password yang kuat menurut standar keamanan modern adalah:",
+                    "options": ["Panjang minimal 12 karakter dengan kombinasi huruf besar/kecil, angka, dan simbol", "Kata yang mudah diingat seperti 'Infranexia2026'", "Password pendek yang diubah setiap minggu", "Kombinasi tanggal lahir dan nama depan Anda"],
+                    "correct_answer_index": 0,
+                    "category": "password-hygiene",
+                    "difficulty": "easy"
+                },
+                {
+                    "question_text": "Mengapa penggunaan Multi-Factor Authentication (MFA) sangat direkomendasikan?",
+                    "options": ["Agar password Anda tidak perlu diganti selamanya", "Menambah lapisan keamanan ekstra jika password utama Anda bocor", "Mempercepat proses masuk (login) ke portal", "Mengurangi penggunaan memori pada server login"],
+                    "correct_answer_index": 1,
+                    "category": "password-hygiene",
+                    "difficulty": "easy"
+                },
+                {
+                    "question_text": "Apa bahaya menggunakan password yang sama untuk akun personal (seperti e-commerce) dan akun kantor?",
+                    "options": ["Akun e-commerce Anda akan terhubung ke email kantor", "Jika akun personal bocor di internet, peretas dapat menggunakannya untuk menembus jaringan kantor", "Dapat menyebabkan akun kantor Anda di-suspend otomatis", "Server kantor akan mendeteksi aktivitas mencurigakan"],
+                    "correct_answer_index": 1,
+                    "category": "password-hygiene",
+                    "difficulty": "medium"
+                },
+                {
+                    "question_text": "Apa itu 'Credential Stuffing'?",
+                    "options": ["Memasukkan data login secara acak pada form palsu", "Pencocokan password bocoran massal secara otomatis ke berbagai situs web", "Pembuatan password yang sangat panjang oleh generator", "Enkripsi password menggunakan algoritma SHA-256"],
+                    "correct_answer_index": 1,
+                    "category": "password-hygiene",
+                    "difficulty": "hard"
+                },
+                {
+                    "question_text": "Kapan waktu terbaik untuk mengganti password akun kantor Anda?",
+                    "options": ["Hanya saat ada notifikasi bahwa password Anda telah kedaluwarsa", "Ketika mencurigai adanya tanda kebocoran data atau setelah salah klik simulasi phishing", "Setiap hari sebelum mulai bekerja", "Hanya jika diperintahkan oleh rekan kerja"],
+                    "correct_answer_index": 1,
+                    "category": "password-hygiene",
+                    "difficulty": "easy"
+                },
+                {
+                    "question_text": "Bagaimana cara aman untuk menyimpan password yang banyak dan kompleks?",
+                    "options": ["Menulisnya pada sticky notes di bawah keyboard/monitor", "Menggunakan password manager resmi korporat yang terenkripsi", "Menyimpannya dalam file Excel di Desktop tanpa password", "Mengirimkan password tersebut ke chat Telegram pribadi"],
+                    "correct_answer_index": 1,
+                    "category": "password-hygiene",
+                    "difficulty": "easy"
+                },
+                {
+                    "question_text": "Apa fungsi utama dari pengamanan 'OTP' (One-Time Password)?",
+                    "options": ["Sebagai password cadangan permanen jika password utama hilang", "Password sekali pakai yang berlaku sangat pendek untuk verifikasi identitas", "Mempercantik proses onboarding pengguna baru", "Menghubungkan akun Telegram dengan database korporat"],
+                    "correct_answer_index": 1,
+                    "category": "password-hygiene",
+                    "difficulty": "easy"
+                },
+                # URL Security (6 questions)
+                {
+                    "question_text": "Manakah dari domain URL berikut yang merupakan domain resmi perusahaan PT Infranexia?",
+                    "options": ["sso.infranexia-secure.com", "sso.infranexia.co.id", "sso.infranexia-portal.xyz", "sso.infranexia.xyz"],
+                    "correct_answer_index": 1,
+                    "category": "url-security",
+                    "difficulty": "easy"
+                },
+                {
+                    "question_text": "Protokol HTTPS (https://) di awal alamat URL menandakan bahwa:",
+                    "options": ["Situs web tersebut 100% aman dan bukan situs penipuan/phishing", "Koneksi data antara browser Anda dan server terenkripsi secara aman", "Situs tersebut memiliki database internal SQLite", "Situs tersebut dibuat oleh tim IT resmi perusahaan"],
+                    "correct_answer_index": 1,
+                    "category": "url-security",
+                    "difficulty": "medium"
+                },
+                {
+                    "question_text": "Anda melihat link dengan alamat: http://infranexia.co.id.attacker-domain.com/login. Ke mana link ini akan mengarahkan Anda jika diklik?",
+                    "options": ["infranexia.co.id (Resmi)", "attacker-domain.com (Penyerang)", "Tidak ke mana-mana karena link error", "Ke portal Google Login"],
+                    "correct_answer_index": 1,
+                    "category": "url-security",
+                    "difficulty": "hard"
+                },
+                {
+                    "question_text": "Taktik 'URL Shortener' (seperti bit.ly atau tinyurl) sering disalahgunakan peretas untuk:",
+                    "options": ["Meningkatkan kecepatan loading situs phishing", "Menyembunyikan alamat URL phishing yang asli agar terlihat tidak mencurigakan", "Mengenkripsi form isian password karyawan", "Mengotomatisasi pengiriman email phishing"],
+                    "correct_answer_index": 1,
+                    "category": "url-security",
+                    "difficulty": "easy"
+                },
+                {
+                    "question_text": "Apa itu 'Quishing'?",
+                    "options": ["Phishing yang dilakukan melalui panggilan telepon suara (vishing)", "Phishing yang menggunakan kode QR palsu untuk mengarahkan ke link berbahaya", "Phishing yang menargetkan data keuangan secara spesifik", "Taktik phishing menggunakan domain typosquatting"],
+                    "correct_answer_index": 1,
+                    "category": "url-security",
+                    "difficulty": "easy"
+                },
+                {
+                    "question_text": "Anda mengarahkan kursor (hover) ke sebuah link di email kantor, teks link menuliskan https://infranexia.co.id, namun tooltip browser di pojok kiri bawah menunjukkan http://fake-login-leak.net. Apa artinya?",
+                    "options": ["Link tersebut aman karena teksnya tertulis infranexia.co.id", "Tautan tersebut mengarah ke fake-login-leak.net dan merupakan upaya penipuan", "Browser Anda sedang mengalami error rendering", "Tautan tersebut memiliki sertifikat SSL ganda"],
+                    "correct_answer_index": 1,
+                    "category": "url-security",
+                    "difficulty": "medium"
+                }
+            ]
+            for q in questions_to_seed:
+                cursor.execute('''
+                    INSERT INTO quiz_questions (question_text, options, correct_answer_index, category, difficulty)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (q["question_text"], json.dumps(q["options"]), q["correct_answer_index"], q["category"], q["difficulty"]))
 
         conn.commit()
     finally:
@@ -414,7 +655,11 @@ def get_leaderboard():
     try:
         rows = conn.execute('''
             SELECT email, divisi, points, badge, click_count,
-                   viewed_training_count, skipped_training_count
+                   viewed_training_count, skipped_training_count,
+                   reports_count_malicious, daily_streak,
+                   (SELECT count(*) FROM events 
+                    WHERE events.email = user_history.email 
+                      AND events.event_type = 'spot_the_fake_correct') as spot_fake_wins
             FROM user_history
             WHERE divisi IS NOT NULL
             ORDER BY points DESC, viewed_training_count DESC
@@ -625,107 +870,131 @@ def get_reports_summary(email: str) -> dict:
         conn.close()
 
 
-def complete_daily_quiz(email: str) -> dict:
-    """
-    Handle quiz completion dengan Duolingo-style Daily Streak logic (Option A):
-    
-    Pseudocode dari spec:
-        today = date.today()
-        yesterday = today - timedelta(days=1)
-        
-        if last_quiz_completed_at is None:
-            # completion pertama kali sepanjang sejarah user ini
-            new_streak = 1
-        elif last_quiz_completed_at == yesterday.isoformat():
-            # completion kemarin → lanjut streak
-            new_streak = current_streak + 1
-        else:
-            # last_quiz_completed_at < yesterday (bolong 1+ hari)
-            # atau kasus aneh last_quiz_completed_at > today (clock skew) → treat as reset juga
-            new_streak = 1
-    
+def complete_daily_quiz(email: str, question_id: int = None, selected_option_index: int = None) -> dict:
+    """Catat log kuis harian, hitung streak, dan berikan poin reputasi jika jawaban benar.
+
     Server side nentuin tanggal, bukan client — ini defense terhadap clock manipulation.
-    
+
     Return: {"status": "completed" atau "already_completed", "daily_streak": X, ...}
     """
     conn = get_connection()
     cursor = conn.cursor()
-    
+
     try:
         # 1. Cek employee ada
-        emp_row = cursor.execute(
-            'SELECT divisi, daily_streak, last_quiz_completed_at FROM user_history WHERE email = ?', (email,)
-        ).fetchone()
+        emp_row = cursor.execute('''
+            SELECT divisi, daily_streak, last_quiz_completed_at,
+                   quiz_revives_remaining, quiz_revives_month, streak_before_break
+            FROM user_history WHERE email = ?
+        ''', (email,)).fetchone()
         if not emp_row:
             raise ValueError(f"Employee {email} tidak ditemukan")
-        
+
         divisi = emp_row["divisi"] or "Unknown"
         current_streak = emp_row["daily_streak"] or 0
         last_quiz_date_str = emp_row["last_quiz_completed_at"]
-        
+
+        today = date.today()
+        today_str = today.isoformat()
+        current_month = today.strftime('%Y-%m')
+
+        revives_remaining = emp_row["quiz_revives_remaining"]
+        revives_month = emp_row["quiz_revives_month"]
+        streak_before_break = emp_row["streak_before_break"]
+
+        # Handle dinamis token reset on-the-fly (Known Limitation: race condition if multi-tab)
+        if revives_month != current_month:
+            revives_remaining = 3
+            revives_month = current_month
+            cursor.execute('''
+                UPDATE user_history
+                SET quiz_revives_remaining = 3, quiz_revives_month = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE email = ?
+            ''', (current_month, email))
+
         # 2. Cek sudah ada event quiz di hari ini (server-side date.today())
-        today_str = date.today().isoformat()
         existing = cursor.execute('''
             SELECT id FROM daily_events
             WHERE email = ? AND event_type = 'quiz_completed' AND event_date = ?
         ''', (email, today_str)).fetchone()
-        
+
         if existing:
             # Sudah completed hari ini
             conn.commit()
             return {
                 "status": "already_completed",
                 "daily_streak": current_streak,
-                "message": "Sudah Menyelesaikan Latihan Hari Ini - Streak Terjaga!"
+                "message": "Sudah Menyelesaikan Latihan Hari Ini - Streak Terjaga!",
+                "revives_remaining": revives_remaining
             }
-        
-        # 3. Tentukan streak logic berdasarkan last_quiz_completed_at (Duolingo style, Option A)
-        today = date.today()
+
+        # 3. Validasi kebenaran jawaban jika parameter diserahkan
+        is_correct = True
+        if question_id is not None and selected_option_index is not None:
+            q_row = cursor.execute('SELECT correct_answer_index FROM quiz_questions WHERE id = ?', (question_id,)).fetchone()
+            if not q_row:
+                raise ValueError("ID Pertanyaan tidak ditemukan di database")
+            is_correct = (selected_option_index == q_row["correct_answer_index"])
+
+        # 4. Tentukan streak & poin logic berdasarkan kebenaran jawaban
         yesterday = today - timedelta(days=1)
-        
-        if last_quiz_date_str is None:
-            # Completion pertama kali sepanjang sejarah user ini
-            new_streak = 1
+
+        if not is_correct:
+            # Jawaban salah: streak reset ke 0, tidak dapat poin reputasi
+            new_streak = 0
+            points_awarded = 0
+            streak_before_break = current_streak
+            cursor.execute('''
+                UPDATE user_history
+                SET streak_before_break = ?
+                WHERE email = ?
+            ''', (current_streak, email))
         else:
-            try:
-                last_quiz_date = date.fromisoformat(last_quiz_date_str)
-            except (ValueError, TypeError):
-                # Parse error → treat as first time
-                new_streak = 1
-                last_quiz_date = None
-            
-            if last_quiz_date == yesterday:
-                # Completion kemarin → lanjut streak
-                new_streak = current_streak + 1
-            elif last_quiz_date is not None and (last_quiz_date < yesterday or last_quiz_date > today):
-                # last_quiz_completed_at < yesterday (bolong 1+ hari) ATAU clock skew → reset ke 1
+            # Jawaban benar: hitung streak Duolingo-style
+            if last_quiz_date_str is None:
                 new_streak = 1
             else:
-                # Edge case aneh, treat as reset
-                new_streak = 1
-        
-        # 4. Record completion
+                try:
+                    last_quiz_date = date.fromisoformat(last_quiz_date_str)
+                except (ValueError, TypeError):
+                    new_streak = 1
+                    last_quiz_date = None
+
+                if last_quiz_date == yesterday:
+                    new_streak = current_streak + 1
+                elif last_quiz_date is not None and (last_quiz_date < yesterday or last_quiz_date > today):
+                    new_streak = 1
+                else:
+                    new_streak = 1
+            points_awarded = POINTS_QUIZ_COMPLETE
+
+        # 5. Record completion
         cursor.execute('''
             INSERT INTO daily_events (email, event_type, event_date)
             VALUES (?, 'quiz_completed', ?)
         ''', (email, today_str))
-        
+
         cursor.execute('''
             UPDATE user_history
             SET daily_streak = ?, last_quiz_completed_at = ?, updated_at = CURRENT_TIMESTAMP
             WHERE email = ?
         ''', (new_streak, today_str, email))
-        
+
         conn.commit()
-        
-        # Award points (via adjust_points)
-        adjust_points(email, divisi, POINTS_QUIZ_COMPLETE)
-        
+
+        # Award points jika benar
+        if points_awarded > 0:
+            adjust_points(email, divisi, points_awarded)
+
         return {
             "status": "completed",
-            "points_awarded": POINTS_QUIZ_COMPLETE,
+            "correct": is_correct,
+            "points_awarded": points_awarded,
             "daily_streak": new_streak,
-            "last_quiz_completed_at": today_str
+            "last_quiz_completed_at": today_str,
+            "revive_available": not is_correct and revives_remaining > 0,
+            "revives_remaining": revives_remaining,
+            "streak_before_break": streak_before_break
         }
     except ValueError:
         # ValueError expected dari aplikasi logic — propagate as-is
@@ -898,6 +1167,13 @@ def update_user_telegram_chat_id(email: str, telegram_chat_id: str):
     conn = get_connection()
     cursor = conn.cursor()
     try:
+        # Clear chat ID from other users to maintain 1-to-1 mapping
+        cursor.execute('''
+            UPDATE user_history
+            SET telegram_chat_id = NULL
+            WHERE telegram_chat_id = ? AND email != ?
+        ''', (telegram_chat_id, email))
+
         # INSERT OR IGNORE biar aman kalau email belum terdaftar
         cursor.execute('''
             INSERT OR IGNORE INTO user_history (email, divisi, click_count)
@@ -961,6 +1237,13 @@ def verify_otp(telegram_chat_id: str, otp_code: str):
             VALUES (?, 'Unknown', 0)
         ''', (email,))
         
+        # Clear chat ID from other users to maintain 1-to-1 mapping
+        cursor.execute('''
+            UPDATE user_history
+            SET telegram_chat_id = NULL
+            WHERE telegram_chat_id = ? AND email != ?
+        ''', (telegram_chat_id, email))
+
         # Update chat ID Telegram user
         cursor.execute('''
             UPDATE user_history
@@ -1793,5 +2076,123 @@ def insert_incident(
             original_filename
         ))
         conn.commit()
+    finally:
+        conn.close()
+
+
+def get_daily_question(email: str) -> dict:
+    """Retrieve 1 deterministic random question per day per user based on date + email seed."""
+    conn = get_connection()
+    try:
+        today_str = date.today().isoformat()
+
+        # Check if already completed today
+        existing = conn.execute('''
+            SELECT id FROM daily_events
+            WHERE email = ? AND event_type = 'quiz_completed' AND event_date = ?
+        ''', (email, today_str)).fetchone()
+
+        if existing:
+            row_streak = conn.execute('SELECT daily_streak FROM user_history WHERE email = ?', (email,)).fetchone()
+            streak = row_streak["daily_streak"] if row_streak else 0
+            return {
+                "completed_today": True,
+                "daily_streak": streak,
+                "message": "Anda sudah menyelesaikan kuis hari ini — Streak terjaga!"
+            }
+
+        rows = conn.execute('SELECT id FROM quiz_questions').fetchall()
+        if not rows:
+            return None
+
+        ids = [row["id"] for row in rows]
+
+        # Deterministic seed using ISO date string + user email
+        seed_str = f"{today_str}:{email}"
+
+        import hashlib
+        seed_hash = int(hashlib.md5(seed_str.encode()).hexdigest(), 16)
+
+        import random
+        r = random.Random(seed_hash)
+        selected_id = r.choice(ids)
+
+        q_row = conn.execute('SELECT * FROM quiz_questions WHERE id = ?', (selected_id,)).fetchone()
+        if q_row:
+            return {
+                "completed_today": False,
+                "id": q_row["id"],
+                "question_text": q_row["question_text"],
+                "options": json.loads(q_row["options"]),
+                "correct_answer_index": q_row["correct_answer_index"],
+                "category": q_row["category"],
+                "difficulty": q_row["difficulty"]
+            }
+        return None
+    finally:
+        conn.close()
+
+
+def revive_quiz_streak(email: str) -> dict:
+    """Hidupkan kembali streak kuis yang baru saja reset ke 0 pada hari yang sama.
+
+    Validasi:
+    - Terjadi di hari yang sama (last_quiz_completed_at == today).
+    - daily_streak saat ini == 0.
+    - streak_before_break > 0 (ada streak yang bisa diselamatkan).
+    - quiz_revives_remaining > 0 (sisa token bulan ini masih ada).
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        today_str = date.today().isoformat()
+
+        # 1. Cek employee & status revive
+        emp_row = cursor.execute('''
+            SELECT daily_streak, last_quiz_completed_at, quiz_revives_remaining, streak_before_break
+            FROM user_history WHERE email = ?
+        ''', (email,)).fetchone()
+
+        if not emp_row:
+            raise ValueError(f"Employee {email} tidak ditemukan")
+
+        daily_streak = emp_row["daily_streak"] or 0
+        last_quiz_completed_at = emp_row["last_quiz_completed_at"]
+        quiz_revives_remaining = emp_row["quiz_revives_remaining"]
+        streak_before_break = emp_row["streak_before_break"] or 0
+
+        # 2. Validasi kelayakan revive (Guard rails)
+        if last_quiz_completed_at != today_str:
+            raise ValueError("Revive hanya bisa dilakukan di hari yang sama saat streak putus")
+
+        if daily_streak > 0:
+            raise ValueError("Streak Anda aktif, tidak memerlukan revive")
+
+        if streak_before_break == 0:
+            raise ValueError("Tidak ada nilai streak historis yang dapat dipulihkan")
+
+        if quiz_revives_remaining <= 0:
+            raise ValueError("Kuota revive token Anda untuk bulan ini sudah habis")
+
+        # 3. Eksekusi revive
+        new_streak = streak_before_break + 1
+        new_revives = quiz_revives_remaining - 1
+
+        cursor.execute('''
+            UPDATE user_history
+            SET daily_streak = ?, quiz_revives_remaining = ?, streak_before_break = 0, updated_at = CURRENT_TIMESTAMP
+            WHERE email = ?
+        ''', (new_streak, new_revives, email))
+
+        conn.commit()
+        return {
+            "status": "revived",
+            "daily_streak": new_streak,
+            "revives_remaining": new_revives,
+            "message": "Streak Anda berhasil dipulihkan!"
+        }
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()

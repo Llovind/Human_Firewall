@@ -58,10 +58,13 @@ const eventLabels: Record<string, { label: string; icon: React.ReactNode; color:
 export default function EmployeeDashboardPage() {
   const { user, isAuthenticated, isLoading: authLoading, logout } = useAuth();
   const [clock, setClock] = useState('');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'game'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'game' | 'quiz'>('dashboard');
 
   // ── Polling & state data sources ───
-  const { data: behaviorData, hasUpdated: behaviorUpdated, refresh: pollBehavior } = usePolling<{ scores: BehaviorScore[] }>('/api/behavior', 5000);
+  const behaviorUrl = user 
+    ? `/api/behavior?email=${encodeURIComponent(user.email)}&token=${encodeURIComponent(user.token || '')}`
+    : '';
+  const { data: behaviorData, hasUpdated: behaviorUpdated, refresh: pollBehavior } = usePolling<{ scores: BehaviorScore[]; by_divisi?: any[] }>(behaviorUrl, 5000);
   const [activities, setActivities] = useState<UserActivity[]>([]);
   const [eligibility, setEligibility] = useState<EligibilityResponse | null>(null);
   const [cooldownTime, setCooldownTime] = useState<number | null>(null);
@@ -71,6 +74,145 @@ export default function EmployeeDashboardPage() {
   const [gameState, setGameState] = useState<'playing' | 'verdict'>('playing');
   const [userChoice, setUserChoice] = useState<'A' | 'B' | null>(null);
   const [isSubmittingEvent, setIsSubmittingEvent] = useState(false);
+
+  // Daily Quiz state
+  const [quizQuestion, setQuizQuestion] = useState<{
+    id: number;
+    question_text: string;
+    options: string[];
+    correct_answer_index: number;
+    category: string;
+    difficulty: string;
+    completed_today?: boolean;
+    daily_streak?: number;
+  } | null>(null);
+  const [quizLoading, setQuizLoading] = useState(false);
+  const [quizError, setQuizError] = useState<string | null>(null);
+  const [quizChoice, setQuizChoice] = useState<number | null>(null);
+  const [quizVerdict, setQuizVerdict] = useState<'playing' | 'verdict'>('playing');
+  const [isSubmittingQuiz, setIsSubmittingQuiz] = useState(false);
+
+  // Daily Quiz Revive state
+  const [quizReviveAvailable, setQuizReviveAvailable] = useState(false);
+  const [quizRevivesRemaining, setQuizRevivesRemaining] = useState(0);
+  const [quizStreakBeforeBreak, setQuizStreakBeforeBreak] = useState(0);
+  const [isSubmittingRevive, setIsSubmittingRevive] = useState(false);
+
+  const fetchDailyQuiz = async () => {
+    if (!user) return;
+    setQuizLoading(true);
+    setQuizError(null);
+    try {
+      const storedToken = user.token || new URLSearchParams(window.location.search).get('token');
+      if (!storedToken) {
+        if (typeof window !== 'undefined') window.location.href = '/auth';
+        return;
+      }
+      const res = await fetch(`/api/quiz/today?email=${encodeURIComponent(user.email)}&token=${encodeURIComponent(storedToken)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setQuizQuestion(data);
+      } else {
+        const errData = await res.json();
+        setQuizError(errData.error || 'Gagal memuat kuis harian.');
+      }
+    } catch (err) {
+      console.error('Error fetching quiz:', err);
+      setQuizError('Gagal menghubungi server.');
+    } finally {
+      setQuizLoading(false);
+    }
+  };
+
+  const submitQuizAnswer = async (choiceIndex: number) => {
+    if (!user || !quizQuestion || isSubmittingQuiz) return;
+    setIsSubmittingQuiz(true);
+    setQuizChoice(choiceIndex);
+
+    try {
+      const storedToken = user.token || new URLSearchParams(window.location.search).get('token');
+      
+      const res = await fetch('/api/quiz/complete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          employee_id: user.email,
+          token: storedToken,
+          question_id: quizQuestion.id,
+          selected_option_index: choiceIndex,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setQuizReviveAvailable(data.revive_available || false);
+        setQuizRevivesRemaining(data.revives_remaining || 0);
+        setQuizStreakBeforeBreak(data.streak_before_break || 0);
+
+        setQuizVerdict('verdict');
+        pollBehavior(); // Refresh stats (points, streak)
+      } else {
+        alert('Gagal mengirim status kuis.');
+      }
+    } catch (err) {
+      console.error('Error submitting quiz:', err);
+      alert('Gagal merekam kuis.');
+    } finally {
+      setIsSubmittingQuiz(false);
+    }
+  };
+
+  const handleReviveStreak = async () => {
+    if (!user || isSubmittingRevive) return;
+    setIsSubmittingRevive(true);
+
+    try {
+      const storedToken = user.token || new URLSearchParams(window.location.search).get('token');
+      
+      const res = await fetch('/api/quiz/revive', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          employee_id: user.email,
+          token: storedToken,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        alert('Streak Anda berhasil dipulihkan!');
+        setQuizReviveAvailable(false);
+        setQuizQuestion(prev => prev ? { ...prev, daily_streak: data.daily_streak, completed_today: true } : null);
+        setQuizVerdict('playing');
+        pollBehavior();
+      } else {
+        const errData = await res.json();
+        alert(errData.error || 'Gagal memulihkan streak.');
+      }
+    } catch (err) {
+      console.error('Error reviving streak:', err);
+      alert('Gagal menghubungi server.');
+    } finally {
+      setIsSubmittingRevive(false);
+    }
+  };
+
+  const handleFinishQuiz = () => {
+    setQuizVerdict('playing');
+    setQuizChoice(null);
+    setQuizQuestion(null);
+    setActiveTab('dashboard');
+  };
+
+  useEffect(() => {
+    if (activeTab === 'quiz' && !quizQuestion) {
+      fetchDailyQuiz();
+    }
+  }, [activeTab, user]);
 
   // ── Clock ───
   useEffect(() => {
@@ -225,16 +367,18 @@ export default function EmployeeDashboardPage() {
   const myScore = scores.find(s => s.email === user.email);
 
   // Calculate division averages and rankings
-  const divisionAverages = Object.entries(
-    scores.reduce((acc, curr) => {
-      if (!acc[curr.division]) acc[curr.division] = [];
-      acc[curr.division].push(curr.score);
-      return acc;
-    }, {} as Record<string, number[]>)
-  ).map(([division, scoresList]) => {
-    const avg = Math.round(scoresList.reduce((a, b) => a + b, 0) / scoresList.length);
-    return { division, avg };
-  }).sort((a, b) => b.avg - a.avg);
+  const divisionAverages = behaviorData?.by_divisi 
+    ? behaviorData.by_divisi.map((d: any) => ({ division: d.division, avg: d.avg })).sort((a: any, b: any) => b.avg - a.avg)
+    : Object.entries(
+        scores.reduce((acc, curr) => {
+          if (!acc[curr.division]) acc[curr.division] = [];
+          acc[curr.division].push(curr.score);
+          return acc;
+        }, {} as Record<string, number[]>)
+      ).map(([division, scoresList]) => {
+        const avg = Math.round(scoresList.reduce((a, b) => a + b, 0) / scoresList.length);
+        return { division, avg };
+      }).sort((a, b) => b.avg - a.avg);
 
   const myDivRankIdx = myScore ? divisionAverages.findIndex(d => d.division === myScore.division) : -1;
   const myDivRank = myDivRankIdx !== -1 ? myDivRankIdx + 1 : null;
@@ -257,13 +401,15 @@ export default function EmployeeDashboardPage() {
             <Logo variant="full" size={28} />
           </div>
           <nav className="topbar-nav">
-            {(['dashboard', 'game'] as const).map(tab => (
+            {(['dashboard', 'game', 'quiz'] as const).map(tab => (
               <button
                 key={tab}
                 className={`nav-btn ${activeTab === tab ? 'active' : ''}`}
                 onClick={() => setActiveTab(tab)}
               >
-                {tab === 'dashboard' ? <><LayoutDashboard size={14} style={{ marginRight: '8px', verticalAlign: 'text-bottom' }} /> My Dashboard</> : <><Fish size={14} style={{ marginRight: '8px', verticalAlign: 'text-bottom' }} /> Spot the Fake</>}
+                {tab === 'dashboard' ? <><LayoutDashboard size={14} style={{ marginRight: '8px', verticalAlign: 'text-bottom' }} /> My Dashboard</> : 
+                 tab === 'game' ? <><Fish size={14} style={{ marginRight: '8px', verticalAlign: 'text-bottom' }} /> Spot the Fake</> :
+                 <><BookOpen size={14} style={{ marginRight: '8px', verticalAlign: 'text-bottom' }} /> Daily Quiz</>}
               </button>
             ))}
           </nav>
@@ -547,13 +693,12 @@ export default function EmployeeDashboardPage() {
                 {eligibility.eligible === false && eligibility.reason === 'safe' && (
               <div className="game-lock-screen" style={{ textAlign: 'center', padding: '60px 20px' }}>
                 <ShieldCheck size={64} style={{ color: 'var(--success)' }} />
-                <h2 style={{ fontSize: '22px', fontWeight: 700, margin: '20px 0 10px 0' }}>Akses Dilindungi</h2>
+                <h2 style={{ fontSize: '22px', fontWeight: 700, margin: '20px 0 10px 0' }}>🛡️ Skor Keamanan Anda Solid!</h2>
                 <p style={{ color: 'var(--text-secondary)', maxWidth: '500px', margin: '0 auto 24px auto', fontSize: '14px', lineHeight: 1.6 }}>
-                  Sistem mendeteksi bahwa Behavior Score Anda terverifikasi AMAN (&gt;= 70).
-                  Anda memiliki pemahaman yang baik tentang keamanan siber, sehingga pelatihan wajib saat ini tidak diperlukan.
+                  Sistem mendeteksi bahwa Skor Perilaku Anda saat ini berada dalam zona AMAN. Modul simulasi "Spot the Fake" ini memang dikhususkan bagi rekan-rekan yang membutuhkan pemulihan skor (redemption track). Anda dibebaskan dari latihan wajib ini — mari pertahankan performa hebat ini dan terus jaga streak Anda melalui Daily Quiz!
                 </p>
                 <div style={{ display: 'inline-block', padding: '8px 16px', background: 'rgba(52,211,153,0.1)', border: '1px solid var(--success)', borderRadius: '20px', color: 'var(--success)', fontSize: '13px', fontWeight: 600 }}>
-                  Skor Perilaku Anda: {myScore?.score || 'Safe'} / 100
+                  Skor Perilaku Anda: {myScore?.score || 'Safe'} / 100 (Pertahankan!)
                 </div>
               </div>
             )}
@@ -793,6 +938,206 @@ export default function EmployeeDashboardPage() {
               </div>
             )}
             </>
+          )}
+        </div>
+      )}
+
+      {/* ── DAILY QUIZ TAB ────────────────────────────────── */}
+      {activeTab === 'quiz' && (
+        <div className="panel glass-card" style={{ minHeight: '500px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {quizLoading ? (
+            <div style={{ textAlign: 'center' }}>
+              <div className="loading-spinner" style={{ margin: '0 auto var(--space-4)' }} />
+              <p style={{ color: 'var(--text-secondary)' }}>Memuat Kuis Hari Ini...</p>
+            </div>
+          ) : quizError ? (
+            <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+              <AlertTriangle size={64} style={{ color: 'var(--danger)' }} />
+              <h2 style={{ fontSize: '22px', fontWeight: 700, margin: '20px 0 10px 0' }}>Gagal Memuat Kuis</h2>
+              <p style={{ color: 'var(--text-secondary)', maxWidth: '500px', margin: '0 auto 24px auto', fontSize: '14px' }}>
+                {quizError}
+              </p>
+              <button
+                onClick={fetchDailyQuiz}
+                style={{ background: 'var(--accent)', border: 'none', color: 'white', padding: '10px 24px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}
+              >
+                Coba Lagi
+              </button>
+            </div>
+          ) : quizQuestion?.completed_today ? (
+            <div className="quiz-completed-screen" style={{ textAlign: 'center', padding: '60px 20px' }}>
+              <div style={{ display: 'inline-flex', width: '80px', height: '80px', background: 'rgba(52,211,153,0.1)', border: '2px solid var(--success)', borderRadius: '50%', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px auto' }}>
+                <ShieldCheck size={48} style={{ color: 'var(--success)' }} />
+              </div>
+              <h2 style={{ fontSize: '24px', fontWeight: 700, margin: '0 0 12px 0' }}>Kuis Hari Ini Selesai!</h2>
+              <p style={{ color: 'var(--text-secondary)', maxWidth: '500px', margin: '0 auto 24px auto', fontSize: '14px', lineHeight: 1.6 }}>
+                Anda sudah menyelesaikan kuis harian untuk hari ini. Bagus sekali! Pertahankan konsistensi Anda untuk menjaga streak dan poin reputasi tetap prima.
+              </p>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginBottom: '32px' }}>
+                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', padding: '12px 24px', borderRadius: '12px' }}>
+                  <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--warning)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                    <Flame size={20} /> {quizQuestion.daily_streak || myScore?.streak || 0}
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Streak Kuis (Minggu)</div>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveTab('dashboard')}
+                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', color: 'var(--text-primary)', padding: '12px 36px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
+              >
+                Kembali ke Dashboard
+              </button>
+            </div>
+          ) : quizQuestion && quizVerdict === 'playing' ? (
+            <div className="active-quiz-container" style={{ width: '100%', maxWidth: '650px', padding: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '16px', marginBottom: '24px' }}>
+                <div>
+                  <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><BookOpen size={18} /> Daily Security Quiz</h2>
+                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                    Selesaikan 1 kuis harian untuk menjaga streak dan mendapatkan <strong>+10 poin reputasi</strong>.
+                  </p>
+                </div>
+                <span className="badge badge-info" style={{ textTransform: 'uppercase', fontSize: '10px' }}>
+                  {quizQuestion.category} • {quizQuestion.difficulty}
+                </span>
+              </div>
+
+              <div className="quiz-question-box" style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border)', borderRadius: '12px', padding: '24px', marginBottom: '24px' }}>
+                <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.6, margin: 0, textAlign: 'left' }}>
+                  {quizQuestion.question_text}
+                </p>
+              </div>
+
+              <div className="quiz-options-list" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {quizQuestion.options.map((opt, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => submitQuizAnswer(idx)}
+                    disabled={isSubmittingQuiz}
+                    className="quiz-option-btn"
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '16px 20px',
+                      background: 'rgba(255,255,255,0.02)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '8px',
+                      color: 'var(--text-secondary)',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(99, 102, 241, 0.05)';
+                      e.currentTarget.style.borderColor = 'var(--accent)';
+                      e.currentTarget.style.color = 'var(--text-primary)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
+                      e.currentTarget.style.borderColor = 'var(--border)';
+                      e.currentTarget.style.color = 'var(--text-secondary)';
+                    }}
+                  >
+                    <span style={{ display: 'flex', width: '24px', height: '24px', background: 'rgba(255,255,255,0.05)', borderRadius: '50%', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 600, flexShrink: 0 }}>
+                      {String.fromCharCode(65 + idx)}
+                    </span>
+                    <span>{opt}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : quizQuestion && quizVerdict === 'verdict' && (
+            <div className="quiz-verdict-container" style={{ width: '100%', maxWidth: '600px', padding: '24px', textAlign: 'center' }}>
+              {quizChoice === quizQuestion.correct_answer_index ? (
+                <div style={{ marginBottom: '24px' }}>
+                  <span style={{ fontSize: '64px' }}>🎉</span>
+                  <h2 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--success)', marginTop: '16px' }}>Jawaban Anda Benar!</h2>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginTop: '8px' }}>
+                    Bagus sekali! Anda berhasil menjawab dengan benar. Poin reputasi Anda bertambah <strong>+10 poin</strong>!
+                  </p>
+                </div>
+              ) : (
+                <div style={{ marginBottom: '24px' }}>
+                  <span style={{ fontSize: '64px' }}>❌</span>
+                  <h2 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--danger)', marginTop: '16px' }}>Jawaban Anda Kurang Tepat</h2>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginTop: '8px', marginBottom: '20px' }}>
+                    Sayang sekali tebakan Anda salah. Streak Anda telah di-reset ke 0.
+                  </p>
+
+                  {quizReviveAvailable && quizRevivesRemaining > 0 && (
+                    <div style={{
+                      background: 'rgba(251, 191, 36, 0.05)',
+                      border: '1px solid rgba(251, 191, 36, 0.2)',
+                      padding: '16px 20px',
+                      borderRadius: '12px',
+                      maxWidth: '450px',
+                      margin: '0 auto',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '12px'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--warning)', fontWeight: 600, fontSize: '14px' }}>
+                        <Flame size={18} /> Streak {quizStreakBeforeBreak} hari kamu putus!
+                      </div>
+                      <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0 }}>
+                        Hidupkan kembali streak Anda? (Sisa {quizRevivesRemaining} kesempatan bulan ini)
+                      </p>
+                      <button
+                        onClick={handleReviveStreak}
+                        disabled={isSubmittingRevive}
+                        style={{
+                          background: 'var(--warning)',
+                          border: 'none',
+                          color: '#1a1a2e',
+                          padding: '8px 24px',
+                          borderRadius: '6px',
+                          fontWeight: 'bold',
+                          cursor: 'pointer',
+                          fontSize: '13px',
+                          boxShadow: '0 4px 12px rgba(251, 191, 36, 0.2)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        {isSubmittingRevive ? 'Memulihkan...' : '✨ Gunakan Revive Token'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '24px', margin: '0 auto 32px auto', textAlign: 'left' }}>
+                <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--accent)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  📖 Pembahasan Jawaban
+                </h3>
+                <div style={{ fontSize: '13px', lineHeight: 1.6, color: 'var(--text-primary)' }}>
+                  <p style={{ marginBottom: '8px' }}>
+                    <strong>Pertanyaan:</strong> {quizQuestion.question_text}
+                  </p>
+                  <p style={{ margin: 0, padding: '10px 14px', background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.15)', borderRadius: '6px', color: 'var(--success)', fontWeight: 600 }}>
+                    ✓ Jawaban Benar: {quizQuestion.options[quizQuestion.correct_answer_index]}
+                  </p>
+                  {quizChoice !== quizQuestion.correct_answer_index && (
+                    <p style={{ marginTop: '8px', margin: 0, padding: '10px 14px', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: '6px', color: '#ef4444' }}>
+                      ✗ Pilihan Anda: {quizQuestion.options[quizChoice as number]}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <button
+                onClick={handleFinishQuiz}
+                style={{ background: 'var(--accent)', border: 'none', color: 'white', padding: '12px 36px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}
+              >
+                Kembali ke Dashboard
+              </button>
+            </div>
           )}
         </div>
       )}

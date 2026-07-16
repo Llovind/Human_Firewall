@@ -1,19 +1,13 @@
 import os
 import requests
+import uuid
 from datetime import datetime
 
 import database
 
 
 def generate_ticket():
-
-    now = datetime.now()
-
-    prefix = now.strftime("HF-%Y%m%d")
-
-    total = database.get_incident_count_today() + 1
-
-    return f"{prefix}-{total:06d}"
+    return f"INC-{uuid.uuid4().hex[:8].upper()}"
 
 
 def create_incident(indicator, analysis):

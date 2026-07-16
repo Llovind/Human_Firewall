@@ -110,6 +110,9 @@ def post_report():
         )
 
     try:
+        from services.threat_service import reconcile_report_source
+        source_verdict = reconcile_report_source(body["target"], body["verdict"])
+
         result = db.create_threat_report(
             email=body["employee_id"],
             telegram_user_id=body["telegram_user_id"],
@@ -121,6 +124,7 @@ def post_report():
             raw_scores=body.get("raw_scores"),
             submitted_at=body["submitted_at"],
         )
+        result["source_verdict"] = source_verdict
         return jsonify(result), 201
 
     except ValueError as e:
@@ -178,7 +182,14 @@ def post_quiz_complete():
         return err
 
     try:
-        result = db.complete_daily_quiz(validated_email)
+        question_id = body.get("question_id")
+        selected_option_index = body.get("selected_option_index")
+
+        result = db.complete_daily_quiz(
+            validated_email,
+            question_id=int(question_id) if question_id is not None else None,
+            selected_option_index=int(selected_option_index) if selected_option_index is not None else None
+        )
         # Sesuai contract 3.3: ini "expected state", bukan error, jadi
         # tetap 200 baik status-nya "completed" maupun "already_completed".
         return jsonify(result), 200
@@ -188,3 +199,52 @@ def post_quiz_complete():
 
     except Exception as e:
         return error_response(500, "INTERNAL_ERROR", f"Gagal memproses quiz completion: {e}")
+
+
+# ---------------------------------------------------------------------------
+# GET /api/quiz/today — serve 1 deterministic daily question for employee
+# ---------------------------------------------------------------------------
+
+@gamification_bp.route("/quiz/today", methods=["GET"])
+def get_quiz_today():
+    employee_id = request.args.get("employee_id")
+    if not employee_id:
+        return error_response(400, "INVALID_PAYLOAD", "Parameter 'employee_id' wajib diisi")
+
+    validated_email, err = _authenticate_employee(employee_id)
+    if err:
+        return err
+
+    try:
+        question = db.get_daily_question(validated_email)
+        if question is None:
+            return error_response(404, "QUESTION_NOT_FOUND", "Tidak ada pertanyaan kuis yang tersedia")
+        return jsonify(question), 200
+    except Exception as e:
+        return error_response(500, "INTERNAL_ERROR", f"Gagal mengambil kuis harian: {e}")
+
+
+# ---------------------------------------------------------------------------
+# POST /api/quiz/revive — memulihkan kuis streak yang terputus hari ini
+# ---------------------------------------------------------------------------
+
+@gamification_bp.route("/quiz/revive", methods=["POST"])
+def post_quiz_revive():
+    body = request.get_json(silent=True)
+    if not body or "employee_id" not in body or not body["employee_id"]:
+        return error_response(400, "INVALID_PAYLOAD", "Field 'employee_id' wajib diisi")
+
+    requested_employee_id = body["employee_id"]
+    validated_email, err = _authenticate_employee(requested_employee_id)
+    if err:
+        return err
+
+    try:
+        result = db.revive_quiz_streak(validated_email)
+        return jsonify(result), 200
+
+    except ValueError as e:
+        return error_response(400, "REVIVE_FAILED", str(e))
+
+    except Exception as e:
+        return error_response(500, "INTERNAL_ERROR", f"Gagal memproses revive: {e}")

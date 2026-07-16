@@ -102,7 +102,33 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Token required' }, { status: 400 });
   }
 
-  const authData = dataStore.validateAuthToken(token);
+  let authData = dataStore.validateAuthToken(token);
+
+  if (!authData) {
+    try {
+      const apiUrl = (process.env.API_URL || process.env.NEXT_PUBLIC_API_URL) || 'http://flask_api:5000';
+      const res = await fetch(`${apiUrl}/api/auth/validate-token?token=${encodeURIComponent(token)}`);
+      if (res.ok) {
+        const flaskData = await res.json();
+        if (flaskData.valid) {
+          authData = {
+            token: token,
+            email: flaskData.email,
+            userName: flaskData.userName,
+            division: flaskData.division,
+            telegramId: '',
+            createdAt: Date.now(),
+            expiresAt: Date.now() + 15 * 60 * 1000,
+          };
+          // Cache it in-memory
+          dataStore.createAuthToken(authData);
+        }
+      }
+    } catch (err) {
+      console.error('[magic-link-verify] Failed to check Flask backend for token:', err);
+    }
+  }
+
   if (!authData) {
     return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
   }

@@ -339,7 +339,7 @@ def api_user_eligibility():
             return jsonify({
                 "eligible": False,
                 "reason": "safe",
-                "message": "Skor Perilaku Keamanan Anda terverifikasi AMAN (>= 70). Pelatihan saat ini tidak diperlukan."
+                "message": "Luar biasa! Skor Keamanan Anda terverifikasi AMAN (>= 70). Modul redemption ini dikhususkan bagi rekan-rekan yang sedang meningkatkan skor mereka. Tetap pertahankan performa Anda lewat Daily Quiz harian!"
             }), 200
 
         game_row = conn.execute('''
@@ -394,3 +394,30 @@ def api_user_activity():
         return jsonify({"activities": activities, "count": len(activities)}), 200
     except Exception as e:
         return jsonify({"error": "Gagal mengambil activity", "detail": str(e)}), 500
+
+
+@events_bp.route('/api/dns-check', methods=['GET'])
+def dns_check():
+    import socket
+    from urllib.parse import urlparse
+
+    url = request.args.get('url', '').strip()
+    if not url:
+        return jsonify({"resolvable": False, "error": "url parameter is required"}), 400
+
+    # Ensure URL has scheme for urlparse to identify hostname correctly
+    if not url.startswith("http://") and not url.startswith("https://"):
+        url = "http://" + url
+
+    try:
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+        if not hostname:
+            return jsonify({"resolvable": False, "error": "Invalid URL structure"}), 400
+
+        socket.gethostbyname(hostname)
+        return jsonify({"resolvable": True}), 200
+    except socket.gaierror:
+        return jsonify({"resolvable": False, "reason": "nxdomain"}), 200
+    except Exception as e:
+        return jsonify({"resolvable": False, "error": str(e)}), 500

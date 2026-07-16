@@ -38,52 +38,76 @@ def _request(method, endpoint, payload=None):
     return {}
 
 def get_campaigns():
-    return _request('GET', '/api/campaigns')
+    return _request('GET', '/api/campaigns/')
 
 def get_templates():
-    return _request('GET', '/api/templates')
+    return _request('GET', '/api/templates/')
 
 def get_sending_profiles():
-    return _request('GET', '/api/smtp')
+    return _request('GET', '/api/smtp/')
 
 def get_pages():
-    return _request('GET', '/api/pages')
+    return _request('GET', '/api/pages/')
 
 def sync_group(name, emails):
-    # GET /api/groups to find existing
-    groups = _request('GET', '/api/groups')
+    # GET /api/groups/ to find existing
+    groups = _request('GET', '/api/groups/')
     
     # DELETE if exists
     for group in groups:
         if group.get('name') == name:
-            _request('DELETE', f"/api/groups/{group.get('id')}")
+            _request('DELETE', f"/api/groups/{group.get('id')}/")
             break
             
-    # POST /api/groups to create new
+    # POST /api/groups/ to create new
     targets = [{"first_name": "", "last_name": "", "email": e, "position": ""} for e in emails]
     payload = {
         "name": name,
         "targets": targets
     }
     
-    return _request('POST', '/api/groups', payload)
+    return _request('POST', '/api/groups/', payload)
 
 def launch_campaign(name, template_id, url, page_id, smtp_id, group_name):
-    # GoPhish API generally accepts IDs or names. We'll format it as a dictionary 
-    # to support whatever the caller passes.
-    def make_ref(val):
+    # GoPhish API requires template, page, and smtp referenced by NAME.
+    # We resolve IDs to names dynamically by querying GoPhish resources.
+    def resolve_template(val):
         try:
-            return {"id": int(val)}
-        except ValueError:
-            return {"name": str(val)}
+            tid = int(val)
+            for t in get_templates():
+                if t.get('id') == tid:
+                    return {"name": t.get('name')}
+        except Exception:
+            pass
+        return {"name": str(val)}
+
+    def resolve_page(val):
+        try:
+            pid = int(val)
+            for p in get_pages():
+                if p.get('id') == pid:
+                    return {"name": p.get('name')}
+        except Exception:
+            pass
+        return {"name": str(val)}
+
+    def resolve_smtp(val):
+        try:
+            sid = int(val)
+            for s in get_sending_profiles():
+                if s.get('id') == sid:
+                    return {"name": s.get('name')}
+        except Exception:
+            pass
+        return {"name": str(val)}
 
     payload = {
         "name": name,
-        "template": make_ref(template_id),
+        "template": resolve_template(template_id),
         "url": url,
-        "page": make_ref(page_id),
-        "smtp": make_ref(smtp_id),
+        "page": resolve_page(page_id),
+        "smtp": resolve_smtp(smtp_id),
         "groups": [{"name": group_name}]
     }
     
-    return _request('POST', '/api/campaigns', payload)
+    return _request('POST', '/api/campaigns/', payload)

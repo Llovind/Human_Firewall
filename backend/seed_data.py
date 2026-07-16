@@ -8,6 +8,16 @@ import database  # Import modul database untuk inisialisasi tabel
 DB_PATH = os.path.join('instance', 'human_firewall.db')
 
 def seed_database(telegram_id=None):
+    # Drop quiz_questions table to force database.init_db() to recreate and re-seed it
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("DROP TABLE IF EXISTS quiz_questions")
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
     # Pastikan database folder dan skema tabel terinisialisasi terlebih dahulu
     print("Menginisialisasi skema database...")
     database.init_db()

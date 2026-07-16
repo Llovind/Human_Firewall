@@ -23,6 +23,20 @@ def go():
     if not url.startswith("http://") and not url.startswith("https://"):
         url = "http://" + url
 
+    # DNS Pre-flight Check
+    import socket
+    from urllib.parse import urlparse
+    try:
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+        if not hostname:
+            return render_template("visit.html", error="Format URL tidak valid.")
+        socket.gethostbyname(hostname)
+    except socket.gaierror:
+        return render_template("visit.html", error=f"Situs tidak dapat dijangkau: Domain '{hostname}' tidak terdaftar atau tidak memiliki catatan DNS di internet.")
+    except Exception:
+        pass
+
     result = analyze_indicator(url)
     action = result["policy"]["action"]
 

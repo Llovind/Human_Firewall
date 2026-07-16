@@ -23,7 +23,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const msg = $input.item.json.message;\n\nif (msg.text) {\n  const text = msg.text.trim();\n\n  const urlRegex = /^https?:\\/\\/\\S+$/i;\n\n  if (urlRegex.test(text)) {\n    return {\n      json: {\n        type: \"url\",\n        url: text,\n        chat_id: msg.chat.id\n      }\n    };\n  }\n}\n\nif (msg.document) {\n  return {\n    json: {\n      type: \"file\",\n      file_id: msg.document.file_id,\n      file_name: msg.document.file_name,\n      mime_type: msg.document.mime_type,\n      chat_id: msg.chat.id\n    }\n  };\n}\n\nreturn {\n  json: {\n    type: \"invalid\",\n    chat_id: msg.chat.id\n  }\n};"
+        "jsCode": "const msg = $input.item.json.message;\n\nif (msg.text) {\n  const text = msg.text.trim();\n\n  if (text.startsWith('/')) {\n    return {\n      json: {\n        type: \"command\",\n        command: text,\n        chat_id: msg.chat.id,\n        reporter_name: msg.from.first_name || 'User'\n      }\n    };\n  }\n\n  const urlRegex = /^https?:\\/\\/\\S+$/i;\n\n  if (urlRegex.test(text)) {\n    return {\n      json: {\n        type: \"url\",\n        url: text,\n        chat_id: msg.chat.id,\n        reporter_name: msg.from.first_name || 'User'\n      }\n    };\n  }\n}\n\nif (msg.document) {\n  return {\n    json: {\n      type: \"file\",\n      file_id: msg.document.file_id,\n      file_name: msg.document.file_name,\n      mime_type: msg.document.mime_type,\n      chat_id: msg.chat.id,\n      reporter_name: msg.from.first_name || 'User'\n    }\n  };\n}\n\nreturn {\n  json: {\n    type: \"invalid\",\n    chat_id: msg.chat.id,\n    reporter_name: msg.from.first_name || 'User'\n  }\n};"
       },
       "id": "602ae754-f089-4edb-8185-905b47da2375",
       "name": "Parse Input",
@@ -85,6 +85,30 @@
               },
               "renameOutput": true,
               "outputKey": "File"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "command",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "command-rule-id"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Command"
             },
             {
               "conditions": {
@@ -575,6 +599,57 @@
         64,
         576
       ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://flask_api:5000/api/telegram/command",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SERVICE_API_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chat_id\": \"{{$json.chat_id}}\",\n  \"command\": \"{{$json.command}}\",\n  \"first_name\": \"{{$json.reporter_name}}\"\n}",
+        "options": {}
+      },
+      "id": "handle-telegram-command-node-id",
+      "name": "Handle Telegram Command",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -272,
+        856
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Parse Input').item.json.chat_id }}",
+        "text": "={{ $json.reply }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "reply-command-response-node-id",
+      "name": "Reply Command Response",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        856
+      ],
+      "webhookId": "reply-command-response-webhook-id",
+      "credentials": {
+        "telegramApi": {
+          "id": "I44oUHC8lBGyDI79",
+          "name": "Telegram account 2"
+        }
+      }
     }
   ],
   "pinData": {},
@@ -613,6 +688,13 @@
         [
           {
             "node": "Get TG File Path",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle Telegram Command",
             "type": "main",
             "index": 0
           }
@@ -782,6 +864,17 @@
         [
           {
             "node": "IF URL Dangerous",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle Telegram Command": {
+      "main": [
+        [
+          {
+            "node": "Reply Command Response",
             "type": "main",
             "index": 0
           }

@@ -173,3 +173,43 @@ def analyze_indicator(indicator, is_scan=False):
         "analysis": analysis,
         "policy": policy_result,
     }
+
+
+def reconcile_report_source(url: str, verdict: str) -> str:
+    """Reconcile whether a reported URL/indicator is an active GoPhish campaign,
+    a real-world threat, or unverified.
+    """
+    import gophish_client
+
+    # 1. First run the static simulation check
+    is_sim = _is_gophish_simulation(url)
+
+    # 2. Try verifying dynamically with GoPhish API if not already flagged statically
+    if not is_sim:
+        try:
+            parsed_target = urlparse(url)
+            target_host = parsed_target.hostname.lower() if parsed_target.hostname else ""
+
+            if target_host:
+                campaigns = gophish_client.get_campaigns()
+                for c in campaigns:
+                    # Match in-progress campaigns
+                    if c.get("status") in ("In Progress", "active"):
+                        c_url = c.get("url", "")
+                        if c_url:
+                            parsed_c = urlparse(c_url)
+                            c_host = parsed_c.hostname.lower() if parsed_c.hostname else ""
+                            if c_host == target_host:
+                                is_sim = True
+                                break
+        except Exception as e:
+            # Fallback quietly to static check if GoPhish is offline
+            print(f"[Reconciliation] GoPhish API check failed, falling back to static check: {e}")
+
+    # 3. Determine the source verdict
+    if is_sim:
+        return "simulation_correctly_reported"
+    elif verdict in ("malicious", "suspicious"):
+        return "real_threat"
+    else:
+        return "unverified"

@@ -26,7 +26,10 @@ function AuthContent() {
   }, []);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    const token = searchParams.get('token');
+
+    // Only auto-redirect if there is NO new token being passed in the URL
+    if (isAuthenticated && !token) {
       if (user?.role === 'admin') {
         router.push('/admin');
       } else {
@@ -35,7 +38,6 @@ function AuthContent() {
       return;
     }
 
-    const token = searchParams.get('token');
     if (!token) {
       setStatus('no-token');
       return;

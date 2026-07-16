@@ -51,8 +51,13 @@ PUBLIC_ROUTES = {
     'events.get_user_history', 'events.user_profile', 'events.create_otp', 'events.verify_otp',
     'events.register_telegram', 'events.list_emails', 'auth.admin_login', 'health',
     'static', 'auth.api_auth_admin', 'events.api_user_eligibility', 'events.api_user_activity',
+    'events.dns_check',
     'gamification.get_employee_reports_summary',
     'gamification.post_quiz_complete',
+    'gamification.get_quiz_today',
+    'gamification.post_quiz_revive',
+    'auth.validate_token_api',
+    'auth.telegram_command',
     'proxy.visit', 'proxy.go', 'proxy.blocked'
 }
 
