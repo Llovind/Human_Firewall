@@ -341,6 +341,21 @@ export default function SOCAdminDashboard() {
     }
   };
 
+  const handleDeleteCampaign = async (campaignId: number, campaignName: string) => {
+    if (!confirm(`Hapus kampanye "${campaignName}"? Tindakan ini tidak bisa dibatalkan.`)) return;
+    try {
+      const res = await fetch(`/api/admin/gophish/campaigns/${campaignId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok) {
+        setCampaigns(prev => prev.filter(c => c.id !== campaignId));
+      } else {
+        alert(`Gagal menghapus: ${data.error}`);
+      }
+    } catch {
+      alert('Koneksi gagal.');
+    }
+  };
+
   const loadEmails = async () => {
     try {
       const res = await fetch('/api/admin/emails');
@@ -1682,12 +1697,13 @@ export default function SOCAdminDashboard() {
                     <th style={{ textAlign: 'center' }}>Dibuka</th>
                     <th style={{ textAlign: 'center' }}>Diklik</th>
                     <th style={{ textAlign: 'center' }}>Leaks Kredensial</th>
+                    <th style={{ textAlign: 'center' }}>Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
                   {campaigns.length === 0 ? (
                     <tr>
-                      <td colSpan={7} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+                      <td colSpan={8} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
                         Belum ada kampanye aktif. Klik "Launch Simulation" untuk memulai.
                       </td>
                     </tr>
@@ -1705,6 +1721,15 @@ export default function SOCAdminDashboard() {
                         <td style={{ color: 'var(--warning)', textAlign: 'center' }}>{c.stats?.opened ?? 0}</td>
                         <td style={{ color: 'var(--danger)', fontWeight: 'bold', textAlign: 'center' }}>{c.stats?.clicked ?? 0}</td>
                         <td style={{ color: 'var(--danger)', fontWeight: 'bold', textAlign: 'center' }}>{c.stats?.submitted_data ?? 0}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <button
+                            onClick={() => handleDeleteCampaign(c.id, c.name)}
+                            title="Hapus kampanye"
+                            style={{ padding: '6px', background: 'transparent', border: '1px solid var(--danger)', borderRadius: '6px', cursor: 'pointer', color: 'var(--danger)' }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
                       </tr>
                     ))
                   )}

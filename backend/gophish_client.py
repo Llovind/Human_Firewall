@@ -37,8 +37,47 @@ def _request(method, endpoint, payload=None):
         return response.json()
     return {}
 
+def _compute_campaign_stats(results):
+    """GoPhish's list/get-campaign endpoints (`GET /api/campaigns/` dan
+    `GET /api/campaigns/:id`) TIDAK menyertakan field `stats` — itu cuma
+    ada di endpoint terpisah `GET /api/campaigns/:id/summary`. Daripada
+    nembak 1 API call ekstra per campaign tiap kali polling (boros +
+    lambat), kita hitung sendiri dari `results[].status` yang UDAH ada
+    di response list. `status` per-target bersifat progresif (nilai
+    tertinggi yang pernah dicapai target itu), jadi setiap tahap otomatis
+    mencakup semua tahap sebelumnya — makanya masing-masing hitungan
+    dicek dengan `in` terhadap set status match-or-above."""
+    sent_statuses = {'Email Sent', 'Email Opened', 'Clicked Link', 'Submitted Data', 'Email Reported'}
+    opened_statuses = {'Email Opened', 'Clicked Link', 'Submitted Data', 'Email Reported'}
+    clicked_statuses = {'Clicked Link', 'Submitted Data', 'Email Reported'}
+    submitted_statuses = {'Submitted Data', 'Email Reported'}
+
+    total = len(results or [])
+    sent = sum(1 for r in results or [] if r.get('status') in sent_statuses)
+    opened = sum(1 for r in results or [] if r.get('status') in opened_statuses)
+    clicked = sum(1 for r in results or [] if r.get('status') in clicked_statuses)
+    submitted_data = sum(1 for r in results or [] if r.get('status') in submitted_statuses)
+    error = sum(1 for r in results or [] if r.get('status') == 'Error')
+
+    return {
+        'total': total,
+        'sent': sent,
+        'opened': opened,
+        'clicked': clicked,
+        'submitted_data': submitted_data,
+        'error': error,
+    }
+
+
 def get_campaigns():
-    return _request('GET', '/api/campaigns/')
+    campaigns = _request('GET', '/api/campaigns/')
+    for c in campaigns or []:
+        c['stats'] = _compute_campaign_stats(c.get('results'))
+    return campaigns
+
+
+def delete_campaign(campaign_id):
+    return _request('DELETE', f'/api/campaigns/{campaign_id}')
 
 def get_templates():
     return _request('GET', '/api/templates/')

@@ -96,6 +96,15 @@ def gophish_launch():
         return jsonify({"error": "Failed to launch campaign", "detail": str(e)}), 500
 
 
+@admin_api_bp.route('/api/admin/gophish/campaigns/<int:campaign_id>', methods=['DELETE'])
+def gophish_delete_campaign(campaign_id):
+    try:
+        result = gophish_client.delete_campaign(campaign_id)
+        return jsonify({"message": "Campaign deleted successfully", "result": result}), 200
+    except Exception as e:
+        return jsonify({"error": "Failed to delete campaign", "detail": str(e)}), 500
+
+
 @admin_api_bp.route('/api/admin/gophish/templates', methods=['POST'])
 def gophish_create_template():
     data = request.get_json(silent=True)
