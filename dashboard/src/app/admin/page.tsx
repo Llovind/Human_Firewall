@@ -5,7 +5,7 @@ import { usePolling } from '@/hooks/usePolling';
 import Logo from '@/components/Logo';
 import SidebarNav from '@/components/SidebarNav';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { Shield, AlertTriangle, Activity, CheckCircle2, TrendingUp, Trophy, FileWarning, Search, Bot, Server, Play, StopCircle, RefreshCw, Plus, Trash2, Mail, Users, Settings, Fish, Scale, Inbox, Sliders } from 'lucide-react';
+import { Shield, AlertTriangle, Activity, CheckCircle2, TrendingUp, Trophy, FileWarning, Search, Bot, Server, Play, StopCircle, RefreshCw, Plus, Trash2, Mail, Users, Settings, Fish, Scale, Inbox, Sliders, Pencil, Globe, X, Eye } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import '../dashboard.css';
 
@@ -55,9 +55,9 @@ interface MockEmail {
   created_at: string;
 }
 interface GoPhishResource {
-  templates: { id: number; name: string }[];
+  templates: { id: number; name: string; subject?: string; html?: string; text?: string }[];
   profiles: { id: number; name: string }[];
-  pages: { id: number; name: string }[];
+  pages: { id: number; name: string; html?: string; capture_credentials?: boolean; capture_passwords?: boolean; redirect_url?: string }[];
 }
 interface ComplianceSummary {
   compliance_pct: number;
@@ -187,6 +187,22 @@ export default function SOCAdminDashboard() {
   const [launchPage, setLaunchPage] = useState('');
   const [launchUrl, setLaunchUrl] = useState('http://localhost:8080');
   const [isLaunching, setIsLaunching] = useState(false);
+
+  // ── Template & Landing Page Builder (bikin phishing pretext sendiri,
+  //    tanpa perlu buka GoPhish UI langsung) ───
+  const [isBuilderOpen, setIsBuilderOpen] = useState(false);
+  const [builderMode, setBuilderMode] = useState<'template' | 'page'>('template');
+  const [builderEditId, setBuilderEditId] = useState<number | null>(null); // null = bikin baru
+  const [builderName, setBuilderName] = useState('');
+  const [builderSubject, setBuilderSubject] = useState(''); // khusus template
+  const [builderHtml, setBuilderHtml] = useState('');
+  const [builderCaptureCredentials, setBuilderCaptureCredentials] = useState(true); // khusus page
+  const [builderCapturePasswords, setBuilderCapturePasswords] = useState(true); // khusus page
+  const [builderRedirectUrl, setBuilderRedirectUrl] = useState(''); // khusus page
+  const [builderCloneUrl, setBuilderCloneUrl] = useState('');
+  const [isCloning, setIsCloning] = useState(false);
+  const [isSavingBuilder, setIsSavingBuilder] = useState(false);
+  const [builderError, setBuilderError] = useState('');
 
   // ── Load Helpers for Employees & Divisions ───
   const loadEmployees = async () => {
@@ -498,6 +514,143 @@ export default function SOCAdminDashboard() {
       alert(`Error: ${err.message || 'Gagal menghubungi backend.'}`);
     } finally {
       setIsLaunching(false);
+    }
+  };
+
+  // ── Template & Landing Page Builder handlers ───
+
+  const resetBuilderForm = () => {
+    setBuilderEditId(null);
+    setBuilderName('');
+    setBuilderSubject('');
+    setBuilderHtml('');
+    setBuilderCaptureCredentials(true);
+    setBuilderCapturePasswords(true);
+    setBuilderRedirectUrl('');
+    setBuilderCloneUrl('');
+    setBuilderError('');
+  };
+
+  const openTemplateBuilder = (existing?: { id: number; name: string; subject?: string; html?: string }) => {
+    resetBuilderForm();
+    setBuilderMode('template');
+    if (existing) {
+      setBuilderEditId(existing.id);
+      setBuilderName(existing.name);
+      setBuilderSubject(existing.subject || '');
+      setBuilderHtml(existing.html || '');
+    }
+    setIsBuilderOpen(true);
+  };
+
+  const openPageBuilder = (existing?: { id: number; name: string; html?: string; capture_credentials?: boolean; capture_passwords?: boolean; redirect_url?: string }) => {
+    resetBuilderForm();
+    setBuilderMode('page');
+    if (existing) {
+      setBuilderEditId(existing.id);
+      setBuilderName(existing.name);
+      setBuilderHtml(existing.html || '');
+      setBuilderCaptureCredentials(existing.capture_credentials ?? true);
+      setBuilderCapturePasswords(existing.capture_passwords ?? true);
+      setBuilderRedirectUrl(existing.redirect_url || '');
+    }
+    setIsBuilderOpen(true);
+  };
+
+  const handleCloneSite = async () => {
+    if (!builderCloneUrl.trim()) {
+      setBuilderError('Isi URL situs yang mau di-clone dulu.');
+      return;
+    }
+    setIsCloning(true);
+    setBuilderError('');
+    try {
+      const res = await fetch('/api/admin/gophish/import-site', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: builderCloneUrl.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Gagal clone situs. Pastikan URL bisa diakses dari server.');
+      }
+      setBuilderHtml(data.html || '');
+    } catch (err: any) {
+      setBuilderError(err.message || 'Gagal clone situs.');
+    } finally {
+      setIsCloning(false);
+    }
+  };
+
+  const handleSaveBuilder = async () => {
+    if (!builderName.trim() || !builderHtml.trim()) {
+      setBuilderError('Nama dan konten HTML wajib diisi.');
+      return;
+    }
+    if (builderMode === 'template' && !builderSubject.trim()) {
+      setBuilderError('Subject email wajib diisi.');
+      return;
+    }
+
+    setIsSavingBuilder(true);
+    setBuilderError('');
+    try {
+      const isEdit = builderEditId !== null;
+      const basePath = builderMode === 'template' ? '/api/admin/gophish/templates' : '/api/admin/gophish/pages';
+      const url = isEdit ? `${basePath}/${builderEditId}` : basePath;
+      const method = isEdit ? 'PUT' : 'POST';
+
+      const body = builderMode === 'template'
+        ? { name: builderName, subject: builderSubject, html: builderHtml }
+        : {
+            name: builderName,
+            html: builderHtml,
+            capture_credentials: builderCaptureCredentials,
+            capture_passwords: builderCapturePasswords,
+            redirect_url: builderRedirectUrl,
+          };
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Gagal menyimpan.');
+      }
+
+      setIsBuilderOpen(false);
+      resetBuilderForm();
+      loadGoPhishResources(); // refresh dropdown & daftar di Launch dialog
+    } catch (err: any) {
+      setBuilderError(err.message || 'Gagal menyimpan.');
+    } finally {
+      setIsSavingBuilder(false);
+    }
+  };
+
+  const handleDeleteTemplate = async (id: number, name: string) => {
+    if (!confirm(`Hapus template "${name}"? Tindakan ini tidak bisa dibatalkan.`)) return;
+    try {
+      const res = await fetch(`/api/admin/gophish/templates/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal menghapus template.');
+      loadGoPhishResources();
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    }
+  };
+
+  const handleDeletePage = async (id: number, name: string) => {
+    if (!confirm(`Hapus landing page "${name}"? Tindakan ini tidak bisa dibatalkan.`)) return;
+    try {
+      const res = await fetch(`/api/admin/gophish/pages/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal menghapus landing page.');
+      loadGoPhishResources();
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
     }
   };
 
@@ -1558,10 +1711,102 @@ export default function SOCAdminDashboard() {
                 </tbody>
               </table>
             </div>
+
+            {/* ── Koleksi Phishing Sendiri (Template & Landing Page) ── */}
+            <div className="panel fade-up" style={{ marginTop: '24px' }}>
+              <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <h2 className="panel-title"><Pencil size={20} style={{ marginRight: '8px', verticalAlign: 'text-bottom' }} /> Koleksi Phishing Saya</h2>
+                  <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                    Bikin email template & landing page sendiri langsung dari sini — gak perlu buka GoPhish.
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginTop: '16px' }}>
+                {/* Email Templates */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <h3 style={{ fontSize: '14px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Mail size={16} /> Email Templates ({resources?.templates?.length ?? 0})
+                    </h3>
+                    <button
+                      onClick={() => openTemplateBuilder()}
+                      style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: 'var(--accent)', border: 'none', color: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}
+                    >
+                      <Plus size={14} /> Buat Baru
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '280px', overflowY: 'auto' }}>
+                    {(resources?.templates?.length ?? 0) === 0 ? (
+                      <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px', border: '1px dashed var(--border)', borderRadius: '8px' }}>
+                        Belum ada template. Klik "Buat Baru" buat mulai.
+                      </div>
+                    ) : (
+                      resources!.templates.map(t => (
+                        <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '8px' }}>
+                          <div style={{ overflow: 'hidden' }}>
+                            <div style={{ fontWeight: 600, fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.name}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.subject || '—'}</div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                            <button onClick={() => openTemplateBuilder(t)} title="Edit" style={{ padding: '6px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', color: 'white' }}>
+                              <Pencil size={14} />
+                            </button>
+                            <button onClick={() => handleDeleteTemplate(t.id, t.name)} title="Hapus" style={{ padding: '6px', background: 'transparent', border: '1px solid var(--danger)', borderRadius: '6px', cursor: 'pointer', color: 'var(--danger)' }}>
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Landing Pages */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <h3 style={{ fontSize: '14px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Globe size={16} /> Landing Pages ({resources?.pages?.length ?? 0})
+                    </h3>
+                    <button
+                      onClick={() => openPageBuilder()}
+                      style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: 'var(--accent)', border: 'none', color: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}
+                    >
+                      <Plus size={14} /> Buat Baru
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '280px', overflowY: 'auto' }}>
+                    {(resources?.pages?.length ?? 0) === 0 ? (
+                      <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px', border: '1px dashed var(--border)', borderRadius: '8px' }}>
+                        Belum ada landing page. Klik "Buat Baru" buat mulai.
+                      </div>
+                    ) : (
+                      resources!.pages.map(p => (
+                        <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '8px' }}>
+                          <div style={{ overflow: 'hidden' }}>
+                            <div style={{ fontWeight: 600, fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                              {p.capture_credentials ? 'Capture kredensial: Ya' : 'Capture kredensial: Tidak'}
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                            <button onClick={() => openPageBuilder(p)} title="Edit" style={{ padding: '6px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', color: 'white' }}>
+                              <Pencil size={14} />
+                            </button>
+                            <button onClick={() => handleDeletePage(p.id, p.name)} title="Hapus" style={{ padding: '6px', background: 'transparent', border: '1px solid var(--danger)', borderRadius: '6px', cursor: 'pointer', color: 'var(--danger)' }}>
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
-
-        {/* ── WEBMAIL TAB (Mock Inbox) ───────────────────── */}
         {activeTab === 'webmail' && (
           <div className="webmail-panel fade-up" style={{ marginBottom: '48px' }}>
             <div className="webmail-sidebar">
@@ -1850,7 +2095,162 @@ export default function SOCAdminDashboard() {
           </div>
         </div>
       )}
-      {/* ── Dialog Add/Edit Employee ── */}
+
+      {/* ── Dialog Template & Landing Page Builder ── */}
+      {isBuilderOpen && (
+        <div className="dialog-overlay">
+          <div className="dialog-box fade-up" style={{ maxWidth: '920px', width: '92vw' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {builderMode === 'template' ? <Mail size={20} /> : <Globe size={20} />}
+                {builderEditId !== null ? 'Edit' : 'Buat'} {builderMode === 'template' ? 'Email Template' : 'Landing Page'}
+              </h3>
+              <button onClick={() => setIsBuilderOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            {builderError && (
+              <div style={{ padding: '10px 14px', background: 'rgba(239,68,68,0.1)', border: '1px solid var(--danger)', color: 'var(--danger)', borderRadius: '6px', marginBottom: '14px', fontSize: '13px' }}>
+                {builderError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 240px' }}>
+                  <label style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                    Nama {builderMode === 'template' ? 'Template' : 'Landing Page'}
+                  </label>
+                  <input
+                    type="text"
+                    placeholder={builderMode === 'template' ? 'Misal: Notifikasi Reset Password' : 'Misal: Fake SSO Login'}
+                    value={builderName}
+                    onChange={(e) => setBuilderName(e.target.value)}
+                    style={{ width: '100%', padding: '10px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'white', outline: 'none' }}
+                  />
+                </div>
+
+                {builderMode === 'template' && (
+                  <div style={{ flex: '1 1 240px' }}>
+                    <label style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                      Subject Email
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Misal: [Action Required] Verifikasi Akun Anda"
+                      value={builderSubject}
+                      onChange={(e) => setBuilderSubject(e.target.value)}
+                      style={{ width: '100%', padding: '10px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'white', outline: 'none' }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {builderMode === 'template' && (
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  Variabel GoPhish yang bisa dipakai di HTML: <code>{'{{.FirstName}}'}</code>, <code>{'{{.LastName}}'}</code>, <code>{'{{.Email}}'}</code>, <code>{'{{.URL}}'}</code>, <code>{'{{.TrackingURL}}'}</code> — otomatis diganti GoPhish pas dikirim.
+                </div>
+              )}
+
+              {builderMode === 'page' && (
+                <div>
+                  <label style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                    Clone dari Situs Asli (opsional)
+                  </label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="text"
+                      placeholder="https://portal-sso-internal.example.com/login"
+                      value={builderCloneUrl}
+                      onChange={(e) => setBuilderCloneUrl(e.target.value)}
+                      style={{ flex: 1, padding: '10px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'white', outline: 'none' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCloneSite}
+                      disabled={isCloning}
+                      style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 14px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'white', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      <Globe size={14} /> {isCloning ? 'Cloning...' : 'Clone HTML'}
+                    </button>
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                    Hasil clone masuk ke editor di bawah — review & sunting dulu sebelum disimpan (misal cek form action / field tersembunyi).
+                  </div>
+                </div>
+              )}
+
+              {/* Split editor: textarea kiri, live preview kanan (WYSIWYG-lite) */}
+              <div>
+                <label style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                  Konten HTML
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', height: '320px' }}>
+                  <textarea
+                    value={builderHtml}
+                    onChange={(e) => setBuilderHtml(e.target.value)}
+                    placeholder="<html>...</html>"
+                    style={{ width: '100%', height: '100%', padding: '10px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'white', outline: 'none', fontFamily: 'monospace', fontSize: '12px', resize: 'none' }}
+                  />
+                  <div style={{ border: '1px solid var(--border)', borderRadius: '6px', overflow: 'hidden', background: 'white', position: 'relative' }}>
+                    <div style={{ position: 'absolute', top: '6px', right: '6px', display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(0,0,0,0.6)', color: 'white', fontSize: '10px', padding: '2px 8px', borderRadius: '4px', zIndex: 1 }}>
+                      <Eye size={10} /> Live Preview
+                    </div>
+                    <iframe
+                      title="preview"
+                      srcDoc={builderHtml || '<div style="font-family:sans-serif;color:#888;padding:16px;font-size:13px;">Preview muncul di sini...</div>'}
+                      style={{ width: '100%', height: '100%', border: 'none' }}
+                      sandbox=""
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {builderMode === 'page' && (
+                <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={builderCaptureCredentials} onChange={(e) => setBuilderCaptureCredentials(e.target.checked)} />
+                    Tangkap kredensial (username/email)
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={builderCapturePasswords} onChange={(e) => setBuilderCapturePasswords(e.target.checked)} />
+                    Tangkap password
+                  </label>
+                  <div style={{ flex: '1 1 220px' }}>
+                    <input
+                      type="text"
+                      placeholder="Redirect URL setelah submit (opsional)"
+                      value={builderRedirectUrl}
+                      onChange={(e) => setBuilderRedirectUrl(e.target.value)}
+                      style={{ width: '100%', padding: '8px 10px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'white', outline: 'none', fontSize: '13px' }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsBuilderOpen(false)}
+                  style={{ padding: '8px 16px', background: 'transparent', border: '1px solid var(--border)', color: 'white', borderRadius: '6px', cursor: 'pointer' }}
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveBuilder}
+                  disabled={isSavingBuilder}
+                  style={{ padding: '8px 16px', background: 'var(--accent)', border: 'none', color: 'white', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+                >
+                  {isSavingBuilder ? 'Menyimpan...' : (builderEditId !== null ? 'Simpan Perubahan' : 'Simpan')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isEmpModalOpen && (
         <div className="dialog-overlay">
           <div className="dialog-box fade-up">

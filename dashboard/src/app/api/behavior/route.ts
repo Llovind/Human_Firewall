@@ -102,8 +102,8 @@ export async function GET(request: NextRequest) {
             trainingCompleted: u.viewed_training_count || 0,
             badges: (() => {
               const bList: string[] = [];
-              if (scoreVal >= 60) bList.push('Guardian');
-              if (scoreVal >= 130) bList.push('Sentinel');
+              if (u.points >= 60) bList.push('Guardian');
+              if (u.points >= 130) bList.push('Sentinel');
               if (u.reports_count_malicious > 0) bList.push('First Report');
               if (u.daily_streak >= 4) bList.push('Streak Master');
               if (u.spot_fake_wins > 0) bList.push('Quiz Champion');
@@ -140,4 +140,3 @@ export async function GET(request: NextRequest) {
   // Fallback
   return NextResponse.json({ scores: [], by_divisi: [] });
 }
-

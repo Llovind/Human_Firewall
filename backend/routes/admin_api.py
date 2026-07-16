@@ -96,6 +96,139 @@ def gophish_launch():
         return jsonify({"error": "Failed to launch campaign", "detail": str(e)}), 500
 
 
+@admin_api_bp.route('/api/admin/gophish/templates', methods=['POST'])
+def gophish_create_template():
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "JSON body is required"}), 400
+
+    required_fields = ['name', 'subject', 'html']
+    for field in required_fields:
+        if not data.get(field):
+            return jsonify({"error": f"Field '{field}' is required"}), 400
+
+    try:
+        result = gophish_client.create_template(
+            name=data['name'],
+            subject=data['subject'],
+            html=data['html'],
+            text=data.get('text'),
+        )
+        return jsonify({"message": "Template created successfully", "result": result}), 201
+    except Exception as e:
+        return jsonify({"error": "Failed to create template", "detail": str(e)}), 500
+
+
+@admin_api_bp.route('/api/admin/gophish/templates/<int:template_id>', methods=['PUT'])
+def gophish_update_template(template_id):
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "JSON body is required"}), 400
+
+    required_fields = ['name', 'subject', 'html']
+    for field in required_fields:
+        if not data.get(field):
+            return jsonify({"error": f"Field '{field}' is required"}), 400
+
+    try:
+        result = gophish_client.update_template(
+            template_id=template_id,
+            name=data['name'],
+            subject=data['subject'],
+            html=data['html'],
+            text=data.get('text'),
+        )
+        return jsonify({"message": "Template updated successfully", "result": result}), 200
+    except Exception as e:
+        return jsonify({"error": "Failed to update template", "detail": str(e)}), 500
+
+
+@admin_api_bp.route('/api/admin/gophish/templates/<int:template_id>', methods=['DELETE'])
+def gophish_delete_template(template_id):
+    try:
+        gophish_client.delete_template(template_id)
+        return jsonify({"message": "Template deleted successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": "Failed to delete template", "detail": str(e)}), 500
+
+
+@admin_api_bp.route('/api/admin/gophish/pages', methods=['POST'])
+def gophish_create_page():
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "JSON body is required"}), 400
+
+    required_fields = ['name', 'html']
+    for field in required_fields:
+        if not data.get(field):
+            return jsonify({"error": f"Field '{field}' is required"}), 400
+
+    try:
+        result = gophish_client.create_page(
+            name=data['name'],
+            html=data['html'],
+            capture_credentials=data.get('capture_credentials', True),
+            capture_passwords=data.get('capture_passwords', True),
+            redirect_url=data.get('redirect_url', ''),
+        )
+        return jsonify({"message": "Landing page created successfully", "result": result}), 201
+    except Exception as e:
+        return jsonify({"error": "Failed to create landing page", "detail": str(e)}), 500
+
+
+@admin_api_bp.route('/api/admin/gophish/pages/<int:page_id>', methods=['PUT'])
+def gophish_update_page(page_id):
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "JSON body is required"}), 400
+
+    required_fields = ['name', 'html']
+    for field in required_fields:
+        if not data.get(field):
+            return jsonify({"error": f"Field '{field}' is required"}), 400
+
+    try:
+        result = gophish_client.update_page(
+            page_id=page_id,
+            name=data['name'],
+            html=data['html'],
+            capture_credentials=data.get('capture_credentials', True),
+            capture_passwords=data.get('capture_passwords', True),
+            redirect_url=data.get('redirect_url', ''),
+        )
+        return jsonify({"message": "Landing page updated successfully", "result": result}), 200
+    except Exception as e:
+        return jsonify({"error": "Failed to update landing page", "detail": str(e)}), 500
+
+
+@admin_api_bp.route('/api/admin/gophish/pages/<int:page_id>', methods=['DELETE'])
+def gophish_delete_page(page_id):
+    try:
+        gophish_client.delete_page(page_id)
+        return jsonify({"message": "Landing page deleted successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": "Failed to delete landing page", "detail": str(e)}), 500
+
+
+@admin_api_bp.route('/api/admin/gophish/import-site', methods=['POST'])
+def gophish_import_site():
+    """Clone HTML dari URL situs asli buat starting point landing page.
+    TIDAK langsung bikin page di GoPhish — cuma return HTML mentahnya
+    biar admin bisa review/edit dulu di builder sebelum di-save."""
+    data = request.get_json(silent=True)
+    if not data or not data.get('url'):
+        return jsonify({"error": "Field 'url' is required"}), 400
+
+    try:
+        result = gophish_client.import_site(
+            url=data['url'],
+            include_resources=data.get('include_resources', False),
+        )
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": "Failed to clone site", "detail": str(e)}), 500
+
+
 @admin_api_bp.route('/api/admin/employees', methods=['GET'])
 def list_employees():
     try:

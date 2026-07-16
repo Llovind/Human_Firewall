@@ -49,6 +49,80 @@ def get_sending_profiles():
 def get_pages():
     return _request('GET', '/api/pages/')
 
+# ── Template management (bikin phishing pretext sendiri dari dashboard,
+#    tanpa perlu buka GoPhish UI langsung) ──────────────────────────────
+
+def create_template(name, subject, html, text=None):
+    """Bikin email template baru di GoPhish. `html` boleh mengandung
+    variabel GoPhish standar: {{.FirstName}}, {{.LastName}}, {{.Email}},
+    {{.URL}}, {{.TrackingURL}} — GoPhish yang substitusi otomatis pas
+    campaign dikirim, kita tidak perlu proses itu di sini."""
+    payload = {
+        "name": name,
+        "subject": subject,
+        "html": html,
+        "text": text or "",
+    }
+    return _request('POST', '/api/templates/', payload)
+
+
+def update_template(template_id, name, subject, html, text=None):
+    payload = {
+        "id": template_id,
+        "name": name,
+        "subject": subject,
+        "html": html,
+        "text": text or "",
+    }
+    return _request('PUT', f'/api/templates/{template_id}', payload)
+
+
+def delete_template(template_id):
+    return _request('DELETE', f'/api/templates/{template_id}')
+
+
+# ── Landing page management ─────────────────────────────────────────────
+
+def create_page(name, html, capture_credentials=True, capture_passwords=True, redirect_url=""):
+    payload = {
+        "name": name,
+        "html": html,
+        "capture_credentials": capture_credentials,
+        "capture_passwords": capture_passwords,
+        "redirect_url": redirect_url,
+    }
+    return _request('POST', '/api/pages/', payload)
+
+
+def update_page(page_id, name, html, capture_credentials=True, capture_passwords=True, redirect_url=""):
+    payload = {
+        "id": page_id,
+        "name": name,
+        "html": html,
+        "capture_credentials": capture_credentials,
+        "capture_passwords": capture_passwords,
+        "redirect_url": redirect_url,
+    }
+    return _request('PUT', f'/api/pages/{page_id}', payload)
+
+
+def delete_page(page_id):
+    return _request('DELETE', f'/api/pages/{page_id}')
+
+
+def import_site(url, include_resources=False):
+    """Clone HTML dari situs asli (misal portal SSO internal) lewat fitur
+    bawaan GoPhish /api/import/site, buat dijadiin starting point landing
+    page yang realistis. Hasilnya HTML mentah — masih perlu direview/
+    diedit manual sebelum dipakai jadi landing page beneran (misal ubah
+    form action, tambah field tersembunyi), makanya endpoint ini SENGAJA
+    cuma return HTML-nya, bukan langsung bikin page di GoPhish."""
+    payload = {
+        "url": url,
+        "include_resources": include_resources,
+    }
+    return _request('POST', '/api/import/site', payload)
+
 def sync_group(name, emails):
     # GET /api/groups/ to find existing
     groups = _request('GET', '/api/groups/')

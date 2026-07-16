@@ -650,6 +650,172 @@
           "name": "Telegram account 2"
         }
       }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=http://flask_api:5000/api/telegram/user?chat_id={{ $('Threat Intelligence API').item.json.chat_id }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SERVICE_API_KEY}}"
+            }
+          ]
+        }
+      },
+      "id": "3b1f751b-e629-4d2b-aa2c-4d0d66d6ded0",
+      "name": "Get Reporter Email (URL)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1296,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.registered }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "81114ffc-de5a-4c29-9d68-5bde328d6661",
+      "name": "IF Reporter Registered (URL)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1520,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://flask_api:5000/api/reports",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"employee_id\": \"{{ $json.email }}\",\n  \"telegram_user_id\": \"{{ $('Threat Intelligence API').item.json.chat_id }}\",\n  \"type\": \"url\",\n  \"target\": \"{{ $('Threat Intelligence API').item.json.reported_url }}\",\n  \"verdict\": \"{{ $('Threat Intelligence API').item.json.policy.verdict }}\",\n  \"source_engine\": \"{{ (() => { const p = $('Threat Intelligence API').item.json.analysis.providers || []; if (p.includes('virustotal') && p.includes('urlscan')) return 'both'; if (p.includes('urlscan')) return 'urlscan'; return 'vt'; })() }}\",\n  \"severity_tier\": \"{{ $('Threat Intelligence API').item.json.policy.severity }}\",\n  \"submitted_at\": \"{{ $now.toISO() }}\"\n}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SERVICE_API_KEY}}"
+            }
+          ]
+        }
+      },
+      "id": "7a77240f-e36a-4c48-a3b8-c140f4766c79",
+      "name": "Create URL Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1744,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=http://flask_api:5000/api/telegram/user?chat_id={{ $('Evaluate File').item.json.chat_id }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SERVICE_API_KEY}}"
+            }
+          ]
+        }
+      },
+      "id": "d52301da-a794-4fd0-938b-77bc5e5aef2f",
+      "name": "Get Reporter Email (File)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1296,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.registered }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "65e97571-7395-4154-af29-3c4ea73031b2",
+      "name": "IF Reporter Registered (File)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1520,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://flask_api:5000/api/reports",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"employee_id\": \"{{ $json.email }}\",\n  \"telegram_user_id\": \"{{ $('Evaluate File').item.json.chat_id }}\",\n  \"type\": \"file\",\n  \"target\": \"{{ $('Evaluate File').item.json.file_hash || $('Evaluate File').item.json.file_name }}\",\n  \"verdict\": \"{{ ['high','medium'].includes($('Evaluate File').item.json.severity) ? 'malicious' : 'suspicious' }}\",\n  \"source_engine\": \"vt\",\n  \"severity_tier\": \"{{ $('Evaluate File').item.json.severity }}\",\n  \"submitted_at\": \"{{ $now.toISO() }}\",\n  \"raw_scores\": {{ JSON.stringify({vt_verdict: $('Evaluate File').item.json.vt_verdict, file_hash: $('Evaluate File').item.json.file_hash, file_name: $('Evaluate File').item.json.file_name}) }}\n}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SERVICE_API_KEY}}"
+            }
+          ]
+        }
+      },
+      "id": "5454534d-37ef-4432-ab43-269d98609dfe",
+      "name": "Create File Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1744,
+        960
+      ]
     }
   ],
   "pinData": {},
@@ -731,6 +897,11 @@
         [
           {
             "node": "SOC Alert URL",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Reporter Email (URL)",
             "type": "main",
             "index": 0
           }
@@ -844,6 +1015,11 @@
             "node": "SOC Alert File",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Get Reporter Email (File)",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -879,6 +1055,52 @@
             "index": 0
           }
         ]
+      ]
+    },
+    "Get Reporter Email (URL)": {
+      "main": [
+        [
+          {
+            "node": "IF Reporter Registered (URL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Reporter Registered (URL)": {
+      "main": [
+        [
+          {
+            "node": "Create URL Report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Get Reporter Email (File)": {
+      "main": [
+        [
+          {
+            "node": "IF Reporter Registered (File)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Reporter Registered (File)": {
+      "main": [
+        [
+          {
+            "node": "Create File Report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
       ]
     }
   },

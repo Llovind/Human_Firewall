@@ -75,7 +75,11 @@ def create_incident():
 
     if (source_type == 'real_world_report' or source_type == 'simulation') and severity in ('medium', 'high'):
         reporter_chat_id = data.get('reporter_chat_id')
-        award = database.award_points_for_report(reporter_chat_id)
+        # target dipakai buat dedupe poin: sama dengan target yang dipakai
+        # create_threat_report() di gamification_routes.py, biar dedupe
+        # "sudah pernah lapor X" konsisten di kedua jalur (poin & badge).
+        report_target = reported_url or data.get('file_hash') or data.get('original_filename')
+        award = database.award_points_for_report(reporter_chat_id, target=report_target)
         if award:
             response_body["points_awarded"] = database.POINTS_CONFIRMED_REPORT
             response_body["reporter"] = award
@@ -114,3 +118,4 @@ def list_incidents():
 
     incidents = database.list_incidents(source_type=source_type, status=status)
     return jsonify({"incidents": incidents, "count": len(incidents)}), 200
+

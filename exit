@@ -1,0 +1,9 @@
+warning: in the working copy of 'backend/routes/incidents.py', LF will be replaced by CRLF the next time Git touches it
+ backend/database.py                                |  53 [32m++[m[31m-[m
+ backend/gophish_client.py                          |  76 [32m+++[m[31m-[m
+ backend/routes/admin_api.py                        | 135 [32m++++++[m[31m-[m
+ backend/routes/incidents.py                        |   7 [32m+[m[31m-[m
+ dashboard/src/app/admin/page.tsx                   | 414 [32m++++++++++++++++++++[m[31m-[m
+ dashboard/src/app/api/behavior/route.ts            |   7 [32m+[m[31m-[m
+ ...0\224 Threat Reporting (Fully Configured).json" | 222 [32m+++++++++++[m
+ 7 files changed, 886 insertions(+), 28 deletions(-)

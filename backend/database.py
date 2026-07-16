@@ -617,18 +617,45 @@ def adjust_points(email: str, divisi: str, delta: int) -> dict:
         conn.close()
 
 
-def award_points_for_report(telegram_chat_id: str, points: int = POINTS_CONFIRMED_REPORT):
+def is_target_already_reported(email: str, target: str) -> bool:
+    """Cek apakah (email, target) sudah pernah dilaporkan sebelumnya dengan
+    verdict malicious/suspicious. Dipakai buat dedupe di 2 tempat:
+    1. create_threat_report() — supaya reports_count_malicious/badge gak
+       nambah dobel kalau URL/file yang sama dilaporin ulang oleh orang
+       yang sama.
+    2. award_points_for_report() — supaya POIN juga gak bisa di-farming
+       dengan cara spam lapor URL/file yang sama berulang-ulang.
+    Sengaja diekstrak jadi satu fungsi biar dua tempat itu gak pernah
+    ketinggalan sinkron (ini persis yang jadi bug sebelumnya — dedupe
+    reports_count_malicious udah ada, tapi dedupe poin belum)."""
+    conn = get_connection()
+    try:
+        row = conn.execute('''
+            SELECT id FROM threat_reports
+            WHERE email = ? AND target = ? AND verdict IN ('malicious', 'suspicious')
+            LIMIT 1
+        ''', (email, target)).fetchone()
+        return row is not None
+    finally:
+        conn.close()
+
+
+def award_points_for_report(telegram_chat_id: str, target: str = None, points: int = POINTS_CONFIRMED_REPORT):
     """Beri poin ke user yang melaporkan threat terkonfirmasi berbahaya
     lewat Flow B (Telegram Bot). Reporter Flow B diidentifikasi lewat
     telegram_chat_id (BUKAN email — Telegram tidak mengirim email),
     jadi kita resolve chat_id -> email lewat mapping yang sudah dibuat
     saat OTP registration (lihat update_user_telegram_chat_id).
 
-    Return None kalau chat_id belum terdaftar/di-link ke email manapun
-    (misal reporter belum pernah verifikasi OTP) — caller (route
-    /api/incidents) harus toleran terhadap ini, karena laporan ancaman
-    TETAP harus diproses walau reporter belum ke-link, hanya saja tidak
-    dapat poin."""
+    Return None kalau:
+    - chat_id belum terdaftar/di-link ke email manapun (misal reporter
+      belum pernah verifikasi OTP) — caller (route /api/incidents) harus
+      toleran terhadap ini, karena laporan ancaman TETAP harus diproses
+      walau reporter belum ke-link, hanya saja tidak dapat poin.
+    - target ini SUDAH PERNAH dilaporkan sebelumnya oleh email yang sama
+      (dedupe) — mencegah user farming poin dengan spam lapor URL/file
+      yang SAMA berkali-kali. User LAIN yang lapor target yang sama tetap
+      dapat poin normal, karena dedupe di-scope per (email, target)."""
     if not telegram_chat_id:
         return None
 
@@ -640,6 +667,9 @@ def award_points_for_report(telegram_chat_id: str, points: int = POINTS_CONFIRME
         ).fetchone()
 
         if row is None:
+            return None
+
+        if target and is_target_already_reported(row["email"], target):
             return None
 
         return adjust_points(row["email"], row["divisi"] or "Unknown", points)
@@ -725,13 +755,8 @@ def create_threat_report(email: str, telegram_user_id: str, type_: str, target: 
             raise ValueError(f"Employee {email} tidak ditemukan")
         
         # 2. Cek dedupe: apakah (email, target) sudah pernah dilaporkan dengan verdict malicious/suspicious?
-        dedupe_row = cursor.execute('''
-            SELECT id FROM threat_reports 
-            WHERE email = ? AND target = ? AND verdict IN ('malicious', 'suspicious')
-            LIMIT 1
-        ''', (email, target)).fetchone()
-        
-        is_duplicate = dedupe_row is not None
+        #    (pakai helper yang sama dengan award_points_for_report, biar dua-duanya selalu sinkron)
+        is_duplicate = is_target_already_reported(email, target)
         report_id = f"rpt_{uuid.uuid4().hex[:6]}"
         submitted_at_val = submitted_at or datetime.utcnow().isoformat()
         raw_scores_json = json.dumps(raw_scores) if raw_scores else None
