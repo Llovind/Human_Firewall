@@ -163,22 +163,47 @@ def import_site(url, include_resources=False):
     return _request('POST', '/api/import/site', payload)
 
 def sync_group(name, emails):
+    """Sinkronisasi group target GoPhish supaya isinya PERSIS sama dengan
+    `emails` yang diberikan — bukan cuma nambahin.
+
+    Kenapa loop delete, bukan cuma 1x + break: kalau karena sebab apapun
+    ada lebih dari 1 group nyangkut dengan nama yang sama (misal delete
+    gagal di percobaan sebelumnya), sisa yang gak ke-hapus bikin GoPhish
+    resolve ke group yang SALAH pas campaign di-launch (bisa jadi group
+    lama yang isinya target test sebelumnya, bukan target yang baru
+    dipilih admin). Makanya kita hapus SEMUA yang namanya cocok, bukan
+    cuma yang pertama ketemu.
+    """
     # GET /api/groups/ to find existing
     groups = _request('GET', '/api/groups/')
-    
-    # DELETE if exists
-    for group in groups:
+
+    # DELETE *semua* group dengan nama yang sama (bukan cuma yang pertama)
+    for group in groups or []:
         if group.get('name') == name:
-            _request('DELETE', f"/api/groups/{group.get('id')}/")
-            break
-            
+            # NOTE: endpoint resmi GoPhish adalah /api/groups/:id (TANPA
+            # trailing slash). Trailing slash bisa bikin request ini gak
+            # match route DELETE sama sekali di sisi GoPhish, jadi group
+            # lama gak beneran kehapus walau kelihatannya "jalan".
+            _request('DELETE', f"/api/groups/{group.get('id')}")
+
+    # Verifikasi bersih sebelum create baru — kalau masih ada sisa
+    # group dengan nama sama, POST create di bawah bakal ditolak GoPhish
+    # (nama group harus unik), jadi mending gagal eksplisit di sini
+    # daripada create silently pakai nama beda/gagal ambigu.
+    remaining = _request('GET', '/api/groups/')
+    if any(g.get('name') == name for g in (remaining or [])):
+        raise RuntimeError(
+            f"Gagal membersihkan group GoPhish lama bernama '{name}' "
+            f"sebelum sinkronisasi ulang — cek manual di GoPhish admin UI."
+        )
+
     # POST /api/groups/ to create new
     targets = [{"first_name": "", "last_name": "", "email": e, "position": ""} for e in emails]
     payload = {
         "name": name,
         "targets": targets
     }
-    
+
     return _request('POST', '/api/groups/', payload)
 
 def launch_campaign(name, template_id, url, page_id, smtp_id, group_name):
