@@ -148,7 +148,10 @@ export default function SOCAdminDashboard() {
   const [selectedEmail, setSelectedEmail] = useState<MockEmail | null>(null);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
   const [isLaunchModalOpen, setIsLaunchModalOpen] = useState(false);
+  const [selectedCampaignDetail, setSelectedCampaignDetail] = useState<any | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [resources, setResources] = useState<GoPhishResource | null>(null);
+  const [incidentPage, setIncidentPage] = useState(1);
 
   // ── Employees & Divisions State ───
   const [employees, setEmployees] = useState<any[]>([]);
@@ -356,6 +359,22 @@ export default function SOCAdminDashboard() {
     }
   };
 
+  const handleViewCampaignDetail = async (campaignId: number) => {
+    try {
+      const res = await fetch(`/api/admin/gophish/campaigns/${campaignId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedCampaignDetail(data);
+        setIsDetailModalOpen(true);
+      } else {
+        alert('Gagal memuat detail kampanye.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Gagal memuat detail kampanye.');
+    }
+  };
+
   const loadEmails = async () => {
     try {
       const res = await fetch('/api/admin/emails');
@@ -404,6 +423,7 @@ export default function SOCAdminDashboard() {
       loadEmployees();
       loadDivisions();
       loadGoPhishCampaigns();
+      loadGoPhishResources();
     } else if (activeTab === 'webmail') {
       loadEmails();
     } else if (activeTab === 'threats') {
@@ -415,7 +435,10 @@ export default function SOCAdminDashboard() {
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (activeTab === 'gophish') {
-      interval = setInterval(loadGoPhishCampaigns, 10000);
+      interval = setInterval(() => {
+        loadGoPhishCampaigns();
+        loadGoPhishResources();
+      }, 10000);
     } else if (activeTab === 'webmail') {
       interval = setInterval(loadEmails, 10000);
     } else if (activeTab === 'threats') {
@@ -435,10 +458,20 @@ export default function SOCAdminDashboard() {
     if (selectedEmails.length === 0) {
       if (!confirm("Tidak ada karyawan terpilih. Sinkronisasi SEMUA karyawan aktif ke GoPhish group 'HFL_Target_Group'?")) return;
       try {
-        const res = await fetch('/api/admin/gophish/sync', { method: 'POST' });
+        // Auto-collect all active employee emails when none are manually selected
+        const allActiveEmails = employees.filter((e: any) => e.is_active === 1 || e.is_active === true).map((e: any) => e.email);
+        if (allActiveEmails.length === 0) {
+          alert('Tidak ada karyawan aktif ditemukan.');
+          return;
+        }
+        const res = await fetch('/api/admin/gophish/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ emails: allActiveEmails })
+        });
         const data = await res.json();
         if (res.ok) {
-          alert(`Sukses! ${data.message || 'Semua karyawan aktif disinkronisasi.'}`);
+          alert(`Sukses! ${allActiveEmails.length} karyawan aktif disinkronisasi.`);
         } else {
           alert(`Gagal: ${data.error}`);
         }
@@ -674,12 +707,13 @@ export default function SOCAdminDashboard() {
       const res = await fetch('/api/incident', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, status: 'resolved' })
+        body: JSON.stringify({ id, status: 'closed' })
       });
       if (res.ok) {
         setSelectedIncident(null);
       } else {
-        alert('Gagal mengupdate status insiden');
+        const errData = await res.json().catch(() => null);
+        alert(`Gagal mengupdate status insiden: ${errData?.error || res.statusText}`);
       }
     } catch (err) {
       console.error(err);
@@ -691,7 +725,7 @@ export default function SOCAdminDashboard() {
   if (authLoading) {
     return (
       <div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <Logo size={52} variant="mark" />
+        <Logo size={52} variant="mark" logoAnimation="loading" />
         <p>Memuat Command Center...</p>
       </div>
     );
@@ -705,7 +739,15 @@ export default function SOCAdminDashboard() {
   }
 
   const stats = incidentData?.stats;
-  const incidents = incidentData?.incidents || [];
+  const allIncidents = incidentData?.incidents || [];
+  // Filter out closed/resolved incidents so they disappear from the dashboard
+  const incidents = allIncidents.filter((inc: Incident) => inc.status !== 'closed');
+  
+  // Pagination logic for incidents
+  const INCIDENTS_PER_PAGE = 8;
+  const incidentTotalPages = Math.max(1, Math.ceil(incidents.length / INCIDENTS_PER_PAGE));
+  const paginatedIncidents = incidents.slice((incidentPage - 1) * INCIDENTS_PER_PAGE, incidentPage * INCIDENTS_PER_PAGE);
+
   const cache = cacheData?.cache || [];
   const summaries = summaryData?.summaries || [];
   const scores = behaviorData?.scores || [];
@@ -923,14 +965,14 @@ export default function SOCAdminDashboard() {
               </div>
 
               {/* Recent Incidents */}
-              <div className={`panel glass-card fade-up-2 ${incidentUpdated ? 'value-flash' : ''}`} style={{ marginBottom: 0 }}>
+              <div className={`panel glass-card fade-up-2 ${incidentUpdated ? 'value-flash' : ''}`} style={{ marginBottom: 0, display: 'flex', flexDirection: 'column' }}>
                 <div className="panel-header">
                   <h2 className="panel-title"><AlertTriangle size={20} style={{ marginRight: "8px", verticalAlign: "text-bottom" }} /> Insiden Terbaru</h2>
                   <span className="panel-count">{incidents.length} total</span>
                 </div>
-                <div className="incident-list">
+                <div className="incident-list" style={{ flex: 1 }}>
                   {incidents.length > 0 ? (
-                    incidents.slice(0, 5).map(inc => (
+                    paginatedIncidents.map(inc => (
                       <div key={inc.id} className="incident-row" onClick={() => setSelectedIncident(inc)} style={{ cursor: 'pointer' }}>
                         <div className="incident-icon">{typeIcon[inc.type] || <FileWarning size={16} />}</div>
                         <div className="incident-info">
@@ -954,6 +996,28 @@ export default function SOCAdminDashboard() {
                     </div>
                   )}
                 </div>
+                {/* Pagination Controls */}
+                {incidents.length > INCIDENTS_PER_PAGE && (
+                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
+                    <button 
+                      onClick={() => setIncidentPage(p => Math.max(1, p - 1))}
+                      disabled={incidentPage === 1}
+                      style={{ background: 'none', border: 'none', color: incidentPage === 1 ? 'var(--text-muted)' : 'var(--text-primary)', cursor: incidentPage === 1 ? 'default' : 'pointer', fontWeight: 600, padding: '4px 8px' }}
+                    >
+                      &laquo; Prev
+                    </button>
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                      Page {incidentPage} of {incidentTotalPages}
+                    </span>
+                    <button 
+                      onClick={() => setIncidentPage(p => Math.min(incidentTotalPages, p + 1))}
+                      disabled={incidentPage === incidentTotalPages}
+                      style={{ background: 'none', border: 'none', color: incidentPage === incidentTotalPages ? 'var(--text-muted)' : 'var(--text-primary)', cursor: incidentPage === incidentTotalPages ? 'default' : 'pointer', fontWeight: 600, padding: '4px 8px' }}
+                    >
+                      Next &raquo;
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1273,7 +1337,7 @@ export default function SOCAdminDashboard() {
                         <h2 className="panel-title"><Trophy size={20} style={{ marginRight: "8px", verticalAlign: "text-bottom" }} /> Division Leaderboard</h2>
                         <span className="panel-count">{filteredDivisions.length} divisi</span>
                       </div>
-                      <div className="threat-table-wrap" style={{ height: '340px', overflowY: 'hidden', overflowX: 'auto' }}>
+                      <div className="threat-table-wrap" style={{ height: '420px', overflowY: 'auto', overflowX: 'auto' }}>
                         <table className="threat-table" style={{ width: '100%' }}>
                           <thead>
                             <tr>
@@ -1284,8 +1348,8 @@ export default function SOCAdminDashboard() {
                             </tr>
                           </thead>
                           <tbody>
-                            {paginatedDivisions.map((row, idx) => {
-                              const actualRank = (activePage - 1) * itemsPerPage + idx + 1;
+                            {filteredDivisions.map((row, idx) => {
+                              const actualRank = idx + 1;
                               return (
                                 <tr key={idx}>
                                   <td className="mono" style={{ width: '15%', fontWeight: 600, textAlign: 'left', padding: '14px 10px' }}>#{actualRank}</td>
@@ -1299,77 +1363,6 @@ export default function SOCAdminDashboard() {
                         </table>
                       </div>
                     </div>
-
-                    {/* Pagination Controls */}
-                    {totalPages > 1 && (
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        gap: '6px',
-                        marginTop: '20px',
-                        paddingTop: '16px',
-                        borderTop: '1px solid var(--border)'
-                      }}>
-                        <button
-                          disabled={activePage === 1}
-                          onClick={() => setDivisionPage(activePage - 1)}
-                          style={{
-                            padding: '4px 10px',
-                            background: 'rgba(255,255,255,0.02)',
-                            border: '1px solid var(--border)',
-                            borderRadius: '4px',
-                            color: 'var(--text-primary)',
-                            fontSize: '11px',
-                            cursor: activePage === 1 ? 'not-allowed' : 'pointer',
-                            opacity: activePage === 1 ? 0.3 : 1
-                          }}
-                        >
-                          Sebelumnya
-                        </button>
-                        
-                        {Array.from({ length: totalPages }).map((_, i) => {
-                          const pageNum = i + 1;
-                          return (
-                            <button
-                              key={pageNum}
-                              onClick={() => setDivisionPage(pageNum)}
-                              style={{
-                                width: '28px',
-                                height: '28px',
-                                background: activePage === pageNum ? 'var(--accent-dim)' : 'transparent',
-                                border: activePage === pageNum ? '1px solid var(--accent)' : '1px solid var(--border)',
-                                borderRadius: '4px',
-                                color: activePage === pageNum ? 'white' : 'var(--text-secondary)',
-                                fontSize: '11px',
-                                fontWeight: activePage === pageNum ? 700 : 500,
-                                cursor: 'pointer',
-                                boxShadow: activePage === pageNum ? '0 0 8px var(--accent)30' : 'none'
-                              }}
-                            >
-                              {pageNum}
-                            </button>
-                          );
-                        })}
-
-                        <button
-                          disabled={activePage === totalPages}
-                          onClick={() => setDivisionPage(activePage + 1)}
-                          style={{
-                            padding: '4px 10px',
-                            background: 'rgba(255,255,255,0.02)',
-                            border: '1px solid var(--border)',
-                            borderRadius: '4px',
-                            color: 'var(--text-primary)',
-                            fontSize: '11px',
-                            cursor: activePage === totalPages ? 'not-allowed' : 'pointer',
-                            opacity: activePage === totalPages ? 0.3 : 1
-                          }}
-                        >
-                          Selanjutnya
-                        </button>
-                      </div>
-                    )}
                   </div>
                 );
               })()}
@@ -1402,7 +1395,7 @@ export default function SOCAdminDashboard() {
                         <h2 className="panel-title"><Users size={20} style={{ marginRight: "8px", verticalAlign: "text-bottom" }} /> Individual Security Leaderboard</h2>
                         <span className="panel-count">{filteredIndividual.length} total</span>
                       </div>
-                      <div className="threat-table-wrap" style={{ height: '340px', overflowY: 'hidden', overflowX: 'auto' }}>
+                      <div className="threat-table-wrap" style={{ height: '420px', overflowY: 'auto', overflowX: 'auto' }}>
                         <table className="threat-table" style={{ width: '100%' }}>
                           <thead>
                             <tr>
@@ -1415,7 +1408,7 @@ export default function SOCAdminDashboard() {
                             </tr>
                           </thead>
                           <tbody>
-                            {paginatedIndividual.map((row, idx) => (
+                            {filteredIndividual.map((row, idx) => (
                               <tr key={idx}>
                                 <td className="mono" style={{ fontWeight: 600, padding: '14px 10px' }}>#{row.rank}</td>
                                 <td className="mono" style={{ fontSize: '12px', padding: '14px 10px' }}>{row.email}</td>
@@ -1433,77 +1426,6 @@ export default function SOCAdminDashboard() {
                         </table>
                       </div>
                     </div>
-
-                    {/* Pagination Controls */}
-                    {totalPages > 1 && (
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        gap: '6px',
-                        marginTop: '20px',
-                        paddingTop: '16px',
-                        borderTop: '1px solid var(--border)'
-                      }}>
-                        <button
-                          disabled={activePage === 1}
-                          onClick={() => setLeaderboardPage(activePage - 1)}
-                          style={{
-                            padding: '4px 10px',
-                            background: 'rgba(255,255,255,0.02)',
-                            border: '1px solid var(--border)',
-                            borderRadius: '4px',
-                            color: 'var(--text-primary)',
-                            fontSize: '11px',
-                            cursor: activePage === 1 ? 'not-allowed' : 'pointer',
-                            opacity: activePage === 1 ? 0.3 : 1
-                          }}
-                        >
-                          Sebelumnya
-                        </button>
-                        
-                        {Array.from({ length: totalPages }).map((_, i) => {
-                          const pageNum = i + 1;
-                          return (
-                            <button
-                              key={pageNum}
-                              onClick={() => setLeaderboardPage(pageNum)}
-                              style={{
-                                width: '28px',
-                                height: '28px',
-                                background: activePage === pageNum ? 'var(--accent-dim)' : 'transparent',
-                                border: activePage === pageNum ? '1px solid var(--accent)' : '1px solid var(--border)',
-                                borderRadius: '4px',
-                                color: activePage === pageNum ? 'white' : 'var(--text-secondary)',
-                                fontSize: '11px',
-                                fontWeight: activePage === pageNum ? 700 : 500,
-                                cursor: 'pointer',
-                                boxShadow: activePage === pageNum ? '0 0 8px var(--accent)30' : 'none'
-                              }}
-                            >
-                              {pageNum}
-                            </button>
-                          );
-                        })}
-
-                        <button
-                          disabled={activePage === totalPages}
-                          onClick={() => setLeaderboardPage(activePage + 1)}
-                          style={{
-                            padding: '4px 10px',
-                            background: 'rgba(255,255,255,0.02)',
-                            border: '1px solid var(--border)',
-                            borderRadius: '4px',
-                            color: 'var(--text-primary)',
-                            fontSize: '11px',
-                            cursor: activePage === totalPages ? 'not-allowed' : 'pointer',
-                            opacity: activePage === totalPages ? 0.3 : 1
-                          }}
-                        >
-                          Selanjutnya
-                        </button>
-                      </div>
-                    )}
                   </div>
                 );
               })()}
@@ -1572,7 +1494,8 @@ export default function SOCAdminDashboard() {
 
         {/* ── GOPHISH TAB (Command Center) ───────────────── */}
         {activeTab === 'gophish' && (
-          <div className="panel glass-card fade-up" style={{ marginBottom: '48px' }}>
+          <>
+            <div className="panel glass-card fade-up" style={{ marginBottom: '0' }}>
             <div className="panel-header">
               <div>
                 <h2 className="panel-title"><Fish size={20} style={{ marginRight: "8px", verticalAlign: "text-bottom" }} /> GoPhish Command Center</h2>
@@ -1637,7 +1560,7 @@ export default function SOCAdminDashboard() {
                         alignItems: 'center',
                         gap: '8px',
                         padding: '8px 10px',
-                        background: isChecked ? 'rgba(111, 217, 168, 0.05)' : 'rgba(255,255,255,0.01)',
+                        background: isChecked ? 'rgba(59, 130, 246, 0.08)' : 'rgba(255,255,255,0.01)',
                         border: isChecked ? '1px solid var(--accent)' : '1px solid var(--border)',
                         borderRadius: '4px',
                         cursor: 'pointer',
@@ -1711,7 +1634,15 @@ export default function SOCAdminDashboard() {
                     campaigns.map(c => (
                       <tr key={c.id}>
                         <td>#{c.id}</td>
-                        <td style={{ fontWeight: 600 }}>{c.name}</td>
+                        <td style={{ fontWeight: 600 }}>
+                          <span 
+                            onClick={() => handleViewCampaignDetail(c.id)} 
+                            style={{ cursor: 'pointer', textDecoration: 'underline', color: 'var(--accent)' }}
+                            title="Klik untuk lihat detail"
+                          >
+                            {c.name}
+                          </span>
+                        </td>
                         <td>
                           <span className={`badge ${c.status === 'In Progress' ? 'badge-warning' : 'badge-allow'}`}>
                             {c.status}
@@ -1722,6 +1653,13 @@ export default function SOCAdminDashboard() {
                         <td style={{ color: 'var(--danger)', fontWeight: 'bold', textAlign: 'center' }}>{c.stats?.clicked ?? 0}</td>
                         <td style={{ color: 'var(--danger)', fontWeight: 'bold', textAlign: 'center' }}>{c.stats?.submitted_data ?? 0}</td>
                         <td style={{ textAlign: 'center' }}>
+                          <button
+                            onClick={() => handleViewCampaignDetail(c.id)}
+                            title="Detail kampanye"
+                            style={{ padding: '6px', background: 'transparent', border: '1px solid var(--accent)', borderRadius: '6px', cursor: 'pointer', color: 'var(--accent)', marginRight: '6px' }}
+                          >
+                            <Eye size={14} />
+                          </button>
                           <button
                             onClick={() => handleDeleteCampaign(c.id, c.name)}
                             title="Hapus kampanye"
@@ -1736,12 +1674,13 @@ export default function SOCAdminDashboard() {
                 </tbody>
               </table>
             </div>
+          </div>
 
-            {/* ── Koleksi Phishing Sendiri (Template & Landing Page) ── */}
-            <div className="panel fade-up" style={{ marginTop: '24px' }}>
-              <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                <div>
-                  <h2 className="panel-title"><Pencil size={20} style={{ marginRight: '8px', verticalAlign: 'text-bottom' }} /> Koleksi Phishing Saya</h2>
+          {/* ── Koleksi Phishing Sendiri (Template & Landing Page) ── */}
+          <div className="panel glass-card fade-up" style={{ marginTop: '24px', marginBottom: '48px' }}>
+            <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <h2 className="panel-title"><Pencil size={20} style={{ marginRight: '8px', verticalAlign: 'text-bottom' }} /> Koleksi Phishing Saya</h2>
                   <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
                     Bikin email template & landing page sendiri langsung dari sini — gak perlu buka GoPhish.
                   </p>
@@ -1830,7 +1769,7 @@ export default function SOCAdminDashboard() {
                 </div>
               </div>
             </div>
-          </div>
+          </>
         )}
         {activeTab === 'webmail' && (
           <div className="webmail-panel fade-up" style={{ marginBottom: '48px' }}>
@@ -2117,6 +2056,95 @@ export default function SOCAdminDashboard() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Dialog Campaign Detail ── */}
+      {isDetailModalOpen && selectedCampaignDetail && (
+        <div className="dialog-overlay">
+          <div className="dialog-box fade-up" style={{ maxWidth: '850px', width: '90vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Eye size={20} /> Detail Kampanye: {selectedCampaignDetail.name}
+              </h3>
+              <button onClick={() => setIsDetailModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '20px' }}>
+              <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+                <div style={{ fontSize: '20px', fontWeight: 700, color: 'white' }}>{selectedCampaignDetail.stats?.sent ?? 0}</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Terkirim</div>
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+                <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--warning)' }}>{selectedCampaignDetail.stats?.opened ?? 0}</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Dibuka</div>
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+                <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--danger)' }}>{selectedCampaignDetail.stats?.clicked ?? 0}</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Diklik</div>
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+                <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--danger)' }}>{selectedCampaignDetail.stats?.submitted_data ?? 0}</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Leaks Kredensial</div>
+              </div>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', marginBottom: '16px' }} className="threat-table-wrap">
+              <table className="threat-table" style={{ width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'left' }}>Email Target</th>
+                    <th style={{ textAlign: 'left' }}>Divisi</th>
+                    <th style={{ textAlign: 'center' }}>Status</th>
+                    <th style={{ textAlign: 'right' }}>Waktu Aktivitas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(!selectedCampaignDetail.results || selectedCampaignDetail.results.length === 0) ? (
+                    <tr>
+                      <td colSpan={4} style={{ textAlign: 'center', padding: '16px', color: 'var(--text-muted)' }}>
+                        Belum ada data aktivitas target.
+                      </td>
+                    </tr>
+                  ) : (
+                    selectedCampaignDetail.results.map((r: any, idx: number) => {
+                      let badgeClass = 'badge-allow';
+                      if (r.status === 'Submitted Data') badgeClass = 'badge-danger';
+                      else if (r.status === 'Clicked Link') badgeClass = 'badge-critical';
+                      else if (r.status === 'Email Opened') badgeClass = 'badge-warning';
+                      else if (r.status === 'Email Sent') badgeClass = 'badge-allow';
+                      
+                      return (
+                        <tr key={idx}>
+                          <td className="mono" style={{ fontSize: '12px' }}>{r.email}</td>
+                          <td>{r.position || '—'}</td>
+                          <td style={{ textAlign: 'center' }}>
+                            <span className={`badge ${badgeClass}`}>
+                              {r.status}
+                            </span>
+                          </td>
+                          <td className="mono" style={{ textAlign: 'right', fontSize: '11px' }}>
+                            {r.modified_date ? new Date(r.modified_date).toLocaleString('id-ID') : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border)', paddingTop: '12px' }}>
+              <button
+                onClick={() => setIsDetailModalOpen(false)}
+                style={{ padding: '8px 24px', background: 'var(--accent)', border: 'none', color: 'white', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+              >
+                Tutup
+              </button>
+            </div>
           </div>
         </div>
       )}

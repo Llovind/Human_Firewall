@@ -1,6 +1,6 @@
 /* ══════════════════════════════════════════════════════════════
    Human Firewall — Global Design System
-   Premium Dark/Neon Cybersecurity Theme
+   Clean Enterprise Security Theme  (Navy-Blue · Wazuh-inspired)
    ══════════════════════════════════════════════════════════════ */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
@@ -14,23 +14,28 @@
 
 /* ── Design Tokens ─────────────────────────────────────────── */
 :root {
-  /* Background layers (brushed slate) */
-  --bg-deep:      #0a120f;
-  --bg-base:      #101a16;
-  --bg-surface:   #16221d;
-  --bg-elevated:  #1c2b24;
-  --bg-hover:     #25362e;
+  /* Background layers (deep slate navy) */
+  --bg-deep:      #080d19;
+  --bg-base:      #0e1525;
+  --bg-surface:   #151e30;
+  --bg-elevated:  #1b2540;
+  --bg-hover:     #22304d;
 
-  /* Tactical Borders */
-  --border:       rgba(111, 217, 168, 0.15);
-  --border-hover: rgba(111, 217, 168, 0.35);
-  --border-active:rgba(111, 217, 168, 0.55);
+  /* Borders (subtle blue-grey) */
+  --border:       rgba(148, 163, 184, 0.12);
+  --border-hover: rgba(148, 163, 184, 0.25);
+  --border-active:rgba(59, 130, 246, 0.50);
 
-  /* Tactical Phosphor Accent */
-  --accent:       #6fd9a8;
-  --accent-dim:   #4fae82;
-  --accent-bright:#8ce8bb;
-  --accent-glow:  rgba(111, 217, 168, 0.20);
+  /* Primary Accent (from logo palette) */
+  --accent:       #3b82f6;
+  --accent-dim:   #2563eb;
+  --accent-bright:#60a5fa;
+  --accent-glow:  rgba(59, 130, 246, 0.12);
+
+  /* Logo brand palette (fixed — matches triskelion mark) */
+  --logo-navy:      #17284d;
+  --logo-blue:      #2f6fed;
+  --logo-lightblue: #8ab4f8;
 
   /* Semantic colors */
   --success:      #10b981;
@@ -103,9 +108,9 @@
   --shadow-sm:  0 2px 8px rgba(0, 0, 0, 0.4);
   --shadow-md:  0 4px 16px rgba(0, 0, 0, 0.5);
   --shadow-lg:  0 8px 40px rgba(0, 0, 0, 0.6);
-  --shadow-glow-accent: 0 0 15px var(--accent-glow);
-  --shadow-glow-success: 0 0 15px var(--success-glow);
-  --shadow-glow-danger: 0 0 15px var(--danger-glow);
+  --shadow-glow-accent: 0 0 12px var(--accent-glow);
+  --shadow-glow-success: 0 0 12px var(--success-glow);
+  --shadow-glow-danger: 0 0 12px var(--danger-glow);
 }
 
 /* ── Base ──────────────────────────────────────────────────── */
@@ -129,16 +134,13 @@ h1, h2, h3, h4, h5, h6 {
   letter-spacing: -0.5px;
 }
 
-/* ── Tactical Coordinate Grid Background ──────────────────── */
+/* ── Clean Background (no cyber grid) ─────────────────────── */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: 0;
-  background-image: 
-    linear-gradient(rgba(111, 217, 168, 0.015) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(111, 217, 168, 0.015) 1px, transparent 1px);
-  background-size: 50px 50px;
+  background: radial-gradient(ellipse at 50% 0%, rgba(59, 130, 246, 0.04) 0%, transparent 60%);
   pointer-events: none;
 }
 
@@ -155,11 +157,11 @@ body::before {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(111, 217, 168, 0.2);
+  background: rgba(148, 163, 184, 0.18);
   border-radius: var(--radius-full);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(111, 217, 168, 0.4);
+  background: rgba(148, 163, 184, 0.35);
 }
 
 /* ── Keyframe Animations ──────────────────────────────────── */
@@ -219,11 +221,9 @@ body::before {
 
 /* ── Tactical Console Card Base ────────────────────────────── */
 .glass-card {
-  background: rgba(25, 31, 46, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: var(--bg-surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   position: relative;
   overflow: hidden;
   transition: border-color var(--transition-base),
@@ -233,7 +233,7 @@ body::before {
 
 .glass-card:hover {
   border-color: var(--border-hover);
-  box-shadow: var(--shadow-glow-accent);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.25);
 }
 
 
@@ -325,7 +325,7 @@ body::before {
 
 /* ── Selection ─────────────────────────────────────────────── */
 ::selection {
-  background: rgba(111, 217, 168, 0.3);
+  background: rgba(59, 130, 246, 0.3);
   color: var(--text-primary);
 }
 
@@ -341,16 +341,9 @@ a {
   text-decoration: none;
 }
 
-/* ── Logo Animation ───────────────────────────────────────── */
+/* ── Logo Animation (Triskelion) ──────────────────────────── */
 @keyframes drawStroke {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-@keyframes pulseOpacity {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 1; }
+  to { stroke-dashoffset: 0; }
 }
 
 @keyframes popNode {
@@ -358,55 +351,65 @@ a {
   100% { transform: scale(1); opacity: 1; }
 }
 
-.logo-shield {
-  stroke-dasharray: 400;
-  stroke-dashoffset: 400;
-  animation: drawStroke 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+@keyframes pulseOpacity {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
 }
 
-.logo-circuit {
-  stroke-dasharray: 100;
-  stroke-dashoffset: 100;
+@keyframes shieldFadeIn {
+  0% { opacity: 0; transform: scale(0.7); }
+  100% { opacity: 1; transform: scale(1); }
 }
 
-.logo-circuit-1 {
-  animation: drawStroke 1s cubic-bezier(0.4, 0, 0.2, 1) 0.5s forwards;
+@keyframes spinGlobe {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
-.logo-circuit-2 {
-  animation: drawStroke 1s cubic-bezier(0.4, 0, 0.2, 1) 0.8s forwards;
+.logo-arm-path {
+  stroke-dasharray: 90;
+  stroke-dashoffset: 90;
+  animation: drawStroke 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-.logo-circuit-3 {
-  animation: drawStroke 1s cubic-bezier(0.4, 0, 0.2, 1) 1s forwards;
-}
-
-.logo-node {
+.logo-arm-node {
   transform-origin: center;
+  transform-box: fill-box;
   animation: popNode 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
-.logo-node-1 { animation-delay: 0.4s; }
-.logo-node-2 { animation-delay: 1.5s; }
-.logo-node-3 { animation-delay: 1.8s; }
-.logo-node-4 { animation-delay: 2s; }
+.logo-arm-1 .logo-arm-path { stroke: var(--logo-navy);     animation-delay: 0s; }
+.logo-arm-1 .logo-arm-node { fill: var(--logo-navy);       animation-delay: 0.6s; }
 
-.logo-container:hover .logo-node {
+.logo-arm-2 .logo-arm-path { stroke: var(--logo-blue);     animation-delay: 0.2s; }
+.logo-arm-2 .logo-arm-node { fill: var(--logo-blue);       animation-delay: 0.8s; }
+
+.logo-arm-3 .logo-arm-path { stroke: var(--logo-lightblue); animation-delay: 0.4s; }
+.logo-arm-3 .logo-arm-node { fill: var(--logo-lightblue);   animation-delay: 1s; }
+
+.logo-shield-group {
+  transform-origin: 50px 50px;
+  animation: shieldFadeIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 1.1s both;
+}
+
+.logo-globe {
+  transform-origin: 50px 54px;
+  animation: spinGlobe 12s linear infinite;
+}
+
+.logo-container:hover .logo-arm-node {
   animation: pulseOpacity 1s ease-in-out infinite;
 }
 
-/* ── HUD micro-details on glass cards ────────────────────── */
+.logo-container:hover .logo-globe {
+  animation-duration: 3s;
+}
+
+/* ── Panel micro-details (clean enterprise) ──────────────── */
 .panel::after,
 .stat-card::after {
-  content: 'SEC-HUD // CLS-A';
-  position: absolute;
-  bottom: 8px;
-  right: 12px;
-  font-family: var(--font-mono);
-  font-size: 8px;
-  color: rgba(245, 158, 11, 0.15);
-  letter-spacing: 1px;
-  pointer-events: none;
+  content: '';
+  display: none;
 }
 
 

@@ -21,8 +21,8 @@ export default function SidebarNav({ activeTab, onTabChange }: SidebarNavProps) 
   return (
     <aside className="sidebar-nav" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', paddingTop: '8px' }}>
       <div className="radar-sweep-bg" />
-      <div className="sidebar-nav-logo" style={{ marginBottom: '14px', display: 'flex', justifyContent: 'center' }}>
-        <Logo variant="mark" size={36} />
+      <div className="sidebar-nav-logo" style={{ marginBottom: '20px', display: 'flex', justifyContent: 'center' }}>
+        <Logo variant="mark" size={54} />
       </div>
       <nav className="sidebar-menu" style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 'none' }}>
         {tabs.map(tab => (

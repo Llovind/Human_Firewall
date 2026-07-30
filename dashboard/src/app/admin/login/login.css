@@ -3,10 +3,10 @@
   --bg-base: #0b1120;
   --bg-surface: #111a2e;
   --bg-elevated: #162036;
-  --border: rgba(111, 217, 168, 0.15);
-  --border-hover: rgba(111, 217, 168, 0.35);
-  --accent: #6fd9a8;
-  --accent-dim: #4fae82;
+  --border: rgba(148, 163, 184, 0.12);
+  --border-hover: rgba(59, 130, 246, 0.25);
+  --accent: #3b82f6;
+  --accent-dim: #2563eb;
   --text-primary: #f1f5f9;
   --text-secondary: #94a3b8;
   --text-muted: #475569;
@@ -64,7 +64,7 @@
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
   border-radius: 16px;
-  background: linear-gradient(135deg, rgba(111, 217, 168, 0.05), transparent);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), transparent);
   pointer-events: none;
   z-index: -1;
 }
@@ -72,8 +72,8 @@
 .admin-login-logo {
   width: 64px;
   height: 64px;
-  background: rgba(111, 217, 168, 0.1);
-  border: 1px solid rgba(111, 217, 168, 0.2);
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.2);
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
@@ -150,7 +150,7 @@
 
 .admin-form-group input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 12px rgba(111, 217, 168, 0.15);
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.15);
 }
 
 .admin-submit-btn {
@@ -164,12 +164,12 @@
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
-  box-shadow: 0 4px 12px rgba(111, 217, 168, 0.3);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
 }
 
 .admin-submit-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(111, 217, 168, 0.4);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.3);
 }
 
 .admin-submit-btn:disabled {

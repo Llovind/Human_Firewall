@@ -1,5 +1,5 @@
 {
-  "name": "Flow B \u2014 Threat Reporting (Fully Configured) THREAT INTELLIGENCE",
+  "name": "Flow B — Threat Reporting (Fully Configured) THREAT INTELLIGENCE",
   "nodes": [
     {
       "parameters": {
@@ -210,9 +210,10 @@
     {
       "parameters": {
         "chatId": "={{$env.SOC_CHAT_ID}}",
-        "text": "={{ $('Threat Intelligence API').item.json.analysis.providers.includes('Infranexia Phishing Simulator') ? '\ud83d\udd14 [SOC ALERT] \u2014 LAPORAN SIMULASI\\n\\n\ud83d\udccb ' + $json.ticket_id + '\\n\ud83d\udd17 ' + $('Threat Intelligence API').item.json.reported_url + '\\n\ud83d\udc64 Pelapor: ' + $('Telegram Trigger').item.json.message.from.first_name + ' (Berhasil dideteksi - Poin diberikan!)' : '\ud83d\udd14 [SOC ALERT] \u2014 LAPORAN ANCAMAN URL\\n\\n\ud83d\udccb ' + $json.ticket_id + '\\n\ud83d\udd17 ' + $('Threat Intelligence API').item.json.reported_url + '\\n\u26a0\ufe0f Severity: ' + $('Threat Intelligence API').item.json.policy.severity + '\\n\ud83d\udee1\ufe0f VT/URLScan: ' + $('Threat Intelligence API').item.json.policy.verdict + '\\n\ud83d\udcdd Alasan: ' + $('Threat Intelligence API').item.json.policy.reason + '\\n\ud83d\udc64 Pelapor: ' + $('Telegram Trigger').item.json.message.from.first_name }}",
+        "text": "={{ $('Threat Intelligence API').item.json.analysis.providers.includes('Infranexia Phishing Simulator') ? '🔔 [SOC ALERT] — LAPORAN SIMULASI\\n\\n📋 ' + $json.ticket_id + '\\n🔗 ' + $('Threat Intelligence API').item.json.reported_url + '\\n👤 Pelapor: ' + $('Telegram Trigger').item.json.message.from.first_name + ' (Berhasil dideteksi - Poin diberikan!)' : '🔔 [SOC ALERT] — LAPORAN ANCAMAN URL\\n\\n📋 ' + $json.ticket_id + '\\n🔗 ' + $('Threat Intelligence API').item.json.reported_url + '\\n⚠️ Severity: ' + $('Threat Intelligence API').item.json.policy.severity + '\\n🛡️ VT/URLScan: ' + $('Threat Intelligence API').item.json.policy.verdict + '\\n📝 Alasan: ' + $('Threat Intelligence API').item.json.policy.reason + '\\n👤 Pelapor: ' + $('Telegram Trigger').item.json.message.from.first_name }}",
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "HTML"
         }
       },
       "id": "a3f7e21d-5fdc-46eb-8ab1-135dd66777a8",
@@ -234,9 +235,10 @@
     {
       "parameters": {
         "chatId": "={{ $('Threat Intelligence API').item.json.chat_id }}",
-        "text": "={{ $('Threat Intelligence API').item.json.analysis.providers.includes('Infranexia Phishing Simulator') ? '\ud83c\udf89 Wah keren! Anda berhasil mendeteksi dan melaporkan link simulasi phishing dari Tim Security IR.\\n\\nPoin reputasi Anda telah ditambahkan! Tetap waspada! \ud83d\udee1\ufe0f' : '\u26a0\ufe0f [USER NOTIFICATION] URL yang Anda laporkan terdeteksi BERBAHAYA.\\n\\n\ud83d\udd17 ' + $('Threat Intelligence API').item.json.reported_url + '\\n\u26a0\ufe0f Severity: ' + $('Threat Intelligence API').item.json.policy.severity + '\\n\ud83d\udee1\ufe0f Status: ' + $('Threat Intelligence API').item.json.policy.verdict + '\\n\\nTiket insiden sudah dibuat dan tim SOC telah diberitahu.\\nTerima kasih atas laporan Anda! \ud83d\ude4f' }}",
+        "text": "={{ $('Threat Intelligence API').item.json.analysis.providers.includes('Infranexia Phishing Simulator') ? '🎉 Wah keren! Anda berhasil mendeteksi dan melaporkan link simulasi phishing dari Tim Security IR.\\n\\nPoin reputasi Anda telah ditambahkan! Tetap waspada! 🛡️' : '⚠️ [USER NOTIFICATION] URL yang Anda laporkan terdeteksi BERBAHAYA.\\n\\n🔗 ' + $('Threat Intelligence API').item.json.reported_url + '\\n⚠️ Severity: ' + $('Threat Intelligence API').item.json.policy.severity + '\\n🛡️ Status: ' + $('Threat Intelligence API').item.json.policy.verdict + '\\n\\nTiket insiden sudah dibuat dan tim SOC telah diberitahu.\\nTerima kasih atas laporan Anda! 🙏' }}",
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "HTML"
         }
       },
       "id": "ee9e0e92-08db-4743-af4d-571a5b108514",
@@ -258,9 +260,10 @@
     {
       "parameters": {
         "chatId": "={{ $json.chat_id }}",
-        "text": "=\u2705 URL yang Anda laporkan tampak AMAN.\n\n\ud83d\udd17 {{ $json.indicator }}\n\ud83d\udee1\ufe0f VT: {{ $json.u}}\n\ud83c\udf10 urlscan: {{ $json.urlscan_verdict }}\n\n\nTolak indikasi ancaman. Silakan buka dengan aman. \ud83d\udc4d",
+        "text": "=✅ URL yang Anda laporkan tampak AMAN.\n\n🔗 {{ $json.indicator }}\n🛡️ VT: {{ $json.u}}\n🌐 urlscan: {{ $json.urlscan_verdict }}\n\n\nTolak indikasi ancaman. Silakan buka dengan aman. 👍",
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "HTML"
         }
       },
       "id": "9903dc0f-df33-499d-a11f-74647c55717d",
@@ -295,8 +298,15 @@
     },
     {
       "parameters": {
-        "url": "=https://api.telegram.org/file/bot8771953552:AAEV6BLdhjLp0IBXunrQ5k_4FHh9WwXuSCU/{{ $json.result.file_path }}",
-        "options": {}
+        "url": "=https://api.telegram.org/file/bot8771953552:AAEV6BLdhjLp0IBXunrQ5k_4FHh9WwXuSCU/{{ $('Get TG File Path').item.json.result.file_path }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
       },
       "id": "fa44e67b-1551-4608-8554-5d11a6495645",
       "name": "Download File",
@@ -383,7 +393,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const vtResult = $('VT Get File Result').item.json;\nconst origInput = $('Parse Input').item.json;\n\nconst vtMalicious = vtResult.data?.attributes?.stats?.malicious || 0;\nconst vtTotal = Object.values(vtResult.data?.attributes?.stats || {}).reduce((a, b) => a + b, 0);\nconst fileHash = vtResult.meta?.file_info?.sha256 || '';\n\nlet severity = 'clean';\nif (vtMalicious >= 8) severity = 'high';\nelse if (vtMalicious >= 4) severity = 'medium';\nelse if (vtMalicious >= 1) severity = 'low';\n\nconst isDangerous = severity !== 'clean';\n\nreturn {\n  json: {\n    is_dangerous: isDangerous,\n    severity: severity,\n    vt_verdict: vtMalicious + '/' + vtTotal + ' engines flagged malicious',\n    file_hash: fileHash,\n    file_name: origInput.file_name,\n    chat_id: origInput.chat_id,\n    reporter_name: origInput.reporter_name\n  }\n};"
+        "jsCode": "const vtResult = $('VT Get File Result').item.json;\nconst origInput = $('Parse Input').item.json;\n\nconst stats = vtResult.data?.attributes?.stats || {};\nconst status = vtResult.data?.attributes?.status;\n\nconst vtMalicious = stats.malicious || 0;\nconst vtTotal = Object.values(stats).reduce((a, b) => a + b, 0);\nconst fileHash = vtResult.meta?.file_info?.sha256 || '';\n\nlet severity = 'clean';\nif (vtMalicious >= 8) severity = 'high';\nelse if (vtMalicious >= 4) severity = 'medium';\nelse if (vtMalicious >= 1) severity = 'low';\n\nconst isDangerous = severity !== 'clean';\n\nreturn {\n  json: {\n    is_dangerous: isDangerous,\n    severity: severity,\n    vt_verdict: vtTotal > 0 ? (vtMalicious + '/' + vtTotal + ' engines flagged malicious') : 'Scan Pending / 0 Engines',\n    file_hash: fileHash,\n    file_name: origInput.file_name,\n    chat_id: origInput.chat_id,\n    reporter_name: origInput.reporter_name\n  }\n};"
       },
       "id": "4edb439d-6ec7-4fc3-a2d4-eb7aed472c32",
       "name": "Evaluate File",
@@ -456,9 +466,10 @@
     {
       "parameters": {
         "chatId": "={{$env.SOC_CHAT_ID}}",
-        "text": "=\ud83d\udd14 [SOC ALERT] \u2014 LAPORAN ANCAMAN FILE\n\n\ud83d\udccb {{ $json.ticket_id }}\n\ud83d\udcce {{ $('Evaluate File').item.json.file_name }}\n\u26a0\ufe0f Severity: {{ $json.severity }}\n\ud83d\udd11 SHA256: {{ $('Evaluate File').item.json.file_hash }}\n\ud83d\udee1\ufe0f VT: {{ $('Evaluate File').item.json.vt_verdict }}\n\ud83d\\c64 Pelapor: {{ $('Evaluate File').item.json.reporter_name }}",
+        "text": "=🔔 [SOC ALERT] — LAPORAN ANCAMAN FILE\n\n📋 {{ $json.ticket_id }}\n📎 {{ $('Evaluate File').item.json.file_name }}\n⚠️ Severity: {{ $json.severity }}\n🔑 SHA256: {{ $('Evaluate File').item.json.file_hash }}\n🛡️ VT: {{ $('Evaluate File').item.json.vt_verdict }}\n👤 Pelapor: {{ $('Evaluate File').item.json.reporter_name }}",
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "HTML"
         }
       },
       "id": "adfd4273-42b6-4124-a72b-60b1603af4cc",
@@ -480,9 +491,10 @@
     {
       "parameters": {
         "chatId": "={{ $('Evaluate File').item.json.chat_id }}",
-        "text": "=\u26a0\ufe0f [USER NOTIFICATION] File yang Anda laporkan terdeteksi BERBAHAYA.\n\n\ud83d\udcce {{ $('Evaluate File').item.json.file_name }}\n\u26a0\ufe0f Severity: {{ $('Evaluate File').item.json.severity }}\n\ud83d\udee1\ufe0f VT: {{ $('Evaluate File').item.json.vt_verdict }}\n\nTiket insiden sudah dibuat dan tim SOC telah diberitahu.\nTerima kasih atas laporan Anda! \ud83d\ude4f",
+        "text": "=⚠️ [USER NOTIFICATION] File yang Anda laporkan terdeteksi BERBAHAYA.\n\n📎 {{ $('Evaluate File').item.json.file_name }}\n⚠️ Severity: {{ $('Evaluate File').item.json.severity }}\n🛡️ VT: {{ $('Evaluate File').item.json.vt_verdict }}\n\nTiket insiden sudah dibuat dan tim SOC telah diberitahu.\nTerima kasih atas laporan Anda! 🙏",
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "HTML"
         }
       },
       "id": "fdf4cbcf-546a-411d-afe1-b29baab125b0",
@@ -504,9 +516,10 @@
     {
       "parameters": {
         "chatId": "={{ $json.chat_id }}",
-        "text": "=\u2705 File yang Anda laporkan tampak AMAN.\n\n\ud83d\udcce {{ $json.file_name }}\n\ud83d\udee1\ufe0f VT: {{ $json.vt_verdict }}\n\nTidak ditemukan indikasi ancaman. Silakan buka dengan aman. \ud83d\udc4d",
+        "text": "=✅ File yang Anda laporkan tampak AMAN.\n\n📎 {{ $json.file_name }}\n🛡️ VT: {{ $json.vt_verdict }}\n\nTidak ditemukan indikasi ancaman. Silakan buka dengan aman. 👍",
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "HTML"
         }
       },
       "id": "d72235da-8c9c-467d-b528-80c6b35f47ce",
@@ -528,9 +541,10 @@
     {
       "parameters": {
         "chatId": "={{ $json.chat_id }}",
-        "text": "=Halo {{ $json.reporter_name }}! \ud83d\udc4b\n\nUntuk melaporkan ancaman, silakan kirimkan:\n\u2022 \ud83d\udd17 URL mencurigakan (teks berisi http/https)\n\u2022 \ud83d\udcce File attachment yang ingin dicek\n\nSaya akan menganalisisnya menggunakan VirusTotal dan urlscan.io secara otomatis.",
+        "text": "=Halo {{ $json.reporter_name }}! 👋\n\nUntuk melaporkan ancaman, silakan kirimkan:\n• 🔗 URL mencurigakan (teks berisi http/https)\n• 📎 File attachment yang ingin dicek\n\nSaya akan menganalisisnya menggunakan VirusTotal dan urlscan.io secara otomatis.",
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "HTML"
         }
       },
       "id": "5bc2a9a1-8453-4bd5-833d-8524412ed129",
@@ -552,9 +566,10 @@
     {
       "parameters": {
         "chatId": "={{ $('Parse Input').item.json.chat_id }}",
-        "text": "\ud83d\udd0d Laporan file Anda telah diterima. Sedang mengunduh dan menganalisis menggunakan VirusTotal... Mohon tunggu sekitar 30 detik untuk hasil analisis.",
+        "text": "🔍 Laporan file Anda telah diterima. Sedang mengunduh dan menganalisis menggunakan VirusTotal... Mohon tunggu sekitar 30 detik untuk hasil analisis.",
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "HTML"
         }
       },
       "type": "n8n-nodes-base.telegram",
@@ -632,7 +647,8 @@
         "chatId": "={{ $('Parse Input').item.json.chat_id }}",
         "text": "={{ $json.reply }}",
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "HTML"
         }
       },
       "id": "reply-command-response-node-id",
@@ -923,12 +939,18 @@
       "main": [
         [
           {
-            "node": "Download File",
+            "node": "Send a text message1",
             "type": "main",
             "index": 0
-          },
+          }
+        ]
+      ]
+    },
+    "Send a text message1": {
+      "main": [
+        [
           {
-            "node": "Send a text message1",
+            "node": "Download File",
             "type": "main",
             "index": 0
           }

@@ -28,6 +28,9 @@ services:
       - N8N_PROXY_HOPS=1
     volumes:
       - n8n_data:/home/node/.n8n
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     restart: unless-stopped
     depends_on:
       - flask_api

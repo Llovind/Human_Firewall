@@ -115,12 +115,12 @@
 
 .nav-btn:hover {
   color: var(--text-primary);
-  background: rgba(111, 217, 168, 0.04);
+  background: rgba(148, 163, 184, 0.04);
 }
 
 .nav-btn.active {
   color: var(--text-primary);
-  background: rgba(111, 217, 168, 0.08);
+  background: rgba(148, 163, 184, 0.08);
   border-color: var(--border) var(--border) transparent var(--border);
   border-top: 2px solid var(--accent);
 }
@@ -162,7 +162,7 @@
   align-items: center;
   gap: var(--space-2);
   padding: 4px 12px 4px 4px;
-  background: rgba(111, 217, 168, 0.08);
+  background: rgba(148, 163, 184, 0.08);
   border: 1px solid var(--border);
   border-radius: var(--radius-full);
   cursor: pointer;
@@ -171,7 +171,7 @@
 
 .user-badge:hover {
   border-color: var(--border-hover);
-  background: rgba(111, 217, 168, 0.15);
+  background: rgba(148, 163, 184, 0.15);
 }
 
 .user-avatar {
@@ -236,7 +236,7 @@
 
 .stat-icon-danger { background: rgba(248, 113, 113, 0.1); }
 .stat-icon-warning { background: rgba(251, 191, 36, 0.1); }
-.stat-icon-accent { background: rgba(111, 217, 168, 0.1); }
+.stat-icon-accent { background: rgba(148, 163, 184, 0.1); }
 .stat-icon-success { background: rgba(52, 211, 153, 0.1); }
 
 .stat-value {
@@ -331,7 +331,7 @@
 
 .score-ring-bg {
   fill: none;
-  stroke: rgba(111, 217, 168, 0.08);
+  stroke: rgba(148, 163, 184, 0.08);
   stroke-width: 8;
   stroke-dasharray: 2 4;
 }
@@ -415,8 +415,8 @@
   align-items: center;
   gap: 4px;
   padding: 4px 12px;
-  background: rgba(111, 217, 168, 0.1);
-  border: 1px solid rgba(111, 217, 168, 0.2);
+  background: rgba(148, 163, 184, 0.1);
+  border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: var(--radius-full);
   font-size: var(--text-xs);
   font-weight: 600;
@@ -451,8 +451,8 @@
   text-transform: uppercase;
   letter-spacing: 1px;
   padding: 3px 10px;
-  background: linear-gradient(135deg, rgba(111, 217, 168, 0.15), rgba(111, 217, 168, 0.1));
-  border: 1px solid rgba(111, 217, 168, 0.2);
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.15), rgba(148, 163, 184, 0.1));
+  border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: var(--radius-full);
   color: var(--accent);
 }
@@ -636,7 +636,7 @@
 .threat-table td {
   padding: 10px 16px;
   font-size: var(--text-base);
-  border-bottom: 1px solid rgba(111, 217, 168, 0.08);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
   vertical-align: middle;
 }
 
@@ -645,7 +645,7 @@
 }
 
 .threat-table tbody tr:hover {
-  background: rgba(111, 217, 168, 0.03);
+  background: rgba(148, 163, 184, 0.03);
 }
 
 .url-cell {
@@ -706,7 +706,7 @@
 }
 
 .leaderboard-me {
-  background: rgba(111, 217, 168, 0.08) !important;
+  background: rgba(148, 163, 184, 0.08) !important;
   border: 1px solid var(--border-hover);
   border-radius: var(--radius-md);
 }
@@ -1055,7 +1055,7 @@
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  background: rgba(111, 217, 168, 0.02);
+  background: rgba(148, 163, 184, 0.02);
   height: 100%;
   max-height: 100%;
   overflow: hidden;
@@ -1076,17 +1076,17 @@
 
 .email-item {
   padding: 16px 20px;
-  border-bottom: 1px solid rgba(111, 217, 168, 0.05);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.05);
   cursor: pointer;
   transition: background 0.15s;
 }
 
 .email-item:hover {
-  background: rgba(111, 217, 168, 0.04);
+  background: rgba(148, 163, 184, 0.04);
 }
 
 .email-item.active {
-  background: rgba(111, 217, 168, 0.08);
+  background: rgba(148, 163, 184, 0.08);
   border-left: 3px solid var(--accent);
 }
 
@@ -1354,14 +1354,14 @@
 }
 
 .sidebar-item:hover {
-  background: rgba(111, 217, 168, 0.05);
+  background: rgba(148, 163, 184, 0.05);
   color: var(--text-primary);
 }
 
 .sidebar-item.active {
-  background: rgba(111, 217, 168, 0.1);
+  background: rgba(148, 163, 184, 0.1);
   color: var(--accent-bright);
-  border: 1px solid rgba(111, 217, 168, 0.2);
+  border: 1px solid rgba(148, 163, 184, 0.2);
 }
 
 .radar-sweep-bg {
@@ -1372,7 +1372,7 @@
   height: 400px;
   margin-top: -200px;
   margin-left: -200px;
-  background: conic-gradient(from 0deg, transparent 70%, rgba(111, 217, 168, 0.3) 100%);
+  background: conic-gradient(from 0deg, transparent 70%, rgba(148, 163, 184, 0.3) 100%);
   border-radius: 50%;
   animation: radarSweep 4s linear infinite;
   opacity: 0.03;
@@ -1421,7 +1421,7 @@
   font-weight: 600;
   padding: 4px 10px;
   border-radius: var(--radius-full);
-  background: rgba(111, 217, 168, 0.08);
+  background: rgba(148, 163, 184, 0.08);
   color: var(--accent);
 }
 

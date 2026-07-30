@@ -55,6 +55,7 @@ export interface BehaviorScore {
   reason: string;
   lastUpdated: string;
   streak: number;
+  dailyStreak?: number;
   rank: number;
   totalPoints: number;
   trainingCompleted: number;

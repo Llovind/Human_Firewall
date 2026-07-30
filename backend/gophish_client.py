@@ -79,6 +79,12 @@ def get_campaigns():
 def delete_campaign(campaign_id):
     return _request('DELETE', f'/api/campaigns/{campaign_id}')
 
+def get_campaign(campaign_id):
+    c = _request('GET', f'/api/campaigns/{campaign_id}')
+    if c:
+        c['stats'] = _compute_campaign_stats(c.get('results'))
+    return c
+
 def get_templates():
     return _request('GET', '/api/templates/')
 
@@ -197,8 +203,22 @@ def sync_group(name, emails):
             f"sebelum sinkronisasi ulang — cek manual di GoPhish admin UI."
         )
 
-    # POST /api/groups/ to create new
-    targets = [{"first_name": "", "last_name": "", "email": e, "position": ""} for e in emails]
+    # POST /api/groups/ to create new (extracting first/last names from email format)
+    targets = []
+    for e in emails:
+        local_part = e.split('@')[0]
+        # Split by dot, underscore, or dash
+        import re
+        parts = re.split(r'[._-]', local_part)
+        first_name = parts[0].capitalize() if parts else ""
+        last_name = " ".join([p.capitalize() for p in parts[1:]]) if len(parts) > 1 else ""
+        
+        targets.append({
+            "first_name": first_name,
+            "last_name": last_name,
+            "email": e,
+            "position": ""
+        })
     payload = {
         "name": name,
         "targets": targets
@@ -239,13 +259,34 @@ def launch_campaign(name, template_id, url, page_id, smtp_id, group_name):
             pass
         return {"name": str(val)}
 
+    # Query group details to find target count for rate limiting calculations
+    groups = _request('GET', '/api/groups/')
+    target_count = 1
+    for g in groups or []:
+        if g.get('name') == group_name:
+            target_count = len(g.get('targets', []))
+            break
+
+    from datetime import datetime, timedelta
+    now_dt = datetime.utcnow()
+    # Schedule campaign start time 120 seconds in the future to allow GoPhish to distribute sending and avoid SMTP rate limits
+    launch_date_dt = now_dt + timedelta(seconds=120)
+    # Spacing out sending window: at least 60s, or 90s per target to stay under SMTP limits
+    # (90s interval verified working via manual GoPhish testing)
+    send_by_dt = launch_date_dt + timedelta(seconds=max(60, target_count * 90))
+
+    launch_date = launch_date_dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+    send_by_date = send_by_dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+
     payload = {
         "name": name,
         "template": resolve_template(template_id),
         "url": url,
         "page": resolve_page(page_id),
         "smtp": resolve_smtp(smtp_id),
-        "groups": [{"name": group_name}]
+        "groups": [{"name": group_name}],
+        "launch_date": launch_date,
+        "send_by_date": send_by_date
     }
     
     return _request('POST', '/api/campaigns/', payload)

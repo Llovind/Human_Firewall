@@ -686,7 +686,7 @@ def get_leaderboard():
         rows = conn.execute('''
             SELECT email, divisi, points, badge, click_count,
                    viewed_training_count, skipped_training_count,
-                   reports_count_malicious, daily_streak,
+                   reports_count_malicious, daily_streak, last_clicked,
                    (SELECT count(*) FROM events 
                     WHERE events.email = user_history.email 
                       AND events.event_type = 'spot_the_fake_correct') as spot_fake_wins
@@ -698,6 +698,26 @@ def get_leaderboard():
         leaderboard = [dict(row) for row in rows]
         for i, entry in enumerate(leaderboard, start=1):
             entry["rank"] = i
+            
+            # Hitung streak_weeks
+            last_clicked = entry.get("last_clicked")
+            if last_clicked:
+                try:
+                    from datetime import datetime
+                    last_dt = datetime.strptime(last_clicked, '%Y-%m-%d %H:%M:%S')
+                    weeks = int((datetime.now() - last_dt).days / 7)
+                    entry["streak_weeks"] = max(0, weeks)
+                except Exception:
+                    # Fallback ke format ISO
+                    try:
+                        from datetime import datetime
+                        last_dt = datetime.fromisoformat(last_clicked.replace('Z', ''))
+                        weeks = int((datetime.now() - last_dt).days / 7)
+                        entry["streak_weeks"] = max(0, weeks)
+                    except Exception:
+                        entry["streak_weeks"] = 4
+            else:
+                entry["streak_weeks"] = 4
 
         # Agregat per divisi (rata-rata poin), untuk "division rankings"
         # sesuai deskripsi tab di handoff, terpisah dari ranking individu.
@@ -1842,9 +1862,28 @@ def get_user_activity(email: str, limit: int = 20) -> list:
             SELECT event_type, tier_assigned, campaign_id, created_at
             FROM events
             WHERE email = ?
+            UNION ALL
+            SELECT 
+                CASE 
+                    WHEN verdict IN ('malicious', 'suspicious') THEN 'report_malicious'
+                    ELSE 'report_safe'
+                END as event_type,
+                verdict as tier_assigned,
+                target as campaign_id,
+                created_at
+            FROM threat_reports
+            WHERE email = ?
+            UNION ALL
+            SELECT 
+                event_type,
+                'quiz' as tier_assigned,
+                NULL as campaign_id,
+                created_at
+            FROM daily_events
+            WHERE email = ?
             ORDER BY created_at DESC
             LIMIT ?
-        ''', (email, limit)).fetchall()
+        ''', (email, email, email, limit)).fetchall()
         return [dict(row) for row in rows]
     finally:
         conn.close()
@@ -2043,6 +2082,15 @@ def save_threat_cache(
             expires_at.isoformat()
         ))
         conn.commit()
+    finally:
+        conn.close()
+
+
+def list_threat_cache():
+    conn = get_connection()
+    try:
+        rows = conn.execute("SELECT * FROM threat_cache ORDER BY id DESC").fetchall()
+        return [dict(row) for row in rows]
     finally:
         conn.close()
 

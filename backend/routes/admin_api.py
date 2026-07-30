@@ -4,6 +4,31 @@ import gophish_client
 
 admin_api_bp = Blueprint('admin_api', __name__)
 
+def sanitize_gophish_html(html):
+    if not html:
+        return html
+    html = html.strip()
+    
+    while html.startswith("<!--"):
+        end_idx = html.find("-->")
+        if end_idx != -1:
+            html = html[end_idx+3:].strip()
+        else:
+            break
+            
+    import re
+    def replacer(match):
+        val = match.group(1).strip()
+        if not val:
+            return match.group(0)
+        first_word = val.split()[0]
+        if val.startswith('.') or val.startswith('$') or first_word in ['if', 'else', 'end', 'with', 'range', 'template', 'define', 'block']:
+            return match.group(0)
+        return f"{{{{.{val}}}}}"
+        
+    html = re.sub(r'\{\{(.*?)\}\}', replacer, html)
+    return html
+
 @admin_api_bp.route('/api/dashboard-summary', methods=['GET'])
 def dashboard_summary():
     summary = database.get_dashboard_summary()
@@ -55,12 +80,12 @@ def gophish_sync():
         data = request.get_json(silent=True) or {}
         emails = data.get('emails')
         
-        # If emails are not specified, fetch all active employees
-        if not emails:
-            conn = database.get_connection()
-            cursor = conn.cursor()
-            users = cursor.execute("SELECT email FROM user_history WHERE is_active = 1").fetchall()
-            emails = [row['email'] for row in users]
+        # If emails are not specified or empty, reject with 400 Bad Request
+        if not emails or not isinstance(emails, list) or len(emails) == 0:
+            return jsonify({
+                "error": "No target selected",
+                "message": "emails must be a non-empty list. Refusing to sync with an empty target list to prevent accidental broadcast to all users."
+            }), 400
             
         result = gophish_client.sync_group('HFL_Target_Group', emails)
         return jsonify({"message": "Group synced successfully", "result": result}), 200
@@ -105,6 +130,17 @@ def gophish_delete_campaign(campaign_id):
         return jsonify({"error": "Failed to delete campaign", "detail": str(e)}), 500
 
 
+@admin_api_bp.route('/api/admin/gophish/campaigns/<int:campaign_id>', methods=['GET'])
+def gophish_get_campaign(campaign_id):
+    try:
+        result = gophish_client.get_campaign(campaign_id)
+        if not result:
+            return jsonify({"error": "Campaign not found"}), 404
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": "Failed to fetch campaign details", "detail": str(e)}), 500
+
+
 @admin_api_bp.route('/api/admin/gophish/templates', methods=['POST'])
 def gophish_create_template():
     data = request.get_json(silent=True)
@@ -120,7 +156,7 @@ def gophish_create_template():
         result = gophish_client.create_template(
             name=data['name'],
             subject=data['subject'],
-            html=data['html'],
+            html=sanitize_gophish_html(data['html']),
             text=data.get('text'),
         )
         return jsonify({"message": "Template created successfully", "result": result}), 201
@@ -144,7 +180,7 @@ def gophish_update_template(template_id):
             template_id=template_id,
             name=data['name'],
             subject=data['subject'],
-            html=data['html'],
+            html=sanitize_gophish_html(data['html']),
             text=data.get('text'),
         )
         return jsonify({"message": "Template updated successfully", "result": result}), 200
@@ -175,7 +211,7 @@ def gophish_create_page():
     try:
         result = gophish_client.create_page(
             name=data['name'],
-            html=data['html'],
+            html=sanitize_gophish_html(data['html']),
             capture_credentials=data.get('capture_credentials', True),
             capture_passwords=data.get('capture_passwords', True),
             redirect_url=data.get('redirect_url', ''),
@@ -200,7 +236,7 @@ def gophish_update_page(page_id):
         result = gophish_client.update_page(
             page_id=page_id,
             name=data['name'],
-            html=data['html'],
+            html=sanitize_gophish_html(data['html']),
             capture_credentials=data.get('capture_credentials', True),
             capture_passwords=data.get('capture_passwords', True),
             redirect_url=data.get('redirect_url', ''),
@@ -245,6 +281,39 @@ def list_employees():
         return jsonify({"employees": employees}), 200
     except Exception as e:
         return jsonify({"error": "Failed to list employees", "detail": str(e)}), 500
+
+
+@admin_api_bp.route('/api/admin/threat-cache', methods=['GET'])
+def list_threat_cache():
+    try:
+        cache = database.list_threat_cache()
+        return jsonify({"cache": cache}), 200
+    except Exception as e:
+        return jsonify({"error": "Failed to list threat cache", "detail": str(e)}), 500
+
+
+@admin_api_bp.route('/api/admin/threat-cache', methods=['POST'])
+def save_threat_cache_api():
+    try:
+        data = request.get_json(silent=True) or {}
+        indicator = data.get('url')
+        if not indicator:
+            return jsonify({"error": "url is required"}), 400
+        
+        threat_type = data.get('threatType', 'suspicious')
+        action = data.get('action', 'warning')
+        score = data.get('score', 50)
+        
+        analysis = {
+            "providers": [data.get('source', 'internal')],
+            "verdict": 'malicious' if threat_type == 'phishing' or threat_type == 'credential_harvesting' else 'suspicious' if threat_type == 'suspicious' else 'safe',
+            "severity": 'high' if action == 'block' else 'medium' if action == 'warning' else 'low',
+            "confidence": score
+        }
+        database.save_threat_cache(indicator, "url", analysis)
+        return jsonify({"message": "Threat cache entry saved successfully"}), 201
+    except Exception as e:
+        return jsonify({"error": "Failed to save threat cache", "detail": str(e)}), 500
 
 
 @admin_api_bp.route('/api/admin/employees', methods=['POST'])

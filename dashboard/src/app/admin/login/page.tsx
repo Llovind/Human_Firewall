@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import Logo from '@/components/Logo';
 import './login.css';
 
 export default function AdminLoginPage() {
@@ -56,10 +57,8 @@ export default function AdminLoginPage() {
     <div className="admin-login-page">
       <div className="admin-scanline" />
       <div className="admin-login-container fade-up">
-        <div className="admin-login-logo">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-          </svg>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
+          <Logo variant="mark" size={96} />
         </div>
 
         <h2 className="admin-login-title">Human <strong>Firewall</strong></h2>

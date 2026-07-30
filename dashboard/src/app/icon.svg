@@ -1,10 +1,20 @@
 <svg width="32" height="32" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M50 6 L90 22 L90 55 C90 78 50 94 50 94 C50 94 10 78 10 55 L10 22 Z" stroke="#f59e0b" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="rgba(245, 158, 11, 0.05)"/>
-  <path d="M50 28 L50 48 L32 48 L32 64" stroke="#f59e0b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M50 48 L68 48 L68 64" stroke="#f59e0b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M50 48 L50 78" stroke="#f59e0b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="50" cy="28" r="5" fill="#fbbf24" />
-  <circle cx="32" cy="64" r="5" fill="#fbbf24" />
-  <circle cx="68" cy="64" r="5" fill="#fbbf24" />
-  <circle cx="50" cy="78" r="5" fill="#fbbf24" />
+  <!-- Triskelion arms -->
+  <g transform="rotate(0 50 50)">
+    <path d="M50 18 L35 18 C22 18, 16 28, 20 42 L26 52" stroke="#17284d" stroke-width="14" stroke-linecap="round" fill="none"/>
+    <circle cx="32" cy="40" r="9" fill="#17284d"/>
+  </g>
+  <g transform="rotate(120 50 50)">
+    <path d="M50 18 L35 18 C22 18, 16 28, 20 42 L26 52" stroke="#2f6fed" stroke-width="14" stroke-linecap="round" fill="none"/>
+    <circle cx="32" cy="40" r="9" fill="#2f6fed"/>
+  </g>
+  <g transform="rotate(240 50 50)">
+    <path d="M50 18 L35 18 C22 18, 16 28, 20 42 L26 52" stroke="#8ab4f8" stroke-width="14" stroke-linecap="round" fill="none"/>
+    <circle cx="32" cy="40" r="9" fill="#8ab4f8"/>
+  </g>
+  <!-- Shield + Globe -->
+  <path d="M50 32 L65 39 L65 55 C65 68 50 75 50 75 C50 75 35 68 35 55 L35 39 Z" fill="#17284d"/>
+  <circle cx="50" cy="54" r="10" stroke="white" stroke-width="2.2" fill="none"/>
+  <ellipse cx="50" cy="54" rx="4" ry="10" stroke="white" stroke-width="2" fill="none"/>
+  <line x1="40" y1="54" x2="60" y2="54" stroke="white" stroke-width="2"/>
 </svg>

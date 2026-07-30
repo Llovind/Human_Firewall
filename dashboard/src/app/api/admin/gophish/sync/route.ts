@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
+    const body = await request.json();
     const apiUrl = (process.env.API_URL || process.env.NEXT_PUBLIC_API_URL) || 'http://flask_api:5000';
     const serviceApiKey = process.env.SERVICE_API_KEY;
     if (!serviceApiKey) {
@@ -17,6 +18,7 @@ export async function POST(request: NextRequest) {
         'Authorization': `Bearer ${serviceApiKey}`,
         'Content-Type': 'application/json',
       },
+      body: JSON.stringify(body),
     });
 
     const data = await res.json();

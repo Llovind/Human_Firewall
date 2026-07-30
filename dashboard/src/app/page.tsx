@@ -5,13 +5,14 @@ import { usePolling } from '@/hooks/usePolling';
 import { useEffect, useState } from 'react';
 import Logo from '@/components/Logo';
 import ReportingBadgesWidget from '@/components/ReportingBadgesWidget';
-import { LayoutDashboard, Fish, Shield, ShieldCheck, Timer, Lightbulb, Search, Flame, BookOpen, Star, FileWarning, CheckCircle2, AlertTriangle, Trophy } from 'lucide-react';
+import { LayoutDashboard, Fish, Shield, ShieldCheck, Timer, Lightbulb, Search, Flame, BookOpen, Star, FileWarning, CheckCircle2, AlertTriangle, Trophy, Flag } from 'lucide-react';
 import './dashboard.css';
 
 /* ── Types matching API responses ─────────────────────────── */
 interface BehaviorScore {
   userId: string; userName: string; email: string; division: string;
   score: number; risk: string; reason: string; streak: number;
+  dailyStreak?: number;
   rank: number; totalPoints: number; trainingCompleted: number; badges: string[];
 }
 interface UserActivity {
@@ -51,8 +52,12 @@ const eventLabels: Record<string, { label: string; icon: React.ReactNode; color:
   viewed_training: { label: 'Mengikuti Retraining', icon: <CheckCircle2 size={14} />, color: 'var(--success)' },
   skipped_training: { label: 'Melewati Retraining', icon: <AlertTriangle size={14} />, color: 'var(--warning)' },
   phishing_click: { label: 'Terjebak Phishing Simulasi', icon: <Fish size={14} />, color: 'var(--danger)' },
-  spot_the_fake_correct: { label: 'Menang Spot the Fake', icon: <Trophy size={14} />, color: 'var(--success)' },
+  spot_the_fake_correct: { label: 'Menang Spot the Fake (+5 pts)', icon: <Trophy size={14} />, color: 'var(--success)' },
   spot_the_fake_incorrect: { label: 'Kalah Spot the Fake', icon: <AlertTriangle size={14} />, color: 'var(--warning)' },
+  report_malicious: { label: 'Melaporkan Ancaman Berbahaya (+15 pts)', icon: <ShieldCheck size={14} />, color: '#10b981' },
+  report_safe: { label: 'Melaporkan URL/File Aman', icon: <CheckCircle2 size={14} />, color: '#06b6d4' },
+  daily_quiz_completed: { label: 'Kuis Harian Selesai & Streak Nambah (+10 pts)', icon: <Flame size={14} />, color: '#e8a33d' },
+  quiz_completed: { label: 'Kuis Harian Selesai & Streak Nambah (+10 pts)', icon: <Flame size={14} />, color: '#e8a33d' },
 };
 
 export default function EmployeeDashboardPage() {
@@ -343,7 +348,7 @@ export default function EmployeeDashboardPage() {
   if (authLoading) {
     return (
       <div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <Logo size={48} variant="mark" />
+        <Logo size={48} variant="mark" logoAnimation="loading" />
         <p>Memuat Dashboard Anda...</p>
       </div>
     );
@@ -493,7 +498,7 @@ export default function EmployeeDashboardPage() {
                           <span className="mini-stat-label">Rank</span>
                         </div>
                         <div className="mini-stat">
-                          <span className="mini-stat-icon"><Flame size={14} /></span>
+                          <span className="mini-stat-icon"><ShieldCheck size={14} /></span>
                           <span className="mini-stat-value">{myScore.streak} minggu</span>
                           <span className="mini-stat-label">Bebas Klik</span>
                         </div>
@@ -503,19 +508,41 @@ export default function EmployeeDashboardPage() {
                           <span className="mini-stat-label">Points</span>
                         </div>
                         <div className="mini-stat">
-                          <span className="mini-stat-icon"><BookOpen size={14} /></span>
-                          <span className="mini-stat-value">{myScore.trainingCompleted} kali</span>
-                          <span className="mini-stat-label">Latihan</span>
+                          <span className="mini-stat-icon"><Flame size={14} /></span>
+                          <span className="mini-stat-value">{myScore.dailyStreak || 0} hari</span>
+                          <span className="mini-stat-label">Daily Streak</span>
                         </div>
                       </div>
                     </div>
                     {(myScore.badges || []).length > 0 && (
                       <div className="my-score-badges" style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        {(myScore.badges || []).map(b => (
-                          <span key={b} className="badge-chip" style={{ background: 'rgba(129,140,248,0.1)', border: '1px solid rgba(129,140,248,0.2)', padding: '4px 10px', borderRadius: '20px', fontSize: '11px', color: 'var(--accent)' }}>
-                            🛡️ {b}
-                          </span>
-                        ))}
+                        {(myScore.badges || []).map(b => {
+                          const config = (({
+                            'First Report': { icon: <Flag size={12} />, color: '#10b981', bg: 'rgba(16, 185, 129, 0.08)', border: 'rgba(16, 185, 129, 0.2)' },
+                            'Streak Master': { icon: <Flame size={12} />, color: '#e8a33d', bg: 'rgba(232, 163, 61, 0.08)', border: 'rgba(232, 163, 61, 0.2)' },
+                            'Guardian': { icon: <ShieldCheck size={12} />, color: '#06b6d4', bg: 'rgba(6, 182, 212, 0.08)', border: 'rgba(6, 182, 212, 0.2)' },
+                            'Quiz Champion': { icon: <Trophy size={12} />, color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.08)', border: 'rgba(139, 92, 246, 0.2)' },
+                            'Sentinel': { icon: <Shield size={12} />, color: '#ec4899', bg: 'rgba(236, 72, 153, 0.08)', border: 'rgba(236, 72, 153, 0.2)' }
+                          } as Record<string, { icon: React.ReactNode; color: string; bg: string; border: string }>)[b]) || { icon: <Shield size={12} />, color: 'var(--accent)', bg: 'rgba(59, 130, 246, 0.08)', border: 'rgba(59, 130, 246, 0.2)' };
+
+                          return (
+                            <span key={b} className="badge-chip" style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              background: config.bg,
+                              border: `1px solid ${config.border}`,
+                              padding: '4px 10px',
+                              borderRadius: '20px',
+                              fontSize: '11px',
+                              color: config.color,
+                              fontWeight: 500
+                            }}>
+                              {config.icon}
+                              {b}
+                            </span>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -602,7 +629,7 @@ export default function EmployeeDashboardPage() {
                   <div style={{ marginTop: '16px' }}>
                     {myScore && myDivRank && (
                       <div style={{
-                        background: 'rgba(111, 217, 168, 0.05)',
+                        background: 'rgba(148, 163, 184, 0.05)',
                         border: '1px dashed var(--border)',
                         borderRadius: '8px',
                         padding: '12px',
@@ -621,7 +648,7 @@ export default function EmployeeDashboardPage() {
                           justifyContent: 'space-between',
                           alignItems: 'center',
                           padding: '8px 12px',
-                          background: div.division === myScore?.division ? 'rgba(111, 217, 168, 0.1)' : 'rgba(255, 255, 255, 0.02)',
+                          background: div.division === myScore?.division ? 'rgba(59, 130, 246, 0.08)' : 'rgba(255, 255, 255, 0.02)',
                           border: div.division === myScore?.division ? '1px solid var(--accent-dim)' : '1px solid rgba(255,255,255,0.05)',
                           borderRadius: '8px',
                           fontSize: '13px'
@@ -693,9 +720,9 @@ export default function EmployeeDashboardPage() {
                 {eligibility.eligible === false && eligibility.reason === 'safe' && (
               <div className="game-lock-screen" style={{ textAlign: 'center', padding: '60px 20px' }}>
                 <ShieldCheck size={64} style={{ color: 'var(--success)' }} />
-                <h2 style={{ fontSize: '22px', fontWeight: 700, margin: '20px 0 10px 0' }}>🛡️ Skor Keamanan Anda Solid!</h2>
+                <h2 style={{ fontSize: '22px', fontWeight: 700, margin: '20px 0 10px 0' }}>🛡️ Skor Perilaku Anda Sudah Aman!</h2>
                 <p style={{ color: 'var(--text-secondary)', maxWidth: '500px', margin: '0 auto 24px auto', fontSize: '14px', lineHeight: 1.6 }}>
-                  Sistem mendeteksi bahwa Skor Perilaku Anda saat ini berada dalam zona AMAN. Modul simulasi "Spot the Fake" ini memang dikhususkan bagi rekan-rekan yang membutuhkan pemulihan skor (redemption track). Anda dibebaskan dari latihan wajib ini — mari pertahankan performa hebat ini dan terus jaga streak Anda melalui Daily Quiz!
+                  Saat ini skor perilaku Anda berada di zona aman. Latihan "Spot the Fake" dikhususkan untuk rekan-rekan yang perlu meningkatkan skor mereka. Anda tidak wajib mengikuti latihan ini — mari pertahankan performa hebat Anda dan tetap ikuti kuis harian di Daily Quiz!
                 </p>
                 <div style={{ display: 'inline-block', padding: '8px 16px', background: 'rgba(52,211,153,0.1)', border: '1px solid var(--success)', borderRadius: '20px', color: 'var(--success)', fontSize: '13px', fontWeight: 600 }}>
                   Skor Perilaku Anda: {myScore?.score || 'Safe'} / 100 (Pertahankan!)
@@ -976,9 +1003,9 @@ export default function EmployeeDashboardPage() {
               <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginBottom: '32px' }}>
                 <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', padding: '12px 24px', borderRadius: '12px' }}>
                   <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--warning)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                    <Flame size={20} /> {quizQuestion.daily_streak || myScore?.streak || 0}
+                    <Flame size={20} /> {quizQuestion.daily_streak || myScore?.dailyStreak || 0}
                   </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Streak Kuis (Minggu)</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Streak Kuis (Hari)</div>
                 </div>
               </div>
               <button

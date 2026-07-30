@@ -339,7 +339,7 @@ def api_user_eligibility():
             return jsonify({
                 "eligible": False,
                 "reason": "safe",
-                "message": "Luar biasa! Skor Keamanan Anda terverifikasi AMAN (>= 70). Modul redemption ini dikhususkan bagi rekan-rekan yang sedang meningkatkan skor mereka. Tetap pertahankan performa Anda lewat Daily Quiz harian!"
+                "message": "Skor perilaku Anda saat ini berada di zona aman. Latihan 'Spot the Fake' dikhususkan untuk rekan-rekan yang perlu meningkatkan skor mereka. Tetap pertahankan performa hebat Anda lewat Daily Quiz harian!"
             }), 200
 
         game_row = conn.execute('''
@@ -365,7 +365,7 @@ def api_user_eligibility():
                     "eligible": False,
                     "reason": "cooldown",
                     "cooldown_seconds": cooldown_seconds,
-                    "message": "Anda sudah mengambil latihan hari ini. Silakan kembali lagi setelah masa cooldown."
+                    "message": "Anda sudah mengikuti latihan hari ini. Silakan kembali lagi setelah masa cooldown selesai."
                 }), 200
 
         return jsonify({
