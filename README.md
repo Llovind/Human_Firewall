@@ -6,9 +6,14 @@
 [![Next.js 16](https://img.shields.io/badge/Next.js-16.2.10-000000?logo=next.js&logoColor=white)](dashboard)
 [![Python Flask](https://img.shields.io/badge/Flask-3.x-000000?logo=flask&logoColor=white)](backend)
 [![n8n Orchestrator](https://img.shields.io/badge/n8n-2.26.9-FF6D5A?logo=n8n&logoColor=white)](n8n-workflows)
-[![GoPhish Engine](https://img.shields.io/badge/GoPhish-Supported-00A8E8)](gophish)
+[![Master Pitch Kitab PDF](https://img.shields.io/badge/Master_Pitch_Kitab-PDF_Download-EA4335?logo=adobe-acrobat-reader&logoColor=white)](HUMAN_FIREWALL_PITCH_KITAB.pdf)
+[![Single Source of Truth](https://img.shields.io/badge/Single_Source_of_Truth-SSOT_Doc-007ACC?logo=markdown&logoColor=white)](PRODUCT_SINGLE_SOURCE_OF_TRUTH.md)
 
 **Human Firewall** adalah platform keamanan siber komprehensif yang dirancang untuk melatih kesadaran keamanan karyawan (*human defense layer*) melalui simulasi phishing adaptif, otomatisasi penanganan insiden (*Incident Response*), serta gamifikasi interaktif real-time.
+
+> 📘 **Dokumen Strategis & Kitab Pitching:**
+> * 📄 [Download Dokumen Pitch Kitab PDF (Executive Format)](HUMAN_FIREWALL_PITCH_KITAB.pdf)
+> * 📖 [Baca Master Single Source of Truth (SSOT Markdown)](PRODUCT_SINGLE_SOURCE_OF_TRUTH.md)
 
 ---
 
