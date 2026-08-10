@@ -11,6 +11,7 @@ services:
       - N8N_PROTOCOL=http
       - NODE_ENV=production
       - WEBHOOK_URL=${WEBHOOK_URL}
+      - N8N_WEBHOOK_URL=${WEBHOOK_URL}
       - GENERIC_TIMEZONE=Asia/Jakarta
       - NODE_OPTIONS=--dns-result-order=ipv4first
       # Wajib false, karena n8n versi baru default BLOKIR akses process.env
