@@ -45,6 +45,9 @@ except (FileNotFoundError, json.JSONDecodeError) as e:
 def get_connection():
     """Buka koneksi baru. Dipanggil per-request, bukan disimpan global,
     supaya aman untuk Flask yang multi-threaded secara default."""
+    db_dir = os.path.dirname(DB_PATH)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row  # supaya hasil query bisa diakses
                                       # seperti dict (row["kolom"])
