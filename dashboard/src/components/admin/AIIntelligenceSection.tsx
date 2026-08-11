@@ -231,7 +231,7 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
 
       if (trimmed.startsWith('# ')) {
         elements.push(
-          <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid rgba(59, 130, 246, 0.25)', marginBottom: '16px' }}>
+          <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid rgba(148,163,184,0.15)', marginTop: '8px', marginBottom: '16px' }}>
             <h1 style={{ fontSize: '20px', fontWeight: 800, background: 'linear-gradient(135deg, #60a5fa, #93c5fd)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Sparkles style={{ width: '20px', height: '20px', color: '#60a5fa' }} />
               {trimmed.replace('# ', '')}

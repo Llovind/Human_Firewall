@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
+export type { AdminRole } from '@/components/admin/types';
 import type { AdminRole } from '@/components/admin/types';
 
 interface User {

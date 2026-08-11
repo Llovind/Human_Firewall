@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import type { AdminRole } from '@/components/admin/types';
+import type { AdminRole } from '@/context/AuthContext';
 import Logo from '@/components/Logo';
 import { Shield, Eye, BarChart3, FileCheck } from 'lucide-react';
 import './login.css';
