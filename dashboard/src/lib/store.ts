@@ -55,7 +55,6 @@ export interface BehaviorScore {
   reason: string;
   lastUpdated: string;
   streak: number;
-  dailyStreak?: number;
   rank: number;
   totalPoints: number;
   trainingCompleted: number;
@@ -100,12 +99,6 @@ class DataStore {
   }
   getIncidents(): Incident[] {
     return [...this.incidents];
-  }
-  updateIncidentStatus(id: string, status: 'open' | 'investigating' | 'resolved' | 'escalated') {
-    const idx = this.incidents.findIndex(i => i.id === id);
-    if (idx >= 0) {
-      this.incidents[idx].status = status;
-    }
   }
 
   // ── Threat Cache ──
@@ -168,10 +161,8 @@ class DataStore {
       this.authTokens.delete(tokenStr);
       return null;
     }
-    // One-time use: delete after validation (except for the demo token)
-    if (tokenStr !== 'demo-magic-link-2026') {
-      this.authTokens.delete(tokenStr);
-    }
+    // One-time use: delete after validation
+    this.authTokens.delete(tokenStr);
     return token;
   }
 

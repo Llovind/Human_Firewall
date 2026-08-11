@@ -25,9 +25,6 @@ def run_tests():
     email = "test.revive@infranexia-dummy.local"
     divisi = "IT"
 
-    # Initialize db to trigger ALTER TABLE migrations
-    db.init_db()
-
     # Setup database with clean state for test user
     conn = db.get_connection()
     cursor = conn.cursor()
@@ -80,12 +77,6 @@ def run_tests():
     conn.close()
 
     print("\n--- Test 3: Double Reviving raises ValueError (no historic streak to save) ---")
-    # Reset daily_streak to 0 manually to simulate post-revive failure state
-    conn = db.get_connection()
-    conn.execute("UPDATE user_history SET daily_streak = 0 WHERE email = ?", (email,))
-    conn.commit()
-    conn.close()
-
     try:
         db.revive_quiz_streak(email)
         check("Double revive allowed (BUG)", False)

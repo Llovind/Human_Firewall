@@ -4,40 +4,23 @@ import { Suspense } from 'react';
 import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import Logo from '@/components/Logo';
 import './auth.css';
 
 function AuthContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { login, isAuthenticated, user } = useAuth();
+  const { login, isAuthenticated } = useAuth();
   const [status, setStatus] = useState<'validating' | 'success' | 'error' | 'no-token'>('validating');
   const [errorMsg, setErrorMsg] = useState('');
   const [userName, setUserName] = useState('');
-  const [botUsername, setBotUsername] = useState('HFL_BOT');
 
   useEffect(() => {
-    fetch('/api/config')
-      .then(res => res.json())
-      .then(data => {
-        if (data.botUsername) setBotUsername(data.botUsername);
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    const token = searchParams.get('token');
-
-    // Only auto-redirect if there is NO new token being passed in the URL
-    if (isAuthenticated && !token) {
-      if (user?.role === 'admin') {
-        router.push('/admin');
-      } else {
-        router.push('/');
-      }
+    if (isAuthenticated) {
+      router.push('/');
       return;
     }
 
+    const token = searchParams.get('token');
     if (!token) {
       setStatus('no-token');
       return;
@@ -66,15 +49,17 @@ function AuthContent() {
     };
 
     validateToken();
-  }, [searchParams, router, login, isAuthenticated, user]);
+  }, [searchParams, router, login, isAuthenticated]);
 
   return (
     <div className="auth-page">
       <div className="auth-scanline" />
       
       <div className="auth-container fade-up">
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '32px' }}>
-          <Logo variant="full" size={36} />
+        <div className="auth-logo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+          </svg>
         </div>
 
         {status === 'validating' && (
@@ -131,7 +116,7 @@ function AuthContent() {
               dan ketik <code>/dashboard</code> untuk mendapatkan link akses.
             </p>
             <a
-              href={`https://t.me/${botUsername}`}
+              href="https://t.me/HFL_BOT"
               target="_blank"
               rel="noopener noreferrer"
               className="auth-telegram-btn"
@@ -141,6 +126,9 @@ function AuthContent() {
               </svg>
               Buka Telegram Bot
             </a>
+            <p className="auth-demo-hint">
+              Demo: <a href="/auth?token=demo-magic-link-2026">Gunakan demo token</a>
+            </p>
           </div>
         )}
       </div>
@@ -157,8 +145,10 @@ export default function AuthPage() {
     <Suspense fallback={
       <div className="auth-page">
         <div className="auth-container fade-up">
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '32px' }}>
-            <Logo variant="full" size={36} />
+          <div className="auth-logo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
           </div>
           <div className="auth-status">
             <div className="auth-spinner" />

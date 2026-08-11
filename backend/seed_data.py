@@ -3,24 +3,12 @@ import os
 import argparse
 from datetime import datetime, timedelta
 import random
-import database  # Import modul database untuk inisialisasi tabel
 
 DB_PATH = os.path.join('instance', 'human_firewall.db')
 
 def seed_database(telegram_id=None):
-    # Drop quiz_questions table to force database.init_db() to recreate and re-seed it
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("DROP TABLE IF EXISTS quiz_questions")
-        conn.commit()
-        conn.close()
-    except Exception:
-        pass
-
-    # Pastikan database folder dan skema tabel terinisialisasi terlebih dahulu
-    print("Menginisialisasi skema database...")
-    database.init_db()
+    if not os.path.exists('instance'):
+        os.makedirs('instance')
 
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -29,10 +17,6 @@ def seed_database(telegram_id=None):
     cursor.execute("DELETE FROM user_history")
     cursor.execute("DELETE FROM events")
     cursor.execute("DELETE FROM incidents")
-    try:
-        cursor.execute("DELETE FROM divisions")
-    except sqlite3.OperationalError:
-        pass
 
     print("Menyuntikkan data karyawan baru (user_history)...")
     
@@ -54,37 +38,12 @@ def seed_database(telegram_id=None):
         ("siti.nurhaliza@salessupport-dummy.local", "Sales Support", 1, 2, 0, None)
     ]
 
-    # Seed divisions table first
-    default_divs = ["Network Engineering", "Performance & Shared Service", "Network Operations", "Sales Support", "IT"]
-    for div in default_divs:
-        cursor.execute("INSERT OR IGNORE INTO divisions (name) VALUES (?)", (div,))
-
     for email, divisi, clicks, viewed, skipped, chat_id in users:
-        # Insert division if it is not already seeded
-        cursor.execute("INSERT OR IGNORE INTO divisions (name) VALUES (?)", (divisi,))
-        
-        # Calculate points based on clicked (-10), viewed (+2), skipped (-5)
-        # points = max(0, min(200, 100 - clicks*10 - skipped*5 + viewed*2))
-        points = 100
-        points -= clicks * 10
-        points -= skipped * 5
-        points += viewed * 2
-        points = max(0, min(200, points))
-        
-        # Determine badge
-        if points >= 130:
-            badge = "Sentinel"
-        elif points >= 60:
-            badge = "Guardian"
-        else:
-            badge = "Vulnerable"
-
         cursor.execute('''
-            INSERT INTO user_history (email, divisi, click_count, viewed_training_count, skipped_training_count, telegram_chat_id, last_clicked, points, badge)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO user_history (email, divisi, click_count, viewed_training_count, skipped_training_count, telegram_chat_id, last_clicked)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         ''', (email, divisi, clicks, viewed, skipped, chat_id, 
-              (datetime.utcnow() - timedelta(days=random.randint(1, 10))).isoformat() if clicks > 0 else None,
-              points, badge))
+              (datetime.utcnow() - timedelta(days=random.randint(1, 10))).isoformat() if clicks > 0 else None))
 
     print("Menyuntikkan log event 30 hari ke belakang...")
     # 2. Tambah data event simulasi historis
@@ -106,8 +65,8 @@ def seed_database(telegram_id=None):
     cursor.execute('''
         INSERT INTO incidents (ticket_id, source_type, reported_url, divisi, severity, vt_verdict, status, created_at)
         VALUES ('INC-A1B2C3D4', 'real_world_report', 'http://phishing-fake-login.com/login', 'Performance & Shared Service', 'high', '8/90 engines malicious', 'open', 
-                ?)
-    ''', ((datetime.utcnow() - timedelta(hours=5)).isoformat(),))
+                (datetime.utcnow() - timedelta(hours=5)).isoformat())
+    ''')
 
     # Tiket 2: Real-world report (Flow B) - Closed (untuk kalkulasi MTTC)
     created_at = datetime.utcnow() - timedelta(days=2)
@@ -122,12 +81,12 @@ def seed_database(telegram_id=None):
     cursor.execute('''
         INSERT INTO incidents (ticket_id, source_type, divisi, severity, status, created_at)
         VALUES ('INC-SIMCRED', 'simulation', 'Network Operations', 'high', 'open', 
-                ?)
-    ''', ((datetime.utcnow() - timedelta(days=1)).isoformat(),))
+                (datetime.utcnow() - timedelta(days=1)).isoformat())
+    ''')
 
     conn.commit()
     conn.close()
-    print("Database seeding selesai dengan sukses! [OK]")
+    print("Database seeding selesai dengan sukses! 🎉")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Seed Human Firewall SQLite database.")

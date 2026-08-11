@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { employee_id, token, question_id, selected_option_index } = body;
+    const { employee_id, token } = body;
 
     if (!employee_id || !token) {
       return NextResponse.json({ error: 'employee_id dan token wajib diisi' }, { status: 400 });
@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ employee_id, token, question_id, selected_option_index }),
+      body: JSON.stringify({ employee_id, token }),
     });
 
     const data = await res.json();

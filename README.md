@@ -6,26 +6,9 @@
 [![Next.js 16](https://img.shields.io/badge/Next.js-16.2.10-000000?logo=next.js&logoColor=white)](dashboard)
 [![Python Flask](https://img.shields.io/badge/Flask-3.x-000000?logo=flask&logoColor=white)](backend)
 [![n8n Orchestrator](https://img.shields.io/badge/n8n-2.26.9-FF6D5A?logo=n8n&logoColor=white)](n8n-workflows)
-[![Technical Spec PDF](https://img.shields.io/badge/Technical_Spec-PDF_Download-007ACC?logo=adobe-acrobat-reader&logoColor=white)](TECHNICAL_CAPSTONE_SPEC.pdf)
-[![Investor Pitch PDF](https://img.shields.io/badge/Investor_Vision-PDF_Download-EA4335?logo=adobe-acrobat-reader&logoColor=white)](INVESTOR_VISION_PITCH.pdf)
+[![GoPhish Engine](https://img.shields.io/badge/GoPhish-Supported-00A8E8)](gophish)
 
 **Human Firewall** adalah platform keamanan siber komprehensif yang dirancang untuk melatih kesadaran keamanan karyawan (*human defense layer*) melalui simulasi phishing adaptif, otomatisasi penanganan insiden (*Incident Response*), serta gamifikasi interaktif real-time.
-
----
-
-### 📚 Dokumentasi Terpisah Sesuai Kebutuhan (Dual-Track Spec)
-
-Untuk menjaga kredibilitas dan ketajaman fokus, dokumentasi project dipisahkan menjadi 2 jalur:
-
-1. 🛠️ **Jalur Teknikal & Demo Live (Capstone Design & Hackathon):**
-   * 📄 [Download Technical Execution Spec PDF](TECHNICAL_CAPSTONE_SPEC.pdf)
-   * 📖 [Baca Technical Spec Markdown](TECHNICAL_DEMO_SPEC.md)
-   * *Fokus:* Arsitektur 4-layer, eksekusi n8n + VirusTotal + urlscan.io, SQL query UNION feed, & langkah-langkah live demo.
-
-2. 🚀 **Jalur Komersial & Visi Investor (B2B SaaS & Business Case):**
-   * 📄 [Download Commercial Vision & Investor Deck PDF](INVESTOR_VISION_PITCH.pdf)
-   * 📖 [Baca Investor Vision Markdown](INVESTOR_VISION_PITCH.md)
-   * *Fokus:* TAM/SAM/SOM pasar, model ALE/SLE bercatatan `[P]` (Proyeksi Asumsi) & `[S]` (Sitasi Terverifikasi), serta skema PUPM B2B SaaS.
 
 ---
 

@@ -1,7 +1,6 @@
 from flask import Blueprint, request, jsonify, render_template, session, redirect, url_for
 import database
 import os
-import json
 import requests
 import logging
 from datetime import datetime, timedelta
@@ -24,26 +23,6 @@ EMAIL_DOMAIN_TO_DIVISI = {
     'perfshared-dummy.local': 'Performance & Shared Service',
     'salessupport-dummy.local': 'Sales Support',
 }
-
-def js_string_literal(value: str) -> str:
-    """Escape a value for safe embedding as a JS string literal inside an
-    inline <script> block, e.g. replacing `"__USER_EMAIL__"` (WITH the
-    surrounding quotes) in a template.
-
-    Why this is needed: `email` comes straight from a URL query param
-    (attacker-controlled — it's the link in a phishing simulation). Naively
-    doing `html.replace('__USER_EMAIL__', email)` inserts it into
-    `const USER_EMAIL = "__USER_EMAIL__";` with zero escaping, so an email
-    value like `";alert(document.cookie);//` breaks out of the string
-    literal and executes as JS (reflected XSS).
-
-    json.dumps() produces a valid, fully-escaped JS/JSON string literal
-    (handles quotes, backslashes, control characters). We additionally
-    escape `</` so the value can't prematurely close the surrounding
-    <script> tag (json.dumps alone does not protect against that).
-    """
-    return json.dumps(value).replace('</', '<\\/')
-
 
 def derive_divisi_from_email(email: str) -> str:
     """Ambil bagian domain dari email, cocokkan ke mapping di atas."""
@@ -94,21 +73,6 @@ def redirect_handler():
     if not email:
         return jsonify({"error": "parameter 'email' wajib diisi"}), 400
 
-    # ── SECURE GATEWAY CHECK ──
-    # Check if this simulation link has already been reported and blocked by the proxy
-    scheme = request.scheme
-    host = request.host
-    reconstructed_url = f"{scheme}://{host}/redirect-handler?rid={rid}"
-    
-    from services.threat_service import analyze_indicator
-    try:
-        result = analyze_indicator(reconstructed_url)
-        if result["policy"]["action"] == "block":
-            from urllib.parse import quote
-            return redirect(f"/blocked?url={quote(reconstructed_url, safe='')}")
-    except Exception as e:
-        print(f"ERROR in redirect-handler secure gateway check: {e}")
-
     history = database.get_user_history(email)
     tier = database.classify_tier(history["click_count"])
     divisi = history.get("divisi") or derive_divisi_from_email(email)
@@ -122,10 +86,8 @@ def redirect_handler():
             tier_assigned=tier,
             campaign_id=rid or None
         )
-    except Exception as e:
-        print(f"ERROR: Failed to record clicked_link event: {e}")
-        import traceback
-        traceback.print_exc()
+    except Exception:
+        pass
 
     notify_n8n({
         "email": email,
@@ -139,7 +101,7 @@ def redirect_handler():
 
     if tier == "tier_1" or skip_fake_login:
         html = render_template('tier1.html')
-        html = html.replace('"__USER_EMAIL__"', js_string_literal(email))
+        html = html.replace('__USER_EMAIL__', email)
         html = html.replace(
             '__HISTORY_NOTE__',
             build_history_note(history["click_count"] + 1, history["viewed_training_count"])
@@ -147,7 +109,7 @@ def redirect_handler():
         return html, 200
 
     html = render_template('tier2.html')
-    return html.replace('"__USER_EMAIL__"', js_string_literal(email)), 200
+    return html.replace('__USER_EMAIL__', email), 200
 
 
 @events_bp.route('/api/fake-login-submit', methods=['POST'])
@@ -329,17 +291,17 @@ def api_user_eligibility():
         points = row["points"] if row else 100
 
         clicked_row = conn.execute(
-            "SELECT count(*) as count FROM events WHERE email = ? AND event_type = 'clicked_link'",
+            "SELECT count(*) as count FROM events WHERE email = ? AND event_type = 'phishing_click'",
             (email,)
         ).fetchone()
         has_clicked = clicked_row["count"] > 0 if clicked_row else False
 
         behavior_score = points / 2.0
-        if behavior_score >= 70:
+        if behavior_score >= 70 and not has_clicked:
             return jsonify({
                 "eligible": False,
                 "reason": "safe",
-                "message": "Skor perilaku Anda saat ini berada di zona aman. Latihan 'Spot the Fake' dikhususkan untuk rekan-rekan yang perlu meningkatkan skor mereka. Tetap pertahankan performa hebat Anda lewat Daily Quiz harian!"
+                "message": "Skor Perilaku Keamanan Anda terverifikasi AMAN (>= 70). Pelatihan saat ini tidak diperlukan."
             }), 200
 
         game_row = conn.execute('''
@@ -365,7 +327,7 @@ def api_user_eligibility():
                     "eligible": False,
                     "reason": "cooldown",
                     "cooldown_seconds": cooldown_seconds,
-                    "message": "Anda sudah mengikuti latihan hari ini. Silakan kembali lagi setelah masa cooldown selesai."
+                    "message": "Anda sudah mengambil latihan hari ini. Silakan kembali lagi setelah masa cooldown."
                 }), 200
 
         return jsonify({
@@ -394,30 +356,3 @@ def api_user_activity():
         return jsonify({"activities": activities, "count": len(activities)}), 200
     except Exception as e:
         return jsonify({"error": "Gagal mengambil activity", "detail": str(e)}), 500
-
-
-@events_bp.route('/api/dns-check', methods=['GET'])
-def dns_check():
-    import socket
-    from urllib.parse import urlparse
-
-    url = request.args.get('url', '').strip()
-    if not url:
-        return jsonify({"resolvable": False, "error": "url parameter is required"}), 400
-
-    # Ensure URL has scheme for urlparse to identify hostname correctly
-    if not url.startswith("http://") and not url.startswith("https://"):
-        url = "http://" + url
-
-    try:
-        parsed = urlparse(url)
-        hostname = parsed.hostname
-        if not hostname:
-            return jsonify({"resolvable": False, "error": "Invalid URL structure"}), 400
-
-        socket.gethostbyname(hostname)
-        return jsonify({"resolvable": True}), 200
-    except socket.gaierror:
-        return jsonify({"resolvable": False, "reason": "nxdomain"}), 200
-    except Exception as e:
-        return jsonify({"resolvable": False, "error": str(e)}), 500

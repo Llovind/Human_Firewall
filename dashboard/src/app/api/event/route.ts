@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Fields email dan event_type wajib diisi' }, { status: 400 });
     }
 
-    const apiUrl = (process.env.API_URL || process.env.NEXT_PUBLIC_API_URL) || 'http://flask_api:5000';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://flask_api:5000';
     const res = await fetch(`${apiUrl}/api/event`, {
       method: 'POST',
       headers: {

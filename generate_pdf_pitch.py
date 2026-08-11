@@ -209,15 +209,16 @@ def compile_markdown_to_pdf(md_file, pdf_file, doc_title_text, doc_subtitle_text
     print(f"Generated PDF: {pdf_file}")
 
 if __name__ == '__main__':
+    bp_dir = r"C:\Human_Firewall\Business Plan"
     compile_markdown_to_pdf(
-        r"C:\Human_Firewall\TECHNICAL_DEMO_SPEC.md",
-        r"C:\Human_Firewall\TECHNICAL_CAPSTONE_SPEC.pdf",
+        os.path.join(bp_dir, "TECHNICAL_DEMO_SPEC.md"),
+        os.path.join(bp_dir, "TECHNICAL_CAPSTONE_SPEC.pdf"),
         "🛡️ HUMAN FIREWALL PLATFORM",
         "TECHNICAL EXECUTION & DEMO SPECIFICATION (CAPSTONE & HACKATHON TRACK)"
     )
     compile_markdown_to_pdf(
-        r"C:\Human_Firewall\INVESTOR_VISION_PITCH.md",
-        r"C:\Human_Firewall\INVESTOR_VISION_PITCH.pdf",
+        os.path.join(bp_dir, "INVESTOR_VISION_PITCH.md"),
+        os.path.join(bp_dir, "INVESTOR_VISION_PITCH.pdf"),
         "🚀 HUMAN FIREWALL PLATFORM",
         "COMMERCIAL VISION, MARKET OPPORTUNITY, & INVESTOR PITCH DECK"
     )

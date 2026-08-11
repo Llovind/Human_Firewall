@@ -32,10 +32,6 @@ export function usePolling<T>(
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchData = useCallback(async () => {
-    if (!url) {
-      setIsLoading(false);
-      return;
-    }
     try {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

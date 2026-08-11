@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Human Firewall — Akses Ditolak</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg-deep: #060a13; --bg-surface: #111a2e;
+    --border: rgba(99,102,241,0.12); --accent: #818cf8;
+    --text-primary: #f1f5f9; --text-secondary: #94a3b8;
+    --danger: #f87171;
+  }
+  body {
+    font-family: 'Inter', sans-serif; background: var(--bg-deep);
+    color: var(--text-primary); min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .card {
+    background: rgba(17,26,46,0.7); backdrop-filter: blur(24px);
+    border: 1px solid var(--border); border-radius: 16px;
+    padding: 48px 36px; max-width: 420px; width: 90%; text-align: center;
+    animation: fadeUp 0.5s ease;
+  }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+  .icon { font-size: 3.5rem; margin-bottom: 16px; }
+  h1 { font-size: 1.2rem; font-weight: 700; margin-bottom: 12px; }
+  p { font-size: 0.9rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 24px; }
+  .btn {
+    display: inline-block; padding: 12px 28px; border-radius: 10px;
+    font-family: inherit; font-size: 0.88rem; font-weight: 600;
+    text-decoration: none; color: white; background: var(--accent);
+    transition: all 0.2s;
+  }
+  .btn:hover { box-shadow: 0 4px 20px rgba(99,102,241,0.35); transform: translateY(-1px); }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">🔒</div>
+    <h1>Akses Ditolak</h1>
+    <p>{{ message }}</p>
+    <a class="btn" href="/link">Link Ulang Akun</a>
+  </div>
+</body>
+</html>

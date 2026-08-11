@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Human Firewall — Link Akun Telegram</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg-deep: #060a13; --bg-base: #0b1120; --bg-surface: #111a2e;
+    --bg-elevated: #162036; --border: rgba(99,102,241,0.12);
+    --accent: #818cf8; --accent-dim: #6366f1;
+    --text-primary: #f1f5f9; --text-secondary: #94a3b8;
+    --text-muted: #475569; --success: #34d399; --danger: #f87171;
+  }
+  body {
+    font-family: 'Inter', sans-serif; background: var(--bg-deep);
+    color: var(--text-primary); min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0; z-index: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 10% 20%, rgba(99,102,241,0.06), transparent 60%),
+      radial-gradient(ellipse 60% 50% at 90% 80%, rgba(52,211,153,0.04), transparent 50%);
+    pointer-events: none;
+  }
+  .container {
+    position: relative; z-index: 1; width: 100%; max-width: 440px; padding: 24px;
+  }
+  .card {
+    background: rgba(17,26,46,0.7); backdrop-filter: blur(24px);
+    border: 1px solid var(--border); border-radius: 16px; padding: 40px 32px;
+    animation: fadeUp 0.5s ease;
+  }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+
+  .logo { text-align: center; margin-bottom: 28px; }
+  .logo svg { width: 48px; height: 48px; filter: drop-shadow(0 0 20px rgba(99,102,241,0.4)); }
+  .logo h1 { font-size: 1.3rem; font-weight: 700; margin-top: 12px; }
+  .logo p { font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px; }
+
+  .step { display: none; }
+  .step.active { display: block; }
+
+  label { display: block; font-size: 0.82rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; }
+  input[type="email"] {
+    width: 100%; padding: 12px 14px; background: var(--bg-deep); border: 1px solid var(--border);
+    border-radius: 10px; color: var(--text-primary); font-family: inherit; font-size: 0.92rem;
+    outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  input[type="email"]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
+  input[type="email"]::placeholder { color: var(--text-muted); }
+
+  .btn {
+    display: block; width: 100%; padding: 13px; border: none; border-radius: 10px;
+    font-family: inherit; font-size: 0.92rem; font-weight: 600; cursor: pointer;
+    transition: all 0.2s; margin-top: 18px;
+  }
+  .btn-primary { background: linear-gradient(135deg, var(--accent-dim), var(--accent)); color: white; }
+  .btn-primary:hover { box-shadow: 0 4px 20px rgba(99,102,241,0.35); transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+  .btn-telegram {
+    background: #2AABEE; color: white; text-decoration: none;
+    text-align: center; display: flex; align-items: center; justify-content: center; gap: 10px;
+  }
+  .btn-telegram:hover { background: #229ED9; box-shadow: 0 4px 20px rgba(42,171,238,0.35); }
+
+  .error { background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3); border-radius: 8px; padding: 10px 14px; margin-top: 14px; font-size: 0.82rem; color: var(--danger); display: none; }
+  .success-info { text-align: center; }
+  .success-info .check { font-size: 3rem; margin-bottom: 12px; }
+  .success-info h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 8px; }
+  .success-info p { font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 20px; }
+  .timer { font-size: 0.78rem; color: var(--text-muted); margin-top: 8px; }
+  .footer { text-align: center; margin-top: 24px; font-size: 0.75rem; color: var(--text-muted); }
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="logo">
+        <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="36" height="36" rx="10" fill="url(#g)"/>
+          <path d="M18 8l-8 4v7c0 5.6 3.4 9.6 8 11 4.6-1.4 8-5.4 8-11v-7l-8-4z" fill="rgba(255,255,255,0.2)" stroke="white" stroke-width="1.5"/>
+          <path d="M16 21l-3-3 1.4-1.4L16 18.2l4.6-4.6L22 15l-6 6z" fill="white"/>
+          <defs><linearGradient id="g" x1="0" y1="0" x2="36" y2="36"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#818cf8"/></linearGradient></defs>
+        </svg>
+        <h1>Link Akun Telegram</h1>
+        <p>Hubungkan email korporat Anda dengan Telegram Bot</p>
+      </div>
+
+      <!-- Step 1: Email input -->
+      <div class="step active" id="step-email">
+        <label for="email">Email Korporat</label>
+        <input type="email" id="email" placeholder="nama@perusahaan.co.id" autocomplete="email" required>
+        <div class="error" id="error-msg"></div>
+        <button class="btn btn-primary" id="btn-submit" onclick="submitEmail()">Lanjutkan</button>
+      </div>
+
+      <!-- Step 2: Deep link button -->
+      <div class="step" id="step-deeplink">
+        <div class="success-info">
+          <div class="check">✅</div>
+          <h2>Token Berhasil Dibuat!</h2>
+          <p>Klik tombol di bawah untuk membuka Telegram Bot dan menyelesaikan proses linking akun Anda.</p>
+          <a class="btn btn-telegram" id="btn-telegram" href="#" target="_blank">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/></svg>
+            Buka Telegram Bot
+          </a>
+          <p class="timer" id="timer-text">Token berlaku selama 15 menit</p>
+        </div>
+      </div>
+    </div>
+    <div class="footer">Human Firewall Lite &middot; Security Awareness Platform</div>
+  </div>
+
+<script>
+async function submitEmail() {
+  const email = document.getElementById('email').value.trim();
+  const errorEl = document.getElementById('error-msg');
+  const btn = document.getElementById('btn-submit');
+
+  errorEl.style.display = 'none';
+
+  if (!email || !email.includes('@')) {
+    errorEl.textContent = 'Masukkan alamat email yang valid.';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Memproses...';
+
+  try {
+    const res = await fetch('/api/link-token/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      errorEl.textContent = data.error || 'Terjadi kesalahan.';
+      errorEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Lanjutkan';
+      return;
+    }
+
+    // Show deep link step
+    document.getElementById('step-email').classList.remove('active');
+    document.getElementById('step-deeplink').classList.add('active');
+    document.getElementById('btn-telegram').href = data.telegram_deeplink;
+
+  } catch (err) {
+    errorEl.textContent = 'Gagal terhubung ke server. Coba lagi.';
+    errorEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Lanjutkan';
+  }
+}
+
+document.getElementById('email').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.preventDefault(); submitEmail(); }
+});
+</script>
+</body>
+</html>

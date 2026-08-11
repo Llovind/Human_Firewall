@@ -1,8 +1,9 @@
-"use client";
+'use client';
 
-import Image from "next/image";
+import React from 'react';
+import Image from 'next/image';
 
-type LogoVariant = "hero" | "navbar" | "loading";
+type LogoVariant = 'hero' | 'navbar' | 'loading';
 
 interface AnimatedLogoProps {
   variant?: LogoVariant;
@@ -10,92 +11,63 @@ interface AnimatedLogoProps {
   className?: string;
 }
 
-// Drop the exported PNGs into /public/logo/ :
-//   /public/logo/hf-logo-hero.png     (400w)
-//   /public/logo/hf-logo-navbar.png   (120w)
-//   /public/logo/hf-logo-loading.png  (160w)
-const SRC: Record<LogoVariant, string> = {
-  hero: "/logo/hf-logo-hero.png",
-  navbar: "/logo/hf-logo-navbar.png",
-  loading: "/logo/hf-logo-loading.png",
-};
-
-const NATIVE_RATIO = 848 / 898; // height / width from the source export
-
 /**
- * Human Firewall animated logo — wraps the actual logo asset (not a redrawn
- * vector) so it's a guaranteed pixel-perfect match, with CSS-only motion:
- *
- * - "hero": one-shot bouncy pop-in + settle. Landing / login page.
- * - "navbar": static-looking with a very subtle idle float. Header.
- * - "loading": continuous breathing pulse + gentle rock. App boot screen.
- *
- * All animation respects prefers-reduced-motion.
+ * AFFERENT Official Logo
+ * Exact High-Resolution Asset from 'ChatGPT Image 16 Jul 2026, 22.21.31.png'
+ * (Background transparentized for dark mode)
  */
 export default function AnimatedLogo({
-  variant = "hero",
-  size = 180,
-  className = "",
+  variant = 'hero',
+  size = 48,
+  className = '',
 }: AnimatedLogoProps) {
-  const width = size;
-  const height = Math.round(size * NATIVE_RATIO);
-
   return (
-    <span className={`hf-logo-wrap hf-${variant} ${className}`}>
+    <span className={`afferent-logo-wrap afferent-${variant} ${className}`} style={{ width: size, height: size, display: 'inline-block' }}>
       <Image
-        src={SRC[variant]}
-        alt="Human Firewall"
-        width={width}
-        height={height}
-        priority={variant === "hero" || variant === "loading"}
-        className="hf-logo-img"
+        src="/logo/afferent-logo.png"
+        alt="AFFERENT Logo"
+        width={size * 2}
+        height={size * 2}
+        priority
+        unoptimized
+        className="afferent-logo-img"
+        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
       />
-
-      <style>{`
-        .hf-logo-wrap { display: inline-block; line-height: 0; }
-        .hf-logo-img { display: block; transform-box: fill-box; transform-origin: center; }
-
-        /* Hero: bouncy pop-in, plays once on mount */
-        .hf-hero .hf-logo-img {
-          opacity: 0;
-          transform: scale(0.4) rotate(-12deg);
-          animation: hf-pop-in 0.75s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+      <style jsx>{`
+        .afferent-logo-wrap {
+          display: inline-block;
+          line-height: 0;
+          vertical-align: middle;
         }
-        @keyframes hf-pop-in {
-          0%   { opacity: 0; transform: scale(0.4) rotate(-12deg); }
-          60%  { opacity: 1; transform: scale(1.08) rotate(3deg); }
+
+        /* Hero Entrance animation */
+        .afferent-hero :global(.afferent-logo-img) {
+          opacity: 0;
+          transform: scale(0.6) rotate(-5deg);
+          animation: aff-official-pop 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+        @keyframes aff-official-pop {
+          0%   { opacity: 0; transform: scale(0.6) rotate(-5deg); }
+          70%  { opacity: 1; transform: scale(1.05) rotate(2deg); }
           100% { opacity: 1; transform: scale(1) rotate(0deg); }
         }
 
-        /* Navbar: subtle continuous float, not distracting */
-        .hf-navbar .hf-logo-img {
-          animation: hf-float 2.6s ease-in-out infinite;
+        /* Navbar Idle Float */
+        .afferent-navbar :global(.afferent-logo-img) {
+          animation: aff-official-float 3s ease-in-out infinite;
         }
-        @keyframes hf-float {
-          0%, 100% { transform: translateY(0) rotate(0deg); }
-          50%      { transform: translateY(-2px) rotate(1.5deg); }
-        }
-
-        /* Loading: breathing pulse + gentle rock, signals "working" */
-        .hf-loading .hf-logo-img {
-          animation: hf-breathe 1.4s ease-in-out infinite,
-                     hf-rock 2.8s ease-in-out infinite;
-        }
-        @keyframes hf-breathe {
-          0%, 100% { transform: scale(1); }
-          50%      { transform: scale(1.08); }
-        }
-        @keyframes hf-rock {
-          0%, 100% { rotate: -3deg; }
-          50%      { rotate: 3deg; }
+        @keyframes aff-official-float {
+          0%, 100% { transform: translateY(0); }
+          50%      { transform: translateY(-3px); }
         }
 
-        @media (prefers-reduced-motion: reduce) {
-          .hf-logo-img {
-            animation: none !important;
-            opacity: 1 !important;
-            transform: none !important;
-          }
+        /* Loading Pulse */
+        .afferent-loading :global(.afferent-logo-img) {
+          animation: aff-official-pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes aff-official-pulse {
+          0%, 100% { transform: scale(1); opacity: 0.9; }
+          50%      { transform: scale(1.08); opacity: 1; }
         }
       `}</style>
     </span>

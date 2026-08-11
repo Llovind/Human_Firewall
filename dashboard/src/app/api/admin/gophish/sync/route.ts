@@ -2,23 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const apiUrl = (process.env.API_URL || process.env.NEXT_PUBLIC_API_URL) || 'http://flask_api:5000';
-    const serviceApiKey = process.env.SERVICE_API_KEY;
-    if (!serviceApiKey) {
-      // Fail fast: no insecure fallback credential. A missing key is a
-      // deployment misconfiguration, not something to paper over.
-      console.error('[admin proxy] SERVICE_API_KEY is not set; refusing to call Flask backend.');
-      return NextResponse.json({ error: 'Server misconfigured: SERVICE_API_KEY is not set' }, { status: 500 });
-    }
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://flask_api:5000';
+    const secretKey = process.env.SECRET_KEY || 'dev-fallback-key-change-in-production';
 
     const res = await fetch(`${apiUrl}/api/admin/gophish/sync`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${serviceApiKey}`,
+        'Authorization': `Bearer ${secretKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(body),
     });
 
     const data = await res.json();

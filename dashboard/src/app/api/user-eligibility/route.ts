@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Parameters email dan token wajib diisi' }, { status: 400 });
     }
 
-    const apiUrl = (process.env.API_URL || process.env.NEXT_PUBLIC_API_URL) || 'http://flask_api:5000';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://flask_api:5000';
     const res = await fetch(`${apiUrl}/api/user-eligibility?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`, {
       method: 'GET',
     });

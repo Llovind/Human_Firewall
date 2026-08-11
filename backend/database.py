@@ -272,6 +272,34 @@ def init_db():
         except sqlite3.OperationalError:
             pass
 
+        # Tabel readiness_thresholds — ambang batas kesiapan GRC terpetakan ke ISO 27001 & UU PDP
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS readiness_thresholds (
+                clause_id TEXT PRIMARY KEY,
+                clause_number TEXT NOT NULL,
+                clause_title TEXT NOT NULL,
+                target_value REAL,
+                unit TEXT NOT NULL,
+                is_legally_mandated INTEGER NOT NULL DEFAULT 0,
+                rationale TEXT NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Seed data default klausul kesiapan
+        default_thresholds = [
+            ("ISO_A63", "ISO 27001:2022 Annex A.6.3", "Information security awareness, education and training", 85.0, "percent", 0, "Default based on KnowBe4 2026 Phishing by Industry Benchmarking Report — global average post-training susceptibility 4.2%."),
+            ("ISO_A68", "ISO 27001:2022 Annex A.6.8", "Information security event reporting", 70.0, "percent", 0, "Default based on Proofpoint State of the Phish report on report-to-click resilience ratios. Highly dependent on industry sector (e.g. financial services ~8.23 vs education ~1.27); admin should calibrate to sector risk appetite."),
+            ("ISO_A812", "ISO 27001:2022 Annex A.8.12", "Data leakage prevention", None, "percent", 0, "No published industry benchmark identified for this specific metric — admin must set based on organizational risk assessment."),
+            ("UU_PDP_35", "UU PDP Pasal 35", "Internal policy & security system obligations for Personal Data Controllers", None, "score", 0, "Organization-specific based on internal PII data controller division assessment — no external numeric benchmark applies."),
+            ("UU_PDP_46", "UU PDP Pasal 46", "Written breach notification obligation within 3x24 hours (72 hours) to the Data Subject and the supervisory institution", 72.0, "hours", 1, "Fixed by UU PDP No. 27/2022 Pasal 46 — statutory breach notification deadline, not an organizational target.")
+        ]
+        for t in default_thresholds:
+            cursor.execute('''
+                INSERT OR IGNORE INTO readiness_thresholds (clause_id, clause_number, clause_title, target_value, unit, is_legally_mandated, rationale)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', t)
+
         # Tabel divisions
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS divisions (
@@ -1738,15 +1766,209 @@ def get_compliance_summary():
         avg_row = conn.execute('SELECT AVG(points) as avg_pts FROM user_history').fetchone()
         avg_points = round(avg_row["avg_pts"], 1) if avg_row and avg_row["avg_pts"] else 100
 
+def get_readiness_thresholds():
+    """Mengembalikan daftar ambang batas kesiapan GRC."""
+    conn = get_connection()
+    try:
+        rows = conn.execute("SELECT * FROM readiness_thresholds ORDER BY clause_id ASC").fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def update_readiness_threshold(clause_id: str, target_value: float = None):
+    """Update ambang batas kesiapan GRC. Menolak perubahan jika is_legally_mandated = 1."""
+    conn = get_connection()
+    try:
+        row = conn.execute("SELECT is_legally_mandated, clause_title, clause_number FROM readiness_thresholds WHERE clause_id = ?", (clause_id,)).fetchone()
+        if not row:
+            raise ValueError(f"Clause {clause_id} not found")
+        if row["is_legally_mandated"] == 1:
+            raise ValueError(f"{row['clause_number']} ({row['clause_title']}) is a statutory legal mandate and cannot be modified.")
+
+        conn.execute("UPDATE readiness_thresholds SET target_value = ?, updated_at = CURRENT_TIMESTAMP WHERE clause_id = ?", (target_value, clause_id))
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def get_compliance_summary():
+    """Mengembalikan skor Kesiapan Kepatuhan (Readiness Level) terklasifikasi
+    berdasarkan klausul resmi ISO 27001:2022 dan UU PDP No. 27/2022.
+    
+    TIDAK menggunakan kata 'Compliant/Non-Compliant' dan TIDAK menggunakan Rupiah arbitrer.
+    """
+    conn = get_connection()
+
+    try:
+        # Load thresholds
+        threshold_rows = conn.execute("SELECT * FROM readiness_thresholds").fetchall()
+        thresholds = {r["clause_id"]: dict(r) for r in threshold_rows}
+
+        # 1. Telemetri Karyawan
+        stats_row = conn.execute('''
+            SELECT 
+                AVG(click_count) as avg_clicks,
+                AVG(CASE WHEN viewed_training_count > 0 THEN 1.0 ELSE 0.0 END) as training_rate,
+                COUNT(*) as total_users,
+                SUM(click_count) as total_clicks
+            FROM user_history
+        ''').fetchone()
+        
+        training_rate = stats_row["training_rate"] if stats_row and stats_row["training_rate"] else 0
+        total_users = stats_row["total_users"] if stats_row else 0
+        total_clicks = stats_row["total_clicks"] if stats_row and stats_row["total_clicks"] else 0
+
+        # Laporan Phishing Simulasi vs Real World
+        reports_row = conn.execute("SELECT COUNT(*) as cnt FROM threat_reports").fetchone()
+        total_reports = reports_row["cnt"] if reports_row else 0
+
+        # Insiden Kebocoran Kredensial (Unique employees)
+        cred_users_row = conn.execute("SELECT COUNT(DISTINCT email) as cnt FROM events WHERE event_type = 'submitted_data'").fetchone()
+        cred_users = cred_users_row["cnt"] if cred_users_row else 0
+
+        # MTTC (Mean Time to Close) dalam jam untuk insiden closed
+        mttc_row = conn.execute('''
+            SELECT AVG(
+                (julianday(closed_at) - julianday(created_at)) * 24
+            ) as avg_hours
+            FROM incidents
+            WHERE status = 'closed' AND closed_at IS NOT NULL
+        ''').fetchone()
+        mttc_hours = round(mttc_row["avg_hours"], 1) if mttc_row and mttc_row["avg_hours"] is not None else 0.0
+
+        # -------------------------------------------------------------------
+        # EVAULASI KLAUSUL MAPPED READINESS
+        # -------------------------------------------------------------------
+
+        # A. ISO 27001:2022 Annex A.6.3 — Awareness & Training
+        iso_a63_pct = round(training_rate * 100, 1)
+        iso_a63_target = thresholds.get("ISO_A63", {}).get("target_value", 85.0)
+        if iso_a63_pct >= (iso_a63_target or 85.0):
+            iso_a63_tier = "Strong Readiness"
+        elif iso_a63_pct >= 50.0:
+            iso_a63_tier = "Partial Readiness"
+        else:
+            iso_a63_tier = "Needs Attention"
+
+        # B. ISO 27001:2022 Annex A.6.8 — Event Reporting
+        reporting_ratio = round((total_reports / max(1, total_reports + total_clicks)) * 100, 1)
+        iso_a68_target = thresholds.get("ISO_A68", {}).get("target_value", 70.0)
+        if reporting_ratio >= (iso_a68_target or 70.0):
+            iso_a68_tier = "Strong Readiness"
+        elif reporting_ratio >= 35.0:
+            iso_a68_tier = "Partial Readiness"
+        else:
+            iso_a68_tier = "Needs Attention"
+
+        # C. ISO 27001:2022 Annex A.8.12 — Data Leakage Prevention (Human Vector)
+        cred_rate = round((cred_users / max(1, total_users)) * 100, 1)
+        iso_a812_target = thresholds.get("ISO_A812", {}).get("target_value")
+        if iso_a812_target is None:
+            iso_a812_tier = "Not Configured"
+        elif cred_rate <= iso_a812_target:
+            iso_a812_tier = "Strong Readiness"
+        else:
+            iso_a812_tier = "Needs Attention"
+
+        # D. UU PDP Pasal 35 — Internal Security System & PII Risk Profile
+        uu_pdp_35_target = thresholds.get("UU_PDP_35", {}).get("target_value")
+        if uu_pdp_35_target is None:
+            uu_pdp_35_tier = "Not Configured"
+        else:
+            uu_pdp_35_tier = "Partial Readiness"
+
+        # E. UU PDP Pasal 46 — Written Breach Notification (72 Hours Statutory Limit)
+        uu_pdp_46_limit = 72.0
+        if mttc_hours == 0.0 or mttc_hours <= 24.0:
+            uu_pdp_46_tier = "Strong Readiness"
+        elif mttc_hours <= uu_pdp_46_limit:
+            uu_pdp_46_tier = "Partial Readiness"
+        else:
+            uu_pdp_46_tier = "Needs Attention"
+
+        # List Klausul Evaluasi
+        clauses = [
+            {
+                "clause_id": "ISO_A63",
+                "clause_number": "ISO 27001:2022 Annex A.6.3",
+                "clause_title": "Information security awareness, education and training",
+                "current_value": iso_a63_pct,
+                "target_value": iso_a63_target,
+                "unit": "percent",
+                "is_legally_mandated": False,
+                "readiness_tier": iso_a63_tier,
+                "rationale": thresholds.get("ISO_A63", {}).get("rationale", "")
+            },
+            {
+                "clause_id": "ISO_A68",
+                "clause_number": "ISO 27001:2022 Annex A.6.8",
+                "clause_title": "Information security event reporting",
+                "current_value": reporting_ratio,
+                "target_value": iso_a68_target,
+                "unit": "percent",
+                "is_legally_mandated": False,
+                "readiness_tier": iso_a68_tier,
+                "rationale": thresholds.get("ISO_A68", {}).get("rationale", "")
+            },
+            {
+                "clause_id": "ISO_A812",
+                "clause_number": "ISO 27001:2022 Annex A.8.12",
+                "clause_title": "Data leakage prevention",
+                "current_value": cred_rate,
+                "target_value": iso_a812_target,
+                "unit": "percent",
+                "is_legally_mandated": False,
+                "readiness_tier": iso_a812_tier,
+                "rationale": thresholds.get("ISO_A812", {}).get("rationale", "")
+            },
+            {
+                "clause_id": "UU_PDP_35",
+                "clause_number": "UU PDP Pasal 35",
+                "clause_title": "Internal policy & security system obligations for Personal Data Controllers",
+                "current_value": None,
+                "target_value": uu_pdp_35_target,
+                "unit": "score",
+                "is_legally_mandated": False,
+                "readiness_tier": uu_pdp_35_tier,
+                "rationale": thresholds.get("UU_PDP_35", {}).get("rationale", "")
+            },
+            {
+                "clause_id": "UU_PDP_46",
+                "clause_number": "UU PDP Pasal 46",
+                "clause_title": "Written breach notification obligation within 3x24 hours (72 hours) to the Data Subject and the supervisory institution",
+                "current_value": mttc_hours,
+                "target_value": uu_pdp_46_limit,
+                "unit": "hours",
+                "is_legally_mandated": True,
+                "readiness_tier": uu_pdp_46_tier,
+                "rationale": thresholds.get("UU_PDP_46", {}).get("rationale", "")
+            }
+        ]
+
+        configured_tiers = [c["readiness_tier"] for c in clauses if c["readiness_tier"] != "Not Configured"]
+        
+        if not configured_tiers:
+            overall_tier = "Not Configured"
+        elif configured_tiers.count("Needs Attention") >= 2:
+            overall_tier = "Needs Attention"
+        elif "Needs Attention" in configured_tiers or configured_tiers.count("Partial Readiness") >= 2:
+            overall_tier = "Partial Readiness"
+        else:
+            overall_tier = "Strong Readiness"
+
         return {
-            "avg_points_all": avg_points,
-            "compliance_pct": compliance_pct,
-            "compliance_grade": compliance_grade,
+            "disclaimer": "Tingkat kesiapan ini merupakan indikator internal berdasarkan telemetri perilaku (human telemetry) dan bukan merupakan penentuan sertifikasi resmi atau hasil audit formal.",
+            "overall_readiness_indicator": overall_tier,
+            "clause_readiness": clauses,
             "total_users": total_users,
-            "total_incidents": total_incidents,
-            "total_incidents_prevented": incidents_prevented,
-            "estimated_savings_idr": estimated_savings,
-            "divisi_risk_map": divisi_risk_map
+            "total_reports": total_reports,
+            "total_clicks": total_clicks,
+            "mean_time_to_close_hours": mttc_hours
         }
     finally:
         conn.close()

@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Human Firewall Lite — My Dashboard</title>
+<meta name="description" content="Personal security dashboard for Human Firewall Lite.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ── Reset & Base ─────────────────────────────────────── */
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg-deep:     #060a13;
+    --bg-base:     #0b1120;
+    --bg-surface:  #111a2e;
+    --bg-elevated: #162036;
+    --border:      rgba(99, 102, 241, 0.12);
+    --border-hover:rgba(99, 102, 241, 0.3);
+    --accent:      #818cf8;
+    --accent-dim:  #6366f1;
+    --text-primary:#f1f5f9;
+    --text-secondary:#94a3b8;
+    --text-muted:  #475569;
+    --success:     #34d399;
+    --warning:     #fbbf24;
+    --danger:      #f87171;
+    --info:        #60a5fa;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Ambient Background ───────────────────────────────── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 10% 20%, rgba(99,102,241,0.06), transparent 60%),
+      radial-gradient(ellipse 60% 50% at 90% 80%, rgba(52,211,153,0.04), transparent 50%),
+      radial-gradient(ellipse 70% 40% at 50% 0%,  rgba(96,165,250,0.04), transparent 50%);
+    pointer-events: none;
+  }
+
+  /* ── Layout Shell ─────────────────────────────────────── */
+  .app { position: relative; z-index: 1; }
+
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 32px;
+    background: rgba(11,17,32,0.8);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 100;
+  }
+
+  .topbar-brand {
+    display: flex; align-items: center; gap: 12px;
+  }
+
+  .topbar-logo {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent-dim), var(--accent));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 20px rgba(99,102,241,0.25);
+  }
+
+  .topbar-logo svg { width: 20px; height: 20px; }
+
+  .topbar-title {
+    font-size: 16px; font-weight: 700;
+    letter-spacing: -0.3px;
+    background: linear-gradient(135deg, var(--text-primary), var(--accent));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .topbar-right {
+    display: flex; align-items: center; gap: 20px;
+  }
+
+  .live-indicator {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 500; color: var(--text-secondary);
+  }
+
+  .live-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 8px var(--success);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--success); }
+    50%      { opacity: 0.5; box-shadow: 0 0 16px var(--success); }
+  }
+
+  .clock {
+    font-size: 13px; font-weight: 500; color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Nav Tabs ──────────────────────────────────────────── */
+  .topbar-nav {
+    display: flex;
+    gap: 8px;
+    margin-left: 32px;
+  }
+
+  .nav-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 6px 14px;
+    border-radius: 8px;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+
+  .nav-btn:hover {
+    color: var(--text-primary);
+    background: rgba(99, 102, 241, 0.06);
+  }
+
+  .nav-btn.active {
+    color: var(--text-primary);
+    background: rgba(99, 102, 241, 0.12);
+    border-color: var(--border);
+  }
+
+  /* ── Main Content ─────────────────────────────────────── */
+  .main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 28px 32px 48px;
+  }
+
+  /* ── Fade-in Animation ────────────────────────────────── */
+  .fade-in {
+    animation: fadeUp 0.5s ease-out both;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Glassmorphism Card Base ───────────────────────────── */
+  .glass-card {
+    background: rgba(17, 26, 46, 0.7);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    transition: border-color 0.3s, transform 0.2s, box-shadow 0.3s;
+  }
+
+  .glass-card:hover {
+    border-color: var(--border-hover);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.35);
+  }
+
+  /* ── Hero Card ────────────────────────────────────────── */
+  .hero-card {
+    padding: 40px 32px;
+    text-align: center;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+    animation-delay: 0.05s;
+  }
+
+  /* Subtle glow behind the hero card */
+  .hero-card::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse 60% 80% at 50% 30%, rgba(99,102,241,0.08), transparent 70%);
+    pointer-events: none;
+  }
+
+  .hero-name {
+    font-size: 28px; font-weight: 800;
+    letter-spacing: -0.5px;
+    margin-bottom: 4px;
+    position: relative;
+  }
+
+  .hero-divisi {
+    font-size: 14px; color: var(--text-secondary);
+    font-weight: 500;
+    margin-bottom: 20px;
+    position: relative;
+  }
+
+  /* ── Progress Ring ────────────────────────────────────── */
+  .ring-wrap {
+    position: relative;
+    width: 180px; height: 180px;
+    margin: 0 auto 20px;
+  }
+
+  .ring-bg {
+    fill: none; stroke: rgba(99,102,241,0.1); stroke-width: 10;
+  }
+
+  .ring-value {
+    fill: none; stroke-width: 10;
+    stroke-linecap: round;
+    /* circumference = 2 * PI * 75 ≈ 471.24 */
+    stroke-dasharray: 471.24;
+    stroke-dashoffset: 471.24;
+    transition: stroke-dashoffset 1.2s ease-out, stroke 0.4s;
+  }
+
+  .ring-text {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column;
+  }
+
+  .ring-points {
+    font-size: 42px; font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ring-label {
+    font-size: 12px; color: var(--text-muted); font-weight: 500; margin-top: 4px;
+  }
+
+  /* ── Badge Pills ──────────────────────────────────────── */
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 20px;
+    font-size: 11px; font-weight: 600;
+    text-transform: capitalize;
+  }
+
+  .badge-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+  }
+
+  /* Sentinel: indigo/purple glow (>=130 pts) */
+  .badge-sentinel {
+    background: rgba(99,102,241,0.15);
+    color: var(--accent);
+    box-shadow: 0 0 12px rgba(99,102,241,0.25), 0 0 24px rgba(99,102,241,0.10);
+  }
+  .badge-sentinel .badge-dot { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+
+  /* Guardian: green (60-129 pts) */
+  .badge-guardian {
+    background: rgba(52,211,153,0.15);
+    color: var(--success);
+    box-shadow: 0 0 12px rgba(52,211,153,0.20), 0 0 24px rgba(52,211,153,0.08);
+  }
+  .badge-guardian .badge-dot { background: var(--success); box-shadow: 0 0 6px var(--success); }
+
+  /* Vulnerable: red (<60 pts) */
+  .badge-vulnerable {
+    background: rgba(248,113,113,0.15);
+    color: var(--danger);
+    box-shadow: 0 0 12px rgba(248,113,113,0.20), 0 0 24px rgba(248,113,113,0.08);
+  }
+  .badge-vulnerable .badge-dot { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+
+  .hero-badge {
+    font-size: 13px;
+    padding: 5px 16px;
+    margin-bottom: 24px;
+    position: relative;
+  }
+
+  /* ── KPI Stats Grid ───────────────────────────────────── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .kpi-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    text-align: center;
+    transition: border-color 0.3s, transform 0.2s, box-shadow 0.3s;
+  }
+
+  .kpi-card:hover {
+    border-color: var(--border-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  }
+
+  .kpi-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .kpi-card.accent-indigo::before  { background: linear-gradient(90deg, var(--accent-dim), var(--accent)); }
+  .kpi-card.accent-emerald::before { background: linear-gradient(90deg, #059669, var(--success)); }
+  .kpi-card.accent-amber::before   { background: linear-gradient(90deg, #d97706, var(--warning)); }
+  .kpi-card.accent-cyan::before    { background: linear-gradient(90deg, #0891b2, var(--info)); }
+
+  .kpi-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 12px;
+  }
+
+  .kpi-icon.indigo  { background: rgba(99,102,241,0.12); color: var(--accent); }
+  .kpi-icon.emerald { background: rgba(52,211,153,0.12);  color: var(--success); }
+  .kpi-icon.amber   { background: rgba(251,191,36,0.12);  color: var(--warning); }
+  .kpi-icon.cyan    { background: rgba(96,165,250,0.12);   color: var(--info); }
+
+  .kpi-icon svg { width: 20px; height: 20px; }
+
+  .kpi-value {
+    font-size: 28px; font-weight: 800;
+    letter-spacing: -0.5px;
+    line-height: 1;
+    margin-bottom: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .kpi-label {
+    font-size: 12px; font-weight: 500;
+    color: var(--text-secondary);
+  }
+
+  .kpi-grid .kpi-card:nth-child(1) { animation-delay: 0.15s; }
+  .kpi-grid .kpi-card:nth-child(2) { animation-delay: 0.20s; }
+  .kpi-grid .kpi-card:nth-child(3) { animation-delay: 0.25s; }
+  .kpi-grid .kpi-card:nth-child(4) { animation-delay: 0.30s; }
+
+  /* ── Activity Feed / Timeline ─────────────────────────── */
+  .activity-card {
+    padding: 24px;
+    animation-delay: 0.35s;
+  }
+
+  .activity-title {
+    font-size: 15px; font-weight: 600;
+    letter-spacing: -0.2px;
+    margin-bottom: 20px;
+  }
+
+  .timeline {
+    position: relative;
+    padding-left: 32px;
+  }
+
+  /* Vertical line */
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 11px; top: 4px; bottom: 4px;
+    width: 2px;
+    background: linear-gradient(180deg, var(--border-hover), var(--border), transparent);
+    border-radius: 2px;
+  }
+
+  .timeline-item {
+    position: relative;
+    padding-bottom: 24px;
+    animation: fadeUp 0.4s ease-out both;
+  }
+
+  .timeline-item:last-child { padding-bottom: 0; }
+
+  /* Icon dot on the timeline */
+  .timeline-icon {
+    position: absolute;
+    left: -32px; top: 2px;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+    border: 2px solid var(--bg-surface);
+  }
+
+  .timeline-icon.click   { background: rgba(248,113,113,0.2); color: var(--danger); }
+  .timeline-icon.training { background: rgba(52,211,153,0.2);  color: var(--success); }
+  .timeline-icon.game    { background: rgba(129,140,248,0.2); color: var(--accent); }
+
+  .timeline-text {
+    font-size: 13px; font-weight: 500;
+    color: var(--text-primary);
+    line-height: 1.5;
+  }
+
+  .timeline-time {
+    font-size: 11px; color: var(--text-muted);
+    margin-top: 3px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .empty-state {
+    text-align: center; padding: 40px 20px;
+    color: var(--text-muted);
+  }
+
+  .empty-state svg { width: 40px; height: 40px; margin-bottom: 12px; opacity: 0.4; }
+
+  .empty-state p {
+    font-size: 13px; line-height: 1.6;
+  }
+
+  /* ── Game Panel (Spot the Fake) ────────────────────────── */
+  .game-panel {
+    display: none;
+  }
+
+  .game-placeholder {
+    padding: 60px 32px;
+    text-align: center;
+    animation-delay: 0.05s;
+  }
+
+  .game-placeholder-icon {
+    width: 64px; height: 64px;
+    margin: 0 auto 20px;
+    border-radius: 16px;
+    background: rgba(99,102,241,0.1);
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .game-placeholder-icon svg {
+    width: 32px; height: 32px; color: var(--accent); opacity: 0.7;
+  }
+
+  .game-placeholder h2 {
+    font-size: 18px; font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .game-placeholder p {
+    font-size: 14px; color: var(--text-secondary);
+  }
+
+  /* ── Loading Skeleton ─────────────────────────────────── */
+  .skeleton {
+    background: linear-gradient(90deg, var(--bg-elevated) 25%, rgba(99,102,241,0.08) 50%, var(--bg-elevated) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+    border-radius: 8px;
+  }
+
+  @keyframes shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* ── Footer ───────────────────────────────────────────── */
+  .footer {
+    text-align: center;
+    padding: 32px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .footer a { color: var(--accent); text-decoration: none; }
+  .footer a:hover { text-decoration: underline; }
+
+  /* ── Responsive ───────────────────────────────────────── */
+  @media (max-width: 900px) {
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .main { padding: 20px 16px 40px; }
+    .topbar { padding: 14px 16px; }
+    .topbar-nav { margin-left: 16px; }
+  }
+
+  @media (max-width: 540px) {
+    .kpi-grid { grid-template-columns: 1fr 1fr; }
+    .hero-name { font-size: 22px; }
+    .ring-wrap { width: 140px; height: 140px; }
+    .ring-points { font-size: 32px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- ── Top Bar ──────────────────────────────────────── -->
+  <header class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </div>
+      <span class="topbar-title">Human Firewall Lite</span>
+
+      <div class="topbar-nav">
+        <button class="nav-btn active" id="btn-dashboard" onclick="switchTab('dashboard')">Dashboard</button>
+        <button class="nav-btn" id="btn-game" onclick="switchTab('game')">Spot the Fake</button>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="live-indicator">
+        <span class="live-dot"></span>
+        <span>Personal</span>
+      </div>
+      <span class="clock" id="clock">--:--:--</span>
+    </div>
+  </header>
+
+  <!-- ── Dashboard Panel ─────────────────────────────── -->
+  <main class="main" id="panel-dashboard">
+
+    <!-- Hero Card -->
+    <section class="glass-card hero-card fade-in" id="hero-card">
+      <div class="hero-name" id="hero-name">
+        <div class="skeleton" style="width: 200px; height: 28px; margin: 0 auto;"></div>
+      </div>
+      <div class="hero-divisi" id="hero-divisi">
+        <div class="skeleton" style="width: 120px; height: 14px; margin: 4px auto 0;"></div>
+      </div>
+      <div id="hero-badge-wrap" style="margin-bottom: 24px; position: relative;">
+        <!-- Badge inserted by JS -->
+      </div>
+
+      <div class="ring-wrap">
+        <svg width="180" height="180" viewBox="0 0 180 180">
+          <circle class="ring-bg" cx="90" cy="90" r="75" />
+          <circle class="ring-value" id="ring-value" cx="90" cy="90" r="75" transform="rotate(-90 90 90)" />
+        </svg>
+        <div class="ring-text">
+          <span class="ring-points" id="ring-points">—</span>
+          <span class="ring-label">dari 200 poin</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- KPI Stats Grid -->
+    <section class="kpi-grid" id="kpi-grid">
+      <div class="kpi-card accent-indigo fade-in">
+        <div class="kpi-icon indigo">
+          <!-- Trophy icon -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 9H4.5a2.5 2.5 0 010-5H6"/><path d="M18 9h1.5a2.5 2.5 0 000-5H18"/>
+            <path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20 7 22"/>
+            <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20 17 22"/>
+            <path d="M18 2H6v7a6 6 0 0012 0V2z"/>
+          </svg>
+        </div>
+        <div class="kpi-value" id="kpi-div-rank">—</div>
+        <div class="kpi-label">Rank di Divisi</div>
+      </div>
+
+      <div class="kpi-card accent-cyan fade-in">
+        <div class="kpi-icon cyan">
+          <!-- Globe icon -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+            <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
+          </svg>
+        </div>
+        <div class="kpi-value" id="kpi-overall-rank">—</div>
+        <div class="kpi-label">Overall Rank</div>
+      </div>
+
+      <div class="kpi-card accent-amber fade-in">
+        <div class="kpi-icon amber">
+          <!-- Fire emoji as SVG placeholder -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 12c2-2.96 0-7-1-8 0 3.038-1.773 4.741-3 6-1.226 1.26-2 3.24-2 5a6 6 0 1012 0c0-1.532-1.056-3.94-2-5-1.786 3-2.791 3-4 2z"/>
+          </svg>
+        </div>
+        <div class="kpi-value" id="kpi-streak">—</div>
+        <div class="kpi-label">🔥 Streak (minggu)</div>
+      </div>
+
+      <div class="kpi-card accent-emerald fade-in">
+        <div class="kpi-icon emerald">
+          <!-- Check-circle icon -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+        </div>
+        <div class="kpi-value" id="kpi-trainings">—</div>
+        <div class="kpi-label">Training Selesai</div>
+      </div>
+    </section>
+
+    <!-- Activity Feed -->
+    <section class="glass-card activity-card fade-in" id="activity-section">
+      <div class="activity-title">Aktivitas Terbaru</div>
+      <div id="activity-feed">
+        <div class="empty-state">
+          <div class="skeleton" style="width: 100%; height: 16px; margin-bottom: 12px;"></div>
+          <div class="skeleton" style="width: 80%; height: 16px; margin-bottom: 12px;"></div>
+          <div class="skeleton" style="width: 60%; height: 16px;"></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── Game Panel (Spot the Fake) ──────────────────── -->
+  <main class="main game-panel" id="panel-game">
+    <div class="glass-card game-placeholder fade-in" id="game-panel">
+      <div class="game-placeholder-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+        </svg>
+      </div>
+      <h2>Spot the Fake</h2>
+      <p>Mini-game akan dimuat di sini</p>
+    </div>
+  </main>
+
+  <footer class="footer">
+    Human Firewall Lite &middot; Personal Dashboard &middot;
+    Powered by gamification 🛡️
+  </footer>
+</div>
+
+<script>
+// ── Jinja2 Variables (rendered server-side) ──────────────────
+const USER_EMAIL = '{{ user_email }}';
+const TOKEN      = '{{ token }}';
+
+// ── Utilities ──────────────────────────────────────────────
+function animateValue(el, target, suffix = '') {
+  const duration = 800;
+  const start = performance.now();
+  const from = 0;
+
+  function update(now) {
+    const elapsed = now - start;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3); // easeOutCubic
+    const current = Math.round(from + (target - from) * eased);
+    el.textContent = current + suffix;
+    if (progress < 1) requestAnimationFrame(update);
+  }
+
+  if (target === 0) { el.textContent = '0' + suffix; return; }
+  requestAnimationFrame(update);
+}
+
+function formatDate(isoStr) {
+  if (!isoStr) return '—';
+  const d = new Date(isoStr);
+  const day = d.getDate().toString().padStart(2, '0');
+  const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  const mon = months[d.getMonth()];
+  const h = d.getHours().toString().padStart(2, '0');
+  const m = d.getMinutes().toString().padStart(2, '0');
+  return `${day} ${mon}, ${h}:${m}`;
+}
+
+/**
+ * Derive a display name from an email address.
+ * e.g. "john.doe@company.com" -> "John Doe"
+ */
+function nameFromEmail(email) {
+  const local = email.split('@')[0];
+  return local
+    .replace(/[._-]/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+/**
+ * Determine the badge tier from points.
+ */
+function badgeTier(points) {
+  if (points >= 130) return { label: 'Sentinel',   css: 'badge-sentinel' };
+  if (points >= 60)  return { label: 'Guardian',   css: 'badge-guardian' };
+  return               { label: 'Vulnerable', css: 'badge-vulnerable' };
+}
+
+/**
+ * Ring stroke color matching badge tier.
+ */
+function ringStrokeColor(points) {
+  if (points >= 130) return 'var(--accent)';
+  if (points >= 60)  return 'var(--success)';
+  return 'var(--danger)';
+}
+
+// ── Clock ──────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── Tab Switching ──────────────────────────────────────────
+let activeTab = 'dashboard';
+
+function switchTab(tab) {
+  activeTab = tab;
+  const panels = {
+    dashboard: document.getElementById('panel-dashboard'),
+    game:      document.getElementById('panel-game')
+  };
+  const buttons = {
+    dashboard: document.getElementById('btn-dashboard'),
+    game:      document.getElementById('btn-game')
+  };
+
+  Object.keys(panels).forEach(key => {
+    if (panels[key]) panels[key].style.display = (key === tab) ? 'block' : 'none';
+    if (buttons[key]) buttons[key].classList.toggle('active', key === tab);
+  });
+}
+
+// ── Render Hero Card ───────────────────────────────────────
+function renderHero(profile) {
+  const name   = nameFromEmail(profile.email || USER_EMAIL);
+  const divisi = profile.divisi || '—';
+  const points = profile.points || 0;
+  const tier   = badgeTier(points);
+
+  // Name & divisi
+  document.getElementById('hero-name').textContent = name;
+  document.getElementById('hero-divisi').textContent = divisi;
+
+  // Badge pill
+  document.getElementById('hero-badge-wrap').innerHTML =
+    `<span class="badge hero-badge ${tier.css}"><span class="badge-dot"></span>${tier.label}</span>`;
+
+  // Animated points counter
+  animateValue(document.getElementById('ring-points'), points);
+
+  // Progress ring (max 200)
+  const circumference = 471.24; // 2 * PI * 75
+  const pct = Math.min(points / 200, 1);
+  const offset = circumference - pct * circumference;
+  const ring = document.getElementById('ring-value');
+  ring.style.stroke = ringStrokeColor(points);
+  // Trigger the CSS transition by setting dashoffset after a frame
+  requestAnimationFrame(() => {
+    ring.style.strokeDashoffset = offset;
+  });
+}
+
+// ── Render Stats Grid ──────────────────────────────────────
+function renderStats(profile, overallRank) {
+  const divRankText = profile.rank_in_division
+    ? `#${profile.rank_in_division} of ${profile.division_size || '?'}`
+    : '—';
+  document.getElementById('kpi-div-rank').textContent = divRankText;
+
+  if (overallRank !== null && overallRank !== undefined) {
+    animateValue(document.getElementById('kpi-overall-rank'), overallRank, '');
+    // Prepend '#' after animation completes
+    setTimeout(() => {
+      document.getElementById('kpi-overall-rank').textContent = '#' + overallRank;
+    }, 850);
+  } else {
+    document.getElementById('kpi-overall-rank').textContent = '—';
+  }
+
+  const streak = profile.streak_weeks || 0;
+  animateValue(document.getElementById('kpi-streak'), streak);
+
+  const trainings = profile.trainings_completed || 0;
+  animateValue(document.getElementById('kpi-trainings'), trainings);
+}
+
+// ── Render Activity Feed ───────────────────────────────────
+function renderActivity(activities) {
+  const container = document.getElementById('activity-feed');
+
+  if (!activities || activities.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+        </svg>
+        <p>Belum ada aktivitas tercatat.<br>Mulai ikuti simulasi untuk menghasilkan data.</p>
+      </div>`;
+    return;
+  }
+
+  const items = activities.map((act, idx) => {
+    let iconClass = 'game';
+    let iconChar  = '⭐';
+    if (act.event_type === 'click' || act.event_type === 'phishing_click') {
+      iconClass = 'click';
+      iconChar  = '⚠️';
+    } else if (act.event_type === 'training' || act.event_type === 'training_completed') {
+      iconClass = 'training';
+      iconChar  = '✅';
+    }
+
+    return `
+      <div class="timeline-item" style="animation-delay: ${0.05 * idx}s;">
+        <div class="timeline-icon ${iconClass}">${iconChar}</div>
+        <div class="timeline-text">${act.description || act.event_type}</div>
+        <div class="timeline-time">${formatDate(act.timestamp || act.created_at)}</div>
+      </div>`;
+  }).join('');
+
+  container.innerHTML = `<div class="timeline">${items}</div>`;
+}
+
+// ── Data Fetching ──────────────────────────────────────────
+async function loadPersonalDashboard() {
+  try {
+    // 1. Fetch user profile (hero card + stats)
+    const profileRes = await fetch(`/api/user-profile?email=${encodeURIComponent(USER_EMAIL)}`);
+    const profile = await profileRes.json();
+    renderHero(profile);
+
+    // 2. Fetch leaderboard to find overall rank
+    let overallRank = null;
+    try {
+      const lbRes = await fetch('/api/leaderboard');
+      const lbData = await lbRes.json();
+      const individual = lbData.individual || [];
+      const me = individual.find(u => u.email === USER_EMAIL);
+      if (me) overallRank = me.rank;
+    } catch (e) {
+      console.warn('Leaderboard fetch failed, skipping overall rank:', e);
+    }
+
+    renderStats(profile, overallRank);
+
+    // 3. Fetch activity feed
+    try {
+      const actRes = await fetch(`/api/user-activity?email=${encodeURIComponent(USER_EMAIL)}&token=${encodeURIComponent(TOKEN)}`);
+      const actData = await actRes.json();
+      renderActivity(actData.activities || actData || []);
+    } catch (e) {
+      console.warn('Activity fetch failed:', e);
+      renderActivity([]);
+    }
+
+  } catch (err) {
+    console.error('Personal dashboard fetch error:', err);
+    // Show friendly error state in hero card
+    document.getElementById('hero-name').textContent = nameFromEmail(USER_EMAIL);
+    document.getElementById('hero-divisi').textContent = 'Gagal memuat data';
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────
+loadPersonalDashboard();
+</script>
+
+</body>
+</html>

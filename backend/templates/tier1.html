@@ -148,19 +148,17 @@
     /* ===== 2. PROFILE CARD ===== */
     .profile-card {
       display: flex;
-      gap: 28px;
-      align-items: flex-start;
-      padding: 32px 28px;
+      gap: 24px;
+      align-items: center;
     }
     .profile-badge-wrap {
       flex-shrink: 0;
       position: relative;
-      width: 110px;
-      height: 110px;
+      width: 100px;
+      height: 100px;
       display: flex;
       align-items: center;
       justify-content: center;
-      margin-top: 4px;
     }
     .badge-glow {
       position: absolute;
@@ -211,6 +209,7 @@
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.6px;
+      margin-bottom: 16px;
     }
     .badge-pill.guardian  { background: rgba(129,140,248,0.18); color: var(--indigo); border: 1px solid rgba(129,140,248,0.3); }
     .badge-pill.sentinel  { background: rgba(52,211,153,0.18); color: var(--emerald); border: 1px solid rgba(52,211,153,0.3); }
@@ -221,9 +220,6 @@
       display: flex;
       align-items: center;
       gap: 14px;
-      margin-top: 16px;
-      padding-top: 16px;
-      border-top: 1px solid rgba(148,163,184,0.1);
     }
     .circle-progress {
       position: relative;
@@ -231,10 +227,7 @@
       height: 56px;
       flex-shrink: 0;
     }
-    .circle-progress svg { 
-      transform: rotate(-90deg); 
-      display: block; /* Fixes vertical misalignment */
-    }
+    .circle-progress svg { transform: rotate(-90deg); }
     .circle-bg   { fill: none; stroke: rgba(148,163,184,0.1); stroke-width: 5; }
     .circle-fill { fill: none; stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset 1.2s ease-out, stroke 0.4s; }
     .circle-fill.guardian  { stroke: var(--indigo); }
@@ -538,30 +531,26 @@
     </div>
 
     <!-- 2. PROFILE CARD -->
-    <div class="glass-card profile-card fade-up stagger-2" id="profile-card" style="align-items: center; justify-content: space-between; gap: 0;">
-      <div class="profile-left" style="display: flex; align-items: center; gap: 28px; flex: 1;">
-        <div class="profile-badge-wrap">
-          <div class="badge-glow guardian" id="badge-glow"></div>
-          <div class="badge-shield guardian" id="badge-shield">
-            <svg viewBox="0 0 80 96" xmlns="http://www.w3.org/2000/svg">
-              <path class="shield-fill" d="M40 4L8 20v28c0 22.4 13.6 38.4 32 44 18.4-5.6 32-21.6 32-44V20L40 4z" opacity="0.18"/>
-              <path class="shield-fill" d="M40 4L8 20v28c0 22.4 13.6 38.4 32 44 18.4-5.6 32-21.6 32-44V20L40 4z" fill="none" stroke="currentColor" stroke-width="2.5" opacity="0.6"/>
-              <path d="M36 52l-8-8 3.6-3.6L36 44.8l12.4-12.4L52 36 36 52z" fill="rgba(255,255,255,0.9)"/>
-            </svg>
-          </div>
-        </div>
-        <div class="profile-info">
-          <div class="profile-name" id="profile-name">
-            <div class="skeleton skeleton-text"></div>
-          </div>
-          <div class="profile-division" id="profile-division">
-            <div class="skeleton skeleton-text-sm"></div>
-          </div>
-          <div class="badge-pill guardian" id="badge-pill" style="margin-bottom: 0;">—</div>
+    <div class="glass-card profile-card fade-up stagger-2" id="profile-card">
+      <div class="profile-badge-wrap">
+        <div class="badge-glow guardian" id="badge-glow"></div>
+        <div class="badge-shield guardian" id="badge-shield">
+          <svg viewBox="0 0 80 96" xmlns="http://www.w3.org/2000/svg">
+            <path class="shield-fill" d="M40 4L8 20v28c0 22.4 13.6 38.4 32 44 18.4-5.6 32-21.6 32-44V20L40 4z" opacity="0.18"/>
+            <path class="shield-fill" d="M40 4L8 20v28c0 22.4 13.6 38.4 32 44 18.4-5.6 32-21.6 32-44V20L40 4z" fill="none" stroke="currentColor" stroke-width="2.5" opacity="0.6"/>
+            <path d="M36 52l-8-8 3.6-3.6L36 44.8l12.4-12.4L52 36 36 52z" fill="rgba(255,255,255,0.9)"/>
+          </svg>
         </div>
       </div>
-      <div class="profile-right" style="border-left: 1px solid rgba(148,163,184,0.1); padding-left: 32px; margin-left: 32px; display: flex; align-items: center;">
-        <div class="points-progress-wrap" style="margin-top: 0; padding-top: 0; border-top: none;">
+      <div class="profile-info">
+        <div class="profile-name" id="profile-name">
+          <div class="skeleton skeleton-text"></div>
+        </div>
+        <div class="profile-division" id="profile-division">
+          <div class="skeleton skeleton-text-sm"></div>
+        </div>
+        <div class="badge-pill guardian" id="badge-pill">—</div>
+        <div class="points-progress-wrap">
           <div class="circle-progress" id="circle-progress">
             <svg width="56" height="56" viewBox="0 0 56 56">
               <circle class="circle-bg" cx="28" cy="28" r="23"/>
@@ -589,10 +578,7 @@
 
     <!-- 4. LEADERBOARD CARD -->
     <div class="glass-card leaderboard-card fade-up stagger-4" id="leaderboard-card">
-      <h3 style="display: flex; align-items: center; gap: 8px;">
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trophy" style="color: var(--accent);"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.45 1-1 1H4v2h16v-2h-5c-.55 0-1-.45-1-1v-2.34"/><path d="M12 2a6 6 0 0 1 6 6v5a6 6 0 0 1-6 6 6 6 0 0 1-6-6V8a6 6 0 0 1 6-6z"/></svg>
-        Posisi Divisi Anda
-      </h3>
+      <h3>📊 Posisi Divisi Anda</h3>
       <div class="leaderboard-rank-line" id="leaderboard-rank">
         <div class="skeleton skeleton-text"></div>
       </div>

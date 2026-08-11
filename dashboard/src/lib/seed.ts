@@ -14,36 +14,6 @@ import type {
 let seeded = false;
 
 export function seedIfEmpty() {
-  // Always guarantee the demo token exists for convenience
-  dataStore.createAuthToken({
-    token: 'demo-magic-link-2026',
-    email: 'lovind@netengineering-dummy.local',
-    userName: 'Lovind',
-    division: 'IT',
-    telegramId: '123456789',
-    createdAt: Date.now(),
-    expiresAt: Date.now() + 365 * 24 * 60 * 60 * 1000, // 1 year
-  });
-
-  // Always guarantee the demo behavior score exists for convenience
-  if (!dataStore.getBehaviorScoreByEmail('lovind@netengineering-dummy.local')) {
-    dataStore.updateBehaviorScore({
-      userId: 'USR-000',
-      userName: 'Lovind',
-      email: 'lovind@netengineering-dummy.local',
-      division: 'IT',
-      score: 85,
-      risk: 'low',
-      reason: 'Kepatuhan sangat baik. Selalu tanggap terhadap email mencurigakan.',
-      lastUpdated: new Date().toISOString(),
-      streak: 4,
-      rank: 3,
-      totalPoints: 120,
-      trainingCompleted: 3,
-      badges: ['First Report', 'Guardian'],
-    });
-  }
-
   if (seeded) return;
   if (dataStore.getIncidents().length > 0) { seeded = true; return; }
 
@@ -193,53 +163,29 @@ export function seedIfEmpty() {
   // ── Behavior Scores ──
   const behaviors: BehaviorScore[] = [
     {
-      userId: 'USR-000', userName: 'Lovind', email: 'lovind@netengineering-dummy.local',
-      division: 'IT', score: 85, risk: 'low', reason: 'Kepatuhan sangat baik. Selalu tanggap terhadap email mencurigakan.',
-      lastUpdated: new Date().toISOString(), streak: 4, rank: 3, totalPoints: 120,
-      trainingCompleted: 3, badges: ['First Report', 'Guardian'],
+      userId: 'USR-001', userName: 'Lovind', email: 'lovind@netengineering-dummy.local',
+      division: 'IT', score: 85, risk: 'low', reason: 'Consistently reports suspicious emails. Completed all training modules.',
+      lastUpdated: new Date().toISOString(), streak: 4, rank: 2, totalPoints: 105,
+      trainingCompleted: 3, badges: ['First Report', 'Streak Master', 'Quiz Champion'],
     },
     {
-      userId: 'USR-001', userName: 'Rina Kusuma', email: 'rina.kusuma@netengineering-dummy.local',
-      division: 'Network Engineering', score: 25, risk: 'high', reason: 'Sering mengklik tautan phishing dalam simulasi. Perlu mengikuti pelatihan tambahan.',
-      lastUpdated: new Date().toISOString(), streak: 0, rank: 14, totalPoints: 15,
+      userId: 'USR-002', userName: 'Budi Santoso', email: 'budi@netengineering-dummy.local',
+      division: 'Network Engineering', score: 35, risk: 'high', reason: 'Clicked 3 phishing links in simulation. No training completed.',
+      lastUpdated: new Date().toISOString(), streak: 0, rank: 12, totalPoints: 20,
       trainingCompleted: 0, badges: [],
     },
     {
-      userId: 'USR-002', userName: 'Budi Santoso', email: 'budi.santoso@netops-dummy.local',
-      division: 'Network Operations', score: 68, risk: 'medium', reason: 'Kewaspadaan baik. Mengklik 2 link simulasi namun rajin menyelesaikan modul pelatihan ulang.',
+      userId: 'USR-003', userName: 'Sari Dewi', email: 'sari@netops-dummy.local',
+      division: 'Network Operations', score: 92, risk: 'low', reason: 'Top reporter. Identified real phishing attempt before SOC.',
+      lastUpdated: new Date().toISOString(), streak: 7, rank: 1, totalPoints: 230,
+      trainingCompleted: 5, badges: ['First Report', 'Streak Master', 'Quiz Champion', 'Guardian', 'Phishing Hunter'],
+    },
+    {
+      userId: 'USR-004', userName: 'Rina Putri', email: 'rina@perfshared-dummy.local',
+      division: 'Performance & Shared Service', score: 60, risk: 'medium', reason: 'Moderate awareness. Occasionally clicks simulation links but improving.',
       lastUpdated: new Date().toISOString(), streak: 2, rank: 5, totalPoints: 75,
-      trainingCompleted: 2, badges: ['First Report', 'Guardian'],
+      trainingCompleted: 2, badges: ['First Report'],
     },
-    {
-      userId: 'USR-003', userName: 'Martina Fitri', email: 'martina.fitri@perfshared-dummy.local',
-      division: 'Performance & Shared Service', score: 95, risk: 'low', reason: 'Kepatuhan sempurna. Selalu melaporkan email mencurigakan dan menyelesaikan semua pelatihan.',
-      lastUpdated: new Date().toISOString(), streak: 6, rank: 1, totalPoints: 140,
-      trainingCompleted: 5, badges: ['First Report', 'Streak Master', 'Quiz Champion', 'Sentinel'],
-    },
-    {
-      userId: 'USR-004', userName: 'Dewi Lestari', email: 'dewi.lestari@netops-dummy.local',
-      division: 'Network Operations', score: 15, risk: 'high', reason: 'Memiliki riwayat klik tinggi pada email simulasi (6 klik). Tindakan pembinaan SOC diperlukan.',
-      lastUpdated: new Date().toISOString(), streak: 0, rank: 15, totalPoints: 10,
-      trainingCompleted: 0, badges: [],
-    },
-    {
-      userId: 'USR-005', userName: 'Eko Prabowo', email: 'eko.prabowo@perfshared-dummy.local',
-      division: 'Performance & Shared Service', score: 52, risk: 'medium', reason: 'Perilaku sedang. Pernah mengklik link phishing sekali, namun mulai rajin mengikuti pelatihan.',
-      lastUpdated: new Date().toISOString(), streak: 1, rank: 8, totalPoints: 50,
-      trainingCompleted: 1, badges: ['First Report'],
-    },
-    {
-      userId: 'USR-006', userName: 'Yudi Hidayat', email: 'yudi.hidayat@salessupport-dummy.local',
-      division: 'Sales Support', score: 90, risk: 'low', reason: 'Perilaku aman. Cepat melaporkan ancaman dan tidak pernah terkena jebakan link tiruan.',
-      lastUpdated: new Date().toISOString(), streak: 5, rank: 2, totalPoints: 110,
-      trainingCompleted: 4, badges: ['First Report', 'Streak Master', 'Quiz Champion', 'Guardian'],
-    },
-    {
-      userId: 'USR-007', userName: 'Siti Nurhaliza', email: 'siti.nurhaliza@salessupport-dummy.local',
-      division: 'Sales Support', score: 72, risk: 'low', reason: 'Perilaku aman. Menunjukkan peningkatan kesadaran keamanan siber yang stabil.',
-      lastUpdated: new Date().toISOString(), streak: 3, rank: 4, totalPoints: 85,
-      trainingCompleted: 2, badges: ['First Report', 'Guardian'],
-    }
   ];
   behaviors.forEach(b => dataStore.updateBehaviorScore(b));
 
@@ -265,6 +211,18 @@ export function seedIfEmpty() {
     },
   ];
   decisions.forEach(d => dataStore.addPolicyDecision(d));
+
+  // ── Pre-seed a demo auth token for testing ──
+  const demoToken: AuthToken = {
+    token: 'demo-magic-link-2026',
+    email: 'lovind@netengineering-dummy.local',
+    userName: 'Lovind',
+    division: 'IT',
+    telegramId: '123456789',
+    createdAt: Date.now(),
+    expiresAt: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
+  };
+  dataStore.createAuthToken(demoToken);
 
   seeded = true;
 }
