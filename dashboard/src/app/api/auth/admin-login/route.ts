@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
           body: JSON.stringify({ password: body.password }),
           cache: 'no-store'
         });
-        if (fetchRes) {
+        if (fetchRes && (fetchRes.ok || fetchRes.status === 401 || fetchRes.status === 400)) {
           res = fetchRes;
           break;
         }
