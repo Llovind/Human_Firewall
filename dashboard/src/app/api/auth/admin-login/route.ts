@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createAdminSession, ADMIN_SESSION_COOKIE } from '@/lib/adminSession';
 
 /**
  * POST /api/auth/admin-login
@@ -47,10 +48,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: data.error || 'Autentikasi gagal' }, { status: res.status });
     }
 
-    return NextResponse.json({
+    // Create valid server-side admin session token
+    const session = createAdminSession();
+
+    const response = NextResponse.json({
       success: true,
       user: data.user,
     });
+
+    // Set HTTP-only admin session cookie for proxy.ts enforcement
+    response.cookies.set(ADMIN_SESSION_COOKIE, session.token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 12 * 60 * 60, // 12 hours
+    });
+
+    return response;
   } catch (error: any) {
     return NextResponse.json({ error: 'Gagal menghubungi server backend', detail: error.message }, { status: 500 });
   }
