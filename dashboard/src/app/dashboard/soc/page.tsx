@@ -9,6 +9,7 @@ import LoginHistorySection from '@/components/admin/LoginHistorySection';
 import PolicySection from '@/components/admin/PolicySection';
 import { usePolling } from '@/hooks/usePolling';
 import type { Incident, Stats, ThreatCacheEntry, AISummary, BehaviorScore, PolicyDecision, ComplianceSummary, AdminLoginEvent } from '@/components/admin/types';
+import AIIntelligenceSection from '@/components/admin/AIIntelligenceSection';
 
 export default function SOCDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -25,7 +26,10 @@ export default function SOCDashboard() {
   const { data: complianceData } = usePolling<ComplianceSummary>('/api/admin/compliance-summary', 3000);
 
   useEffect(() => {
-    fetch('/api/admin/login-history').then(r => r.ok && r.json()).then(data => data && setLoginHistory(data)).catch(() => {});
+    fetch('/api/admin/login-history')
+      .then(r => r.ok && r.json())
+      .then(data => data && setLoginHistory(Array.isArray(data) ? data : data.logs || []))
+      .catch(() => {});
   }, []);
 
   const handleResolveIncident = async (id: string) => {
@@ -97,17 +101,7 @@ export default function SOCDashboard() {
       )}
 
       {activeTab === 'ai' && (
-        <div className="glass-card" style={{ padding: '24px', textAlign: 'center' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>AI Behavioral Risk Heatmap</h2>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>Buka halaman AI penuh untuk analisis pengguna individual & agentic investigator.</p>
-          <a
-            href="/ai"
-            className="admin-submit-btn"
-            style={{ display: 'inline-block', width: 'auto', padding: '8px 24px', textDecoration: 'none' }}
-          >
-            Buka Halaman AI Heatmap →
-          </a>
-        </div>
+        <AIIntelligenceSection role="soc" readOnly={false} />
       )}
     </DashboardLayout>
   );

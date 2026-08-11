@@ -8,6 +8,7 @@ import MockWebmailSection from '@/components/admin/MockWebmailSection';
 import LeaderboardSection from '@/components/admin/LeaderboardSection';
 import { usePolling } from '@/hooks/usePolling';
 import type { GoPhishCampaign, GoPhishResource, MockEmail, LeaderboardResponse } from '@/components/admin/types';
+import AIIntelligenceSection from '@/components/admin/AIIntelligenceSection';
 
 export default function PhishingAdminDashboard() {
   const [activeTab, setActiveTab] = useState('gophish');
@@ -81,7 +82,7 @@ export default function PhishingAdminDashboard() {
           selectedEmails={Array.isArray(selectedEmails) ? selectedEmails : []}
           onSelectedEmailsChange={setSelectedEmails}
           onSyncUsers={handleSyncUsers}
-          onOpenLaunchModal={() => alert('Buka modal launch')}
+          onOpenLaunchModal={() => alert('Fitur buat kampanye GoPhish dapat diakses di panel Master Admin (/admin).')}
           onDeleteCampaign={handleDeleteCampaign}
           onViewCampaignDetail={() => {}}
           onOpenTemplateBuilder={() => {}}
@@ -119,6 +120,10 @@ export default function PhishingAdminDashboard() {
           onDivisiFilterChange={() => {}}
           onBadgeFilterChange={() => {}}
         />
+      )}
+
+      {activeTab === 'ai' && (
+        <AIIntelligenceSection role="phishing_admin" readOnly={false} />
       )}
     </DashboardLayout>
   );

@@ -12,6 +12,8 @@ import EmployeeRosterSection from '@/components/admin/EmployeeRosterSection';
 import { usePolling } from '@/hooks/usePolling';
 import type { Incident, Stats, ThreatCacheEntry, AISummary, BehaviorScore, PolicyDecision, ComplianceSummary, GoPhishCampaign, LeaderboardResponse } from '@/components/admin/types';
 
+import AIIntelligenceSection from '@/components/admin/AIIntelligenceSection';
+
 export default function CISODashboard() {
   const [activeTab, setActiveTab] = useState('overview');
   const [campaigns, setCampaigns] = useState<GoPhishCampaign[]>([]);
@@ -28,9 +30,18 @@ export default function CISODashboard() {
   const { data: leaderboardData } = usePolling<LeaderboardResponse>('/api/admin/leaderboard', 3000);
 
   useEffect(() => {
-    fetch('/api/admin/gophish/campaigns').then(r => r.ok && r.json()).then(data => data && setCampaigns(data)).catch(() => {});
-    fetch('/api/admin/employees').then(r => r.ok && r.json()).then(data => data && setEmployees(data)).catch(() => {});
-    fetch('/api/admin/divisions').then(r => r.ok && r.json()).then(data => data && setDivisions(data)).catch(() => {});
+    fetch('/api/admin/gophish/campaigns')
+      .then(r => r.ok && r.json())
+      .then(data => data && setCampaigns(Array.isArray(data) ? data : data?.campaigns || []))
+      .catch(() => {});
+    fetch('/api/admin/employees')
+      .then(r => r.ok && r.json())
+      .then(data => data && setEmployees(Array.isArray(data) ? data : data?.employees || []))
+      .catch(() => {});
+    fetch('/api/admin/divisions')
+      .then(r => r.ok && r.json())
+      .then(data => data && setDivisions(Array.isArray(data) ? data : data?.divisions || []))
+      .catch(() => {});
   }, []);
 
   const incidents = incidentData?.incidents || [];
@@ -141,13 +152,7 @@ export default function CISODashboard() {
       )}
 
       {activeTab === 'ai' && (
-        <div className="glass-card" style={{ padding: '24px', textAlign: 'center' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>Executive AI Summary & PDF Report</h2>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>Lihat laporan risiko organisasi & download PDF resmi di halaman AI.</p>
-          <a href="/ai" className="admin-submit-btn" style={{ display: 'inline-block', width: 'auto', padding: '8px 24px', textDecoration: 'none' }}>
-            Buka Halaman AI Report →
-          </a>
-        </div>
+        <AIIntelligenceSection role="ciso" readOnly={true} />
       )}
     </DashboardLayout>
   );

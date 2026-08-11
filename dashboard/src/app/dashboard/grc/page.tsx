@@ -7,7 +7,8 @@ import LeaderboardSection from '@/components/admin/LeaderboardSection';
 import EmployeeRosterSection from '@/components/admin/EmployeeRosterSection';
 import { usePolling } from '@/hooks/usePolling';
 import type { Incident, Stats, ThreatCacheEntry, AISummary, BehaviorScore, ComplianceSummary, LeaderboardResponse } from '@/components/admin/types';
-import { FileCheck, Download } from 'lucide-react';
+import { ComplianceReadinessSection } from '@/components/admin/ComplianceReadinessSection';
+import AIIntelligenceSection from '@/components/admin/AIIntelligenceSection';
 
 export default function GCDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -24,8 +25,14 @@ export default function GCDashboard() {
   const { data: leaderboardData } = usePolling<LeaderboardResponse>('/api/admin/leaderboard', 3000);
 
   useEffect(() => {
-    fetch('/api/admin/employees').then(r => r.ok && r.json()).then(data => data && setEmployees(data)).catch(() => {});
-    fetch('/api/admin/divisions').then(r => r.ok && r.json()).then(data => data && setDivisions(data)).catch(() => {});
+    fetch('/api/admin/employees')
+      .then(r => r.ok && r.json())
+      .then(data => data && setEmployees(Array.isArray(data) ? data : data?.employees || []))
+      .catch(() => {});
+    fetch('/api/admin/divisions')
+      .then(r => r.ok && r.json())
+      .then(data => data && setDivisions(Array.isArray(data) ? data : data?.divisions || []))
+      .catch(() => {});
   }, []);
 
   const incidents = incidentData?.incidents || [];
@@ -61,33 +68,11 @@ export default function GCDashboard() {
       )}
 
       {activeTab === 'compliance' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          <div className="glass-card" style={{ padding: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h2 style={{ fontSize: '18px', fontWeight: 600 }}>Compliance & Financial Impact Center</h2>
-              <a
-                href="/ai"
-                className="admin-submit-btn"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', width: 'auto', padding: '8px 16px', textDecoration: 'none' }}
-              >
-                <Download size={16} /> Export Executive PDF
-              </a>
-            </div>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: 1.6 }}>
-              GRC Specialist bertanggung jawab mengelola kepatuhan ISO 27001, UU PDP, dan pemantauan postur risiko antar divisi.
-            </p>
-          </div>
-        </div>
+        <ComplianceReadinessSection readOnly={false} />
       )}
 
       {activeTab === 'ai' && (
-        <div className="glass-card" style={{ padding: '24px', textAlign: 'center' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>AI Risk Heatmap & Executive PDF</h2>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>Generasi laporan naratif eksekutif & PDF resmi di halaman AI.</p>
-          <a href="/ai" className="admin-submit-btn" style={{ display: 'inline-block', width: 'auto', padding: '8px 24px', textDecoration: 'none' }}>
-            Buka Halaman AI Report →
-          </a>
-        </div>
+        <AIIntelligenceSection role="grc" readOnly={false} />
       )}
 
       {activeTab === 'employees' && (

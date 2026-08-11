@@ -10,6 +10,10 @@ interface LoginHistorySectionProps {
 }
 
 export default function LoginHistorySection({ readOnly, loginHistory }: LoginHistorySectionProps) {
+  const logs = Array.isArray(loginHistory)
+    ? loginHistory
+    : (loginHistory as any)?.logs || (loginHistory as any)?.loginHistory || [];
+
   return (
     <>
       {/* Central Login & Device Anomaly Audit Log */}
@@ -18,7 +22,7 @@ export default function LoginHistorySection({ readOnly, loginHistory }: LoginHis
           <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Server size={20} /> Audit Riwayat Login & Perangkat (Identity Security)
           </h2>
-          <span className="panel-count">{loginHistory.length} log terdeteksi</span>
+          <span className="panel-count">{logs.length} log terdeteksi</span>
         </div>
         <div className="threat-table-wrap">
           <table className="threat-table" style={{ width: '100%' }}>
@@ -34,14 +38,14 @@ export default function LoginHistorySection({ readOnly, loginHistory }: LoginHis
               </tr>
             </thead>
             <tbody>
-              {loginHistory.length === 0 ? (
+              {logs.length === 0 ? (
                 <tr>
                   <td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>
                     Belum ada log audit login terkumpul.
                   </td>
                 </tr>
               ) : (
-                loginHistory.map((log) => (
+                logs.map((log: any) => (
                   <tr key={log.id} title={log.reason}>
                     <td style={{ fontWeight: 600 }}>{log.email}</td>
                     <td>{log.division}</td>

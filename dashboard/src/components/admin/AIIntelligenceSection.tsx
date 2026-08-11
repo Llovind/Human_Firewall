@@ -737,3 +737,5 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
     </div>
   );
 };
+
+export default AIIntelligenceSection;
