@@ -312,6 +312,29 @@ def init_db():
         for div in default_divs:
             cursor.execute('INSERT OR IGNORE INTO divisions (name) VALUES (?)', (div,))
 
+        # Seed default employees if user_history is empty
+        user_cnt_row = cursor.execute("SELECT COUNT(*) FROM user_history").fetchone()
+        if user_cnt_row and user_cnt_row[0] == 0:
+            sample_emps = [
+                ("budi.santoso@infranexia.co.id", "IT", 185, "Cyber Shield Elite", 2, 0, 4, 12, 1, 85),
+                ("citra.dewi@infranexia.co.id", "Network Engineering", 160, "The Front Man", 1, 0, 3, 8, 1, 92),
+                ("donny.hermawan@infranexia.co.id", "Performance & Shared Service", 140, "Front-Line Defender", 3, 1, 2, 5, 1, 78),
+                ("eka.putri@infranexia.co.id", "Network Operations", 195, "Cyber Shield Elite", 0, 0, 5, 15, 1, 98),
+                ("fajar.ramadhan@infranexia.co.id", "Sales Support", 130, "Front-Line Defender", 2, 1, 2, 6, 1, 74),
+                ("gina.sari@infranexia.co.id", "IT", 175, "The Front Man", 1, 0, 4, 10, 1, 88),
+                ("hadi.wijaya@infranexia.co.id", "Network Operations", 110, "Sentinel Troops", 4, 2, 1, 3, 1, 62),
+                ("indah.permata@infranexia.co.id", "Performance & Shared Service", 145, "Front-Line Defender", 2, 0, 3, 7, 1, 80),
+                ("joko.susilo@infranexia.co.id", "Sales Support", 125, "Sentinel Troops", 3, 1, 2, 4, 1, 70),
+                ("kartika.sari@infranexia.co.id", "IT", 190, "Cyber Shield Elite", 1, 0, 5, 14, 1, 94)
+            ]
+            for emp in sample_emps:
+                cursor.execute('''
+                    INSERT INTO user_history (
+                        email, divisi, points, badge, click_count, skipped_training_count,
+                        viewed_training_count, daily_streak, is_active, reports_count_malicious
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', emp)
+
         # THREAT INTELLIGENCE (Daffa's additions)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS threat_cache(
