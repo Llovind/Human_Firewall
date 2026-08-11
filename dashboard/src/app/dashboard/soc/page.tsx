@@ -27,7 +27,7 @@ export default function SOCDashboard() {
 
   useEffect(() => {
     fetch('/api/admin/login-history')
-      .then(r => r.ok && r.json())
+      .then(async r => (r.ok ? r.json() : null))
       .then(data => data && setLoginHistory(Array.isArray(data) ? data : data.logs || []))
       .catch(() => {});
   }, []);

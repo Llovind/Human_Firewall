@@ -26,11 +26,11 @@ export default function GCDashboard() {
 
   useEffect(() => {
     fetch('/api/admin/employees')
-      .then(r => r.ok && r.json())
+      .then(async r => (r.ok ? r.json() : null))
       .then(data => data && setEmployees(Array.isArray(data) ? data : data?.employees || []))
       .catch(() => {});
     fetch('/api/admin/divisions')
-      .then(r => r.ok && r.json())
+      .then(async r => (r.ok ? r.json() : null))
       .then(data => data && setDivisions(Array.isArray(data) ? data : data?.divisions || []))
       .catch(() => {});
   }, []);

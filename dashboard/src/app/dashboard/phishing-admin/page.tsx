@@ -25,28 +25,28 @@ export default function PhishingAdminDashboard() {
   // Load GoPhish data & employees on mount
   useEffect(() => {
     fetch('/api/admin/gophish/campaigns')
-      .then(r => r.ok && r.json())
-      .then(data => setCampaigns(Array.isArray(data) ? data : data?.campaigns || []))
+      .then(async r => (r.ok ? r.json() : null))
+      .then(data => data && setCampaigns(Array.isArray(data) ? data : data?.campaigns || []))
       .catch(() => {});
 
     fetch('/api/admin/gophish/resources')
-      .then(r => r.ok && r.json())
+      .then(async r => (r.ok ? r.json() : null))
       .then(data => data && setResources(data))
       .catch(() => {});
 
     fetch('/api/admin/employees')
-      .then(r => r.ok && r.json())
-      .then(data => setEmployees(Array.isArray(data) ? data : data?.employees || []))
+      .then(async r => (r.ok ? r.json() : null))
+      .then(data => data && setEmployees(Array.isArray(data) ? data : data?.employees || []))
       .catch(() => {});
 
     fetch('/api/admin/divisions')
-      .then(r => r.ok && r.json())
-      .then(data => setDivisions(Array.isArray(data) ? data : data?.divisions || []))
+      .then(async r => (r.ok ? r.json() : null))
+      .then(data => data && setDivisions(Array.isArray(data) ? data : data?.divisions || []))
       .catch(() => {});
 
     fetch('/api/admin/emails')
-      .then(r => r.ok && r.json())
-      .then(data => setEmails(Array.isArray(data) ? data : data?.emails || []))
+      .then(async r => (r.ok ? r.json() : null))
+      .then(data => data && setEmails(Array.isArray(data) ? data : data?.emails || []))
       .catch(() => {});
   }, []);
 

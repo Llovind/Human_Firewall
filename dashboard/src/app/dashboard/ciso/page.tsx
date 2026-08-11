@@ -31,15 +31,15 @@ export default function CISODashboard() {
 
   useEffect(() => {
     fetch('/api/admin/gophish/campaigns')
-      .then(r => r.ok && r.json())
+      .then(async r => (r.ok ? r.json() : null))
       .then(data => data && setCampaigns(Array.isArray(data) ? data : data?.campaigns || []))
       .catch(() => {});
     fetch('/api/admin/employees')
-      .then(r => r.ok && r.json())
+      .then(async r => (r.ok ? r.json() : null))
       .then(data => data && setEmployees(Array.isArray(data) ? data : data?.employees || []))
       .catch(() => {});
     fetch('/api/admin/divisions')
-      .then(r => r.ok && r.json())
+      .then(async r => (r.ok ? r.json() : null))
       .then(data => data && setDivisions(Array.isArray(data) ? data : data?.divisions || []))
       .catch(() => {});
   }, []);
