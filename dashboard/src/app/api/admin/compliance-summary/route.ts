@@ -1,22 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { fetchFlaskBackend } from '@/lib/backendClient';
 
 export async function GET(request: NextRequest) {
   try {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://flask_api:5000';
-    const secretKey = process.env.SECRET_KEY || 'dev-fallback-key-change-in-production';
-
-    const res = await fetch(`${apiUrl}/api/compliance-summary`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${secretKey}`,
-      },
-    });
-
+    const res = await fetchFlaskBackend('/api/admin/compliance-summary', { method: 'GET' });
     const data = await res.json();
     if (!res.ok) {
       return NextResponse.json({ error: data.error || 'Gagal mengambil data kepatuhan' }, { status: res.status });
     }
-
     return NextResponse.json(data);
   } catch (error: any) {
     return NextResponse.json({ error: 'Gagal menghubungi server backend', detail: error.message }, { status: 500 });
