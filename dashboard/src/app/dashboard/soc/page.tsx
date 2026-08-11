@@ -1,181 +1,114 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import Logo from '@/components/Logo';
-import { Shield, AlertTriangle, CheckCircle2, Activity, RefreshCw, Filter, Search, ArrowLeft, ArrowUpRight } from 'lucide-react';
-import '../../dashboard.css';
-
-interface Incident {
-  id: string;
-  timestamp: string;
-  type: string;
-  severity: string;
-  source: string;
-  target: string;
-  description: string;
-  status: string;
-}
+import DashboardLayout from '@/components/admin/DashboardLayout';
+import OverviewSection from '@/components/admin/OverviewSection';
+import IncidentTriageSection from '@/components/admin/IncidentTriageSection';
+import ThreatCacheSection from '@/components/admin/ThreatCacheSection';
+import LoginHistorySection from '@/components/admin/LoginHistorySection';
+import PolicySection from '@/components/admin/PolicySection';
+import { usePolling } from '@/hooks/usePolling';
+import type { Incident, Stats, ThreatCacheEntry, AISummary, BehaviorScore, PolicyDecision, ComplianceSummary, AdminLoginEvent } from '@/components/admin/types';
 
 export default function SOCDashboard() {
-  const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filterSeverity, setFilterSeverity] = useState('all');
+  const [activeTab, setActiveTab] = useState('overview');
+  const [threatTypeFilter, setThreatTypeFilter] = useState('ALL');
+  const [threatActionFilter, setThreatActionFilter] = useState('ALL');
+  const [loginHistory, setLoginHistory] = useState<AdminLoginEvent[]>([]);
 
-  const fetchSOCData = async () => {
-    setLoading(true);
+  // Polling core data
+  const { data: incidentData, hasUpdated: incidentUpdated } = usePolling<{ incidents: Incident[]; stats: Stats }>('/api/incident', 3000);
+  const { data: cacheData, hasUpdated: cacheUpdated } = usePolling<{ cache: ThreatCacheEntry[] }>('/api/cache', 3000);
+  const { data: summaryData, hasUpdated: summaryUpdated } = usePolling<{ summaries: AISummary[] }>('/api/summary', 3000);
+  const { data: behaviorData, hasUpdated: behaviorUpdated } = usePolling<{ scores: BehaviorScore[] }>('/api/behavior', 3000);
+  const { data: policyData, hasUpdated: policyUpdated } = usePolling<{ decisions: PolicyDecision[] }>('/api/policy', 3000);
+  const { data: complianceData } = usePolling<ComplianceSummary>('/api/admin/compliance-summary', 3000);
+
+  useEffect(() => {
+    fetch('/api/admin/login-history').then(r => r.ok && r.json()).then(data => data && setLoginHistory(data)).catch(() => {});
+  }, []);
+
+  const handleResolveIncident = async (id: string) => {
     try {
-      const res = await fetch('/api/incident');
-      if (res.ok) {
-        const data = await res.json();
-        setIncidents(data.incidents || []);
-      }
-    } catch (e) {
-      console.error('Failed to fetch SOC incidents:', e);
-    } finally {
-      setLoading(false);
+      const res = await fetch('/api/incident', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket_id: id, status: 'closed' }),
+      });
+      if (!res.ok) alert('Gagal memperbarui status insiden.');
+    } catch {
+      alert('Gagal menghubungi server.');
     }
   };
 
-  useEffect(() => {
-    fetchSOCData();
-  }, []);
-
-  const filteredIncidents = incidents.filter(i => 
-    filterSeverity === 'all' ? true : i.severity.toLowerCase() === filterSeverity
-  );
+  const incidents = incidentData?.incidents || [];
+  const activeIncidents = incidents.filter(inc => inc.status !== 'closed');
+  const cache = cacheData?.cache || [];
+  const summaries = summaryData?.summaries || [];
+  const scores = behaviorData?.scores || [];
+  const decisions = policyData?.decisions || [];
 
   return (
-    <div className="admin-container fade-in" style={{ padding: '32px', minHeight: '100vh', background: 'var(--bg-dark)' }}>
-      {/* Header */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <Logo variant="mark" size={48} />
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="badge badge-danger" style={{ fontSize: '10px', letterSpacing: '1px' }}>SOC ROLE</span>
-              <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-light)', margin: 0 }}>
-                SOC Analyst Command Center
-              </h1>
-            </div>
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
-              Real-time threat triage, VirusTotal & urlscan.io intelligence, and incident queue
-            </p>
+    <DashboardLayout role="soc" activeTab={activeTab} onTabChange={setActiveTab}>
+      {activeTab === 'overview' && (
+        <>
+          <OverviewSection
+            readOnly={false}
+            stats={incidentData?.stats}
+            incidents={activeIncidents}
+            summaries={summaries}
+            scores={scores}
+            cache={cache}
+            complianceData={complianceData}
+            incidentUpdated={incidentUpdated}
+            cacheUpdated={cacheUpdated}
+            summaryUpdated={summaryUpdated}
+            behaviorUpdated={behaviorUpdated}
+          />
+          <div style={{ marginTop: '24px' }}>
+            <IncidentTriageSection
+              readOnly={false}
+              incidents={activeIncidents}
+              onSelectIncident={() => {}}
+              onResolveIncident={handleResolveIncident}
+            />
           </div>
-        </div>
+        </>
+      )}
 
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <button onClick={fetchSOCData} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <RefreshCw size={16} className={loading ? 'spin' : ''} /> Refresh Queue
-          </button>
-          <Link href="/admin" className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
-            <ArrowLeft size={16} /> Master Admin
-          </Link>
-        </div>
-      </header>
-
-      {/* Metrics Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '32px' }}>
-        <div className="stat-card border-danger">
-          <div className="stat-icon icon-danger"><AlertTriangle size={24} /></div>
-          <div className="stat-value">{incidents.filter(i => i.severity === 'high' || i.severity === 'critical').length}</div>
-          <div className="stat-label">Critical / High Triage</div>
-        </div>
-
-        <div className="stat-card border-warning">
-          <div className="stat-icon icon-warning"><Activity size={24} /></div>
-          <div className="stat-value">{incidents.filter(i => i.status === 'open').length}</div>
-          <div className="stat-label">Open Incidents</div>
-        </div>
-
-        <div className="stat-card border-success">
-          <div className="stat-icon icon-success"><CheckCircle2 size={24} /></div>
-          <div className="stat-value">{incidents.filter(i => i.status === 'closed').length}</div>
-          <div className="stat-label">Resolved / Sanitized</div>
-        </div>
-
-        <div className="stat-card border-info">
-          <div className="stat-icon icon-info"><Shield size={24} /></div>
-          <div className="stat-value">{incidents.length}</div>
-          <div className="stat-label">Total Signals Analyzed</div>
-        </div>
-      </div>
-
-      {/* Incident Triage Queue Table */}
-      <div className="card" style={{ padding: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <h3 style={{ fontSize: '18px', fontWeight: 600, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Shield size={20} style={{ color: 'var(--accent-blue)' }} /> Real-time Incident Triage Queue
-          </h3>
-
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <Filter size={16} style={{ color: 'var(--text-muted)' }} />
-            <select 
-              value={filterSeverity} 
-              onChange={e => setFilterSeverity(e.target.value)}
-              className="form-control"
-              style={{ padding: '6px 12px', fontSize: '13px', background: 'var(--bg-card)', color: 'var(--text-light)', border: '1px solid var(--border-color)', borderRadius: '6px' }}
-            >
-              <option value="all">All Severities</option>
-              <option value="critical">Critical</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
+      {activeTab === 'threats' && (
+        <>
+          <ThreatCacheSection
+            readOnly={false}
+            cacheData={cache}
+            threatTypeFilter={threatTypeFilter}
+            threatActionFilter={threatActionFilter}
+            onThreatTypeFilterChange={setThreatTypeFilter}
+            onThreatActionFilterChange={setThreatActionFilter}
+          />
+          <div style={{ marginTop: '24px' }}>
+            <LoginHistorySection readOnly={false} loginHistory={loginHistory} />
           </div>
-        </div>
+        </>
+      )}
 
-        {loading ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
-            <RefreshCw className="spin" size={24} style={{ marginBottom: '12px' }} />
-            <p>Loading real-time SOC incident queue...</p>
-          </div>
-        ) : filteredIncidents.length === 0 ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
-            <CheckCircle2 size={32} style={{ color: 'var(--success)', marginBottom: '12px' }} />
-            <p>No active incidents found for this filter.</p>
-          </div>
-        ) : (
-          <div className="table-responsive">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Timestamp</th>
-                  <th>Source / Reporter</th>
-                  <th>Target / URL</th>
-                  <th>Severity</th>
-                  <th>Status</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredIncidents.map((incident) => (
-                  <tr key={incident.id}>
-                    <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{incident.timestamp}</td>
-                    <td style={{ fontWeight: 600 }}>{incident.source}</td>
-                    <td style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--accent-blue)' }}>{incident.target}</td>
-                    <td>
-                      <span className={`badge badge-${incident.severity === 'high' || incident.severity === 'critical' ? 'danger' : incident.severity === 'medium' ? 'warning' : 'success'}`}>
-                        {incident.severity.toUpperCase()}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`badge badge-${incident.status === 'open' ? 'warning' : 'success'}`}>
-                        {incident.status.toUpperCase()}
-                      </span>
-                    </td>
-                    <td>
-                      <button className="btn btn-xs btn-outline" style={{ fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                        Triage <ArrowUpRight size={12} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
+      {activeTab === 'policy' && (
+        <PolicySection readOnly={false} decisions={decisions} />
+      )}
+
+      {activeTab === 'ai' && (
+        <div className="glass-card" style={{ padding: '24px', textAlign: 'center' }}>
+          <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>AI Behavioral Risk Heatmap</h2>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>Buka halaman AI penuh untuk analisis pengguna individual & agentic investigator.</p>
+          <a
+            href="/ai"
+            className="admin-submit-btn"
+            style={{ display: 'inline-block', width: 'auto', padding: '8px 24px', textDecoration: 'none' }}
+          >
+            Buka Halaman AI Heatmap →
+          </a>
+        </div>
+      )}
+    </DashboardLayout>
   );
 }

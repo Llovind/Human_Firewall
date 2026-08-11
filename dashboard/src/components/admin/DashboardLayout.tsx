@@ -10,7 +10,7 @@ import {
   LayoutDashboard, ShieldAlert, Trophy, FileWarning, Fish,
   Mail, Users, Brain, BarChart3, Eye, FileCheck, Shield
 } from 'lucide-react';
-import '../../dashboard.css';
+import '@/app/dashboard.css';
 
 /** Sidebar tab definitions per role */
 type TabDef = { id: string; label: string; icon: ReactNode };

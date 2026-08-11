@@ -4,7 +4,7 @@ import React from 'react';
 import { Sliders, Activity, Search, StopCircle, FileWarning, CheckCircle2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { ThreatCacheEntry, timeAgo } from '@/components/admin/types';
-import '../../dashboard.css';
+import '@/app/dashboard.css';
 
 interface ThreatCacheSectionProps {
   readOnly: boolean;
