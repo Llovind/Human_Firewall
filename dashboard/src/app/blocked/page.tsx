@@ -173,7 +173,7 @@ function BlockedContent() {
       {/* Actions Button */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <button
-          onClick={() => window.history.back()}
+          onClick={() => window.location.href = '/'}
           style={{
             padding: '12px 24px',
             background: '#ef4444',

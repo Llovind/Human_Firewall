@@ -10,6 +10,7 @@ interface User {
   division: string;
   telegramId: string;
   role?: AdminRole | string;
+  token?: string;
 }
 
 interface AuthContextType {
