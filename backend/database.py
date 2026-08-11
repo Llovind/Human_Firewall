@@ -1766,6 +1766,20 @@ def get_compliance_summary():
         avg_row = conn.execute('SELECT AVG(points) as avg_pts FROM user_history').fetchone()
         avg_points = round(avg_row["avg_pts"], 1) if avg_row and avg_row["avg_pts"] else 100
 
+        return {
+            "compliance_pct": compliance_pct,
+            "compliance_grade": compliance_grade,
+            "resilience_score": round(resilience_score, 1),
+            "training_score": round(training_score, 1),
+            "cred_protection_score": round(cred_protection_score, 1),
+            "estimated_savings_idr": estimated_savings,
+            "incidents_prevented": incidents_prevented,
+            "divisi_risk_map": divisi_risk_map,
+            "avg_points": avg_points
+        }
+    finally:
+        conn.close()
+
 def get_readiness_thresholds():
     """Mengembalikan daftar ambang batas kesiapan GRC."""
     conn = get_connection()

@@ -11,21 +11,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Password wajib diisi' }, { status: 400 });
     }
 
-    const primaryUrl = process.env.NEXT_PUBLIC_API_URL || 'http://flask_api:5000';
-    let res;
-    try {
-      res = await fetch(`${primaryUrl}/api/auth/admin`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: body.password }),
-      });
-    } catch {
-      // Fallback for local dev environment outside Docker
-      res = await fetch('http://127.0.0.1:5000/api/auth/admin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: body.password }),
-      });
+    const targetUrls = Array.from(new Set([
+      process.env.NEXT_PUBLIC_API_URL,
+      'http://127.0.0.1:5000',
+      'http://localhost:5000',
+      'http://flask_api:5000'
+    ])).filter(Boolean) as string[];
+
+    let res = null;
+    let lastErr = null;
+
+    for (const baseUrl of targetUrls) {
+      try {
+        const fetchRes = await fetch(`${baseUrl}/api/auth/admin`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: body.password }),
+          cache: 'no-store'
+        });
+        if (fetchRes) {
+          res = fetchRes;
+          break;
+        }
+      } catch (err: any) {
+        lastErr = err;
+      }
+    }
+
+    if (!res) {
+      return NextResponse.json({ error: 'Gagal menghubungi server backend', detail: lastErr?.message }, { status: 500 });
     }
 
     const data = await res.json();
