@@ -6,6 +6,11 @@ from flask import Flask, request, jsonify, render_template, session, redirect, u
 from flask_cors import CORS
 import database
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 from routes.threat import threat_bp
 from routes.proxy import proxy_bp
 
