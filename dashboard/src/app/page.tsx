@@ -109,10 +109,7 @@ export default function EmployeeDashboardPage() {
     setQuizError(null);
     try {
       const storedToken = user.token || new URLSearchParams(window.location.search).get('token');
-      if (!storedToken) {
-        if (typeof window !== 'undefined') window.location.href = '/auth';
-        return;
-      }
+      if (!storedToken) return;
       const res = await fetch(`/api/quiz/today?email=${encodeURIComponent(user.email)}&token=${encodeURIComponent(storedToken)}`);
       if (res.ok) {
         const data = await res.json();
@@ -232,10 +229,7 @@ export default function EmployeeDashboardPage() {
     if (!user) return;
     try {
       const storedToken = user.token || new URLSearchParams(window.location.search).get('token');
-      if (!storedToken) {
-        if (typeof window !== 'undefined') window.location.href = '/auth';
-        return;
-      }
+      if (!storedToken) return;
       
       const res = await fetch(`/api/user-activity?email=${encodeURIComponent(user.email)}&token=${encodeURIComponent(storedToken)}`);
       if (res.ok) {
@@ -251,10 +245,7 @@ export default function EmployeeDashboardPage() {
     if (!user) return;
     try {
       const storedToken = user.token || new URLSearchParams(window.location.search).get('token');
-      if (!storedToken) {
-        if (typeof window !== 'undefined') window.location.href = '/auth';
-        return;
-      }
+      if (!storedToken) return;
       const res = await fetch(`/api/user-eligibility?email=${encodeURIComponent(user.email)}&token=${encodeURIComponent(storedToken)}`);
       if (res.ok) {
         const data = await res.json();
@@ -361,11 +352,20 @@ export default function EmployeeDashboardPage() {
     return null;
   }
 
-  if (user.role === 'admin') {
-    if (typeof window !== 'undefined') {
-      window.location.href = '/admin';
+  if (user.role) {
+    const roleRoutes: Record<string, string> = {
+      admin: '/admin',
+      soc: '/dashboard/soc',
+      ciso: '/dashboard/ciso',
+      grc: '/dashboard/grc',
+      phishing_admin: '/dashboard/phishing-admin',
+    };
+    if (roleRoutes[user.role]) {
+      if (typeof window !== 'undefined') {
+        window.location.href = roleRoutes[user.role];
+      }
+      return null;
     }
-    return null;
   }
 
   const scores = behaviorData?.scores || [];
