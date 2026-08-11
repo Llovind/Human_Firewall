@@ -187,6 +187,60 @@
   line-height: 1.5;
 }
 
+/* Role Selector Cards */
+.role-selector-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.role-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 12px;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.role-card:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-surface);
+}
+
+.role-card.active {
+  border-color: var(--accent);
+  background: rgba(129, 140, 248, 0.15);
+  box-shadow: 0 0 12px rgba(129, 140, 248, 0.25);
+}
+
+.role-card-icon {
+  color: var(--accent);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+}
+
+.role-card-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.role-card-desc {
+  font-size: 10px;
+  color: var(--text-secondary);
+  line-height: 1.2;
+}
+
 /* Animations */
 .fade-up {
   animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;

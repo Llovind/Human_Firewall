@@ -11,14 +11,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Password wajib diisi' }, { status: 400 });
     }
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://flask_api:5000';
-    const res = await fetch(`${apiUrl}/api/auth/admin`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ password: body.password }),
-    });
+    const primaryUrl = process.env.NEXT_PUBLIC_API_URL || 'http://flask_api:5000';
+    let res;
+    try {
+      res = await fetch(`${primaryUrl}/api/auth/admin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: body.password }),
+      });
+    } catch {
+      // Fallback for local dev environment outside Docker
+      res = await fetch('http://127.0.0.1:5000/api/auth/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: body.password }),
+      });
+    }
 
     const data = await res.json();
     if (!res.ok) {
