@@ -1128,19 +1128,14 @@ def get_user_history(email: str):
                 "skipped_training_count": 0,
                 "last_clicked": None,
                 "telegram_chat_id": None,
+                "points": 100,
+                "badge": "Guardian",
                 "is_new_user": True
             }
 
-        return {
-            "email": row["email"],
-            "divisi": row["divisi"],
-            "click_count": row["click_count"],
-            "viewed_training_count": row["viewed_training_count"],
-            "skipped_training_count": row["skipped_training_count"],
-            "last_clicked": row["last_clicked"],
-            "telegram_chat_id": row["telegram_chat_id"],
-            "is_new_user": False
-        }
+        res = dict(row)
+        res["is_new_user"] = False
+        return res
     finally:
         conn.close()
 

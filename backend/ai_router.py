@@ -36,11 +36,12 @@ logger = logging.getLogger(__name__)
 # Prioritas dari atas ke bawah. Jika satu gagal (404/429/400),
 # sistem otomatis lanjut ke model berikutnya dalam list ini.
 OPENROUTER_FALLBACK_MODELS = [
-    os.environ.get("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free"),
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "qwen/qwen3-coder:free",
-    "deepseek/deepseek-v4-flash:free",
+    os.environ.get("OPENROUTER_MODEL", "openrouter/free"),
+    "openrouter/free",
     "google/gemma-4-31b-it:free",
+    "google/gemma-4-26b-a4b-it:free",
+    "nvidia/nemotron-3-nano-30b-a3b:free",
+    "cohere/north-mini-code:free",
     "openai/gpt-oss-20b:free",
 ]
 
