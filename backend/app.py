@@ -34,12 +34,17 @@ CORS(app, origins=os.environ.get('ALLOWED_ORIGINS', 'http://localhost:3000').spl
 # Initialize database on startup
 database.init_db()
 
+# Initialize AI cache table (must run AFTER database.init_db creates the DB)
+import ai_cache
+ai_cache.init_cache_table()
+
 # Register blueprints
 from routes.auth import auth_bp
 from routes.events import events_bp
 from routes.incidents import incidents_bp
 from routes.admin_api import admin_api_bp
 from gamification_routes import gamification_bp
+from routes.ai_routes import ai_bp  # AI Behavioral Engine
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(events_bp)
@@ -48,6 +53,7 @@ app.register_blueprint(admin_api_bp)
 app.register_blueprint(gamification_bp)
 app.register_blueprint(threat_bp)
 app.register_blueprint(proxy_bp)
+app.register_blueprint(ai_bp)  # AI Behavioral: /api/ai/*
 
 # Public endpoints whitelisting (matching blueprint endpoint paths)
 # /api/telegram/user is deliberately excluded to prevent sensitive data exposure
@@ -63,7 +69,10 @@ PUBLIC_ROUTES = {
     'gamification.post_quiz_revive',
     'auth.validate_token_api',
     'auth.telegram_command',
-    'proxy.visit', 'proxy.go', 'proxy.blocked'
+    'proxy.visit', 'proxy.go', 'proxy.blocked',
+    'ai.classify_all_users', 'ai.analyze_user', 'ai.generate_org_report',
+    'ai.invalidate_ai_cache', 'ai.cache_stats', 'ai.agentic_investigate',
+    'ai.gophish_generate', 'ai.router_status', 'ai.get_agentic_history'
 }
 
 @app.before_request
