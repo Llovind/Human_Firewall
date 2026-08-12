@@ -168,6 +168,27 @@ def generate_org_report():
             expect_json=True
         )
 
+        # Format markdown_report string for frontend rendering & PDF export
+        md_lines = [
+            f"# {result.get('report_title', 'Laporan Analisis Keamanan Perilaku')}",
+            f"*Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')} | Periode: {days} Hari*\n",
+            "## Executive Summary",
+            f"{result.get('executive_summary', '')}\n",
+            "## Key Findings",
+        ]
+        for item in result.get('key_findings', []):
+            md_lines.append(f"- {item}")
+
+        if result.get('positive_highlights'):
+            md_lines.append("\n## Positive Highlights")
+            for item in result.get('positive_highlights', []):
+                md_lines.append(f"- {item}")
+
+        if result.get('next_steps'):
+            md_lines.append("\n## Recommended Next Steps")
+            md_lines.append(f"{result.get('next_steps')}")
+
+        result["markdown_report"] = "\n".join(md_lines)
         result["_generated_at"] = datetime.utcnow().isoformat()
         result["_from_cache"] = False
         result["_org_context_snapshot"] = {

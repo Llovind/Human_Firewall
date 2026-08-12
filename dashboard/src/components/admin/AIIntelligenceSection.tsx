@@ -71,63 +71,52 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
   const [userDeepDive, setUserDeepDive] = useState<UserDeepDive | null>(null);
   const [isDeepDiveLoading, setIsDeepDiveLoading] = useState(false);
 
-  // Markdown Action Bar State
-  const [copied, setCopied] = useState(false);
-  const [pdfGenerating, setPdfGenerating] = useState(false);
+  // Markdown Report State
+  const [internalReport, setInternalReport] = useState<string>('');
+  const [isReportLoading, setIsReportLoading] = useState(false);
 
-  // Fetch Heatmap Data
-  const fetchHeatmapData = async (refresh = false) => {
-    setIsHeatmapLoading(true);
+  const activeReport = markdownReport || internalReport;
+  const isReportBusy = isLoading || isReportLoading;
+
+  const fetchReportData = async (refresh = false) => {
+    setIsReportLoading(true);
     try {
-      const res = await fetch(`/api/ai/classify?role=${role}${refresh ? '&refresh=true' : ''}`);
+      const res = await fetch(`/api/ai/report?days=7${refresh ? '&refresh=true' : ''}`);
       if (res.ok) {
         const data = await res.json();
-        if (data.classifications) setClassifications(data.classifications);
-        if (data.org_risk_summary) setOrgSummary(data.org_risk_summary);
+        if (data.markdown_report) setInternalReport(data.markdown_report);
       }
     } catch (err) {
-      console.error('Failed to fetch AI heatmap classifications:', err);
+      console.error('Failed to fetch AI report:', err);
     } finally {
-      setIsHeatmapLoading(false);
+      setIsReportLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchHeatmapData();
-  }, [role]);
-
-  // Fetch Individual User Deep Dive
-  const handleOpenUserModal = async (email: string) => {
-    setSelectedUserEmail(email);
-    setIsDeepDiveLoading(true);
-    setUserDeepDive(null);
-    try {
-      const res = await fetch(`/api/ai/user/${encodeURIComponent(email)}?days=30`);
-      if (res.ok) {
-        const data = await res.json();
-        setUserDeepDive(data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch user deep dive:', err);
-    } finally {
-      setIsDeepDiveLoading(false);
+    if (activeSubTab === 'report' && !markdownReport && !internalReport) {
+      fetchReportData();
     }
-  };
+  }, [activeSubTab, markdownReport]);
 
   const handleCopyMarkdown = () => {
-    if (!markdownReport) return;
-    navigator.clipboard.writeText(markdownReport);
+    if (!activeReport) return;
+    navigator.clipboard.writeText(activeReport);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleDownloadMarkdown = () => {
-    if (!markdownReport) return;
-    const blob = new Blob([markdownReport], { type: 'text/markdown;charset=utf-8' });
+    if (!activeReport) return;
+    const blob = new Blob([activeReport], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = `AFFERENT_${role.toUpperCase()}_Executive_Report_${new Date().toISOString().slice(0, 10)}.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -585,20 +574,18 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-              {onRefresh && (
-                <button
-                  onClick={onRefresh}
-                  disabled={isLoading}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: '#1e293b', color: '#e2e8f0', border: '1px solid rgba(148,163,184,0.2)', cursor: 'pointer' }}
-                >
-                  <RefreshCw style={{ width: '14px', height: '14px', animation: isLoading ? 'spin 1s linear infinite' : 'none' }} />
-                  Regenerate
-                </button>
-              )}
+              <button
+                onClick={() => fetchReportData(true)}
+                disabled={isReportBusy}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: '#1e293b', color: '#e2e8f0', border: '1px solid rgba(148,163,184,0.2)', cursor: 'pointer' }}
+              >
+                <RefreshCw style={{ width: '14px', height: '14px', animation: isReportBusy ? 'spin 1s linear infinite' : 'none' }} />
+                Regenerate
+              </button>
 
               <button
                 onClick={handleCopyMarkdown}
-                disabled={!markdownReport}
+                disabled={!activeReport}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: '#1e293b', color: '#e2e8f0', border: '1px solid rgba(148,163,184,0.2)', cursor: 'pointer' }}
               >
                 {copied ? <Check style={{ width: '14px', height: '14px', color: '#34d399' }} /> : <Copy style={{ width: '14px', height: '14px', color: '#94a3b8' }} />}
@@ -607,7 +594,7 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
 
               <button
                 onClick={handleDownloadMarkdown}
-                disabled={!markdownReport}
+                disabled={!activeReport}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: '#1e293b', color: '#e2e8f0', border: '1px solid rgba(148,163,184,0.2)', cursor: 'pointer' }}
               >
                 <Download style={{ width: '14px', height: '14px', color: '#60a5fa' }} />
@@ -615,8 +602,8 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
               </button>
 
               <button
-                onClick={handleExportPdf}
-                disabled={isPdfLoading || pdfGenerating || !markdownReport}
+                onClick={() => exportExecutivePdf(role, activeReport)}
+                disabled={isPdfLoading || pdfGenerating || !activeReport}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -639,18 +626,18 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
           </div>
 
           {/* Report Body */}
-          {isLoading ? (
+          {isReportBusy ? (
             <div style={{ padding: '60px 0', textAlign: 'center' }}>
               <RefreshCw style={{ width: '32px', height: '32px', color: '#3b82f6', animation: 'spin 1s linear infinite', margin: '0 auto 12px auto' }} />
               <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0, fontWeight: 500 }}>Generating GFM Executive Report for role [{role}]...</p>
             </div>
-          ) : !markdownReport ? (
+          ) : !activeReport ? (
             <div style={{ padding: '40px 0', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
               No report available yet. Click "Regenerate" to trigger AI analysis.
             </div>
           ) : (
             <div>
-              {renderFormattedMarkdown(markdownReport)}
+              {renderFormattedMarkdown(activeReport)}
             </div>
           )}
         </div>
