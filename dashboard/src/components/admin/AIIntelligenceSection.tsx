@@ -74,9 +74,50 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
   // Markdown Report State
   const [internalReport, setInternalReport] = useState<string>('');
   const [isReportLoading, setIsReportLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [pdfGenerating, setPdfGenerating] = useState(false);
 
   const activeReport = markdownReport || internalReport;
   const isReportBusy = isLoading || isReportLoading;
+
+  // Fetch Heatmap Data
+  const fetchHeatmapData = async (refresh = false) => {
+    setIsHeatmapLoading(true);
+    try {
+      const res = await fetch(`/api/ai/classify?role=${role}${refresh ? '&refresh=true' : ''}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.classifications) setClassifications(data.classifications);
+        if (data.org_risk_summary) setOrgSummary(data.org_risk_summary);
+      }
+    } catch (err) {
+      console.error('Failed to fetch AI heatmap classifications:', err);
+    } finally {
+      setIsHeatmapLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchHeatmapData();
+  }, [role]);
+
+  // Fetch Individual User Deep Dive
+  const handleOpenUserModal = async (email: string) => {
+    setSelectedUserEmail(email);
+    setIsDeepDiveLoading(true);
+    setUserDeepDive(null);
+    try {
+      const res = await fetch(`/api/ai/user/${encodeURIComponent(email)}?days=30`);
+      if (res.ok) {
+        const data = await res.json();
+        setUserDeepDive(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch user deep dive:', err);
+    } finally {
+      setIsDeepDiveLoading(false);
+    }
+  };
 
   const fetchReportData = async (refresh = false) => {
     setIsReportLoading(true);
@@ -113,10 +154,6 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
     const link = document.createElement('a');
     link.href = url;
     link.download = `AFFERENT_${role.toUpperCase()}_Executive_Report_${new Date().toISOString().slice(0, 10)}.md`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
