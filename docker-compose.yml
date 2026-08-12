@@ -73,6 +73,8 @@ services:
     volumes:
       - ./backend:/app           # Live-reload pas development
       - flask_db:/app/instance   # Persistence SQLite Flask
+    env_file:
+      - .env
     environment:
       - FLASK_APP=app.py
       - FLASK_ENV=production
@@ -83,6 +85,12 @@ services:
       - SERVICE_API_KEY=${SERVICE_API_KEY}
       - DEV_BYPASS_AUTH=${DEV_BYPASS_AUTH}
       - BOT_USERNAME=${BOT_USERNAME}
+
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY}
 
       - GOPHISH_API_KEY=${GOPHISH_API_KEY}
       - GOPHISH_API_URL=${GOPHISH_API_URL}
