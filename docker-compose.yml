@@ -5,6 +5,8 @@ services:
     container_name: hfl-n8n
     ports:
       - "5678:5678"
+    env_file:
+      - .env
     environment:
       - N8N_HOST=localhost
       - N8N_PORT=5678
@@ -21,6 +23,7 @@ services:
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
       - N8N_ALLOW_ENV_VARIABLES=*
       - NODE_FUNCTION_ALLOW_BUILTIN=crypto
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - VT_API_KEY=${VT_API_KEY}
       - URLSCAN_API_KEY=${URLSCAN_API_KEY}
       - SOC_CHAT_ID=${SOC_CHAT_ID}
