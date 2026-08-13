@@ -54,7 +54,7 @@
                                           |
                                           v
 +------------------+           +----------+----------+           +-------------------+
-|  n8n Orchestrator| <=======> |   Flask API Backend  | <=======> |   GoPhish Engine  |
+|  n8n Orchestrator| <=======> |   Flask API Backend | <=======> |   GoPhish Engine  |
 |   (Port 5678)    |  REST API |      (Port 5000)    |  REST API | (Port 3333/8080)  |
 +---------+--------+           +----------+----------+           +-------------------+
           |                               |
