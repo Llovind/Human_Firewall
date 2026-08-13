@@ -20,6 +20,10 @@ import { isValidAdminSession, ADMIN_SESSION_COOKIE } from '@/lib/adminSession';
  * default ke Edge Runtime dan gagal/berperilaku tidak terduga.
  */
 export function proxy(request: NextRequest) {
+  if (process.env.DEV_BYPASS_AUTH?.trim().toLowerCase() === 'true') {
+    return NextResponse.next();
+  }
+
   const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
   console.log(`[PROXY DEBUG] PID: ${process.pid}, token: ${token}, isValid: ${isValidAdminSession(token)}`);
 

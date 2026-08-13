@@ -118,12 +118,15 @@ services:
     container_name: hfl-dashboard
     ports:
       - "3000:3000"
+    env_file:
+      - .env
     environment:
       - NEXT_PUBLIC_BASE_URL=http://localhost:3000
       - NEXT_PUBLIC_API_URL=http://flask_api:5000
       - NEXT_PUBLIC_BOT_USERNAME=${BOT_USERNAME}
       - API_URL=http://flask_api:5000
       - SERVICE_API_KEY=${SERVICE_API_KEY}
+      - DEV_BYPASS_AUTH=${DEV_BYPASS_AUTH}
     depends_on:
       - flask_api
     restart: unless-stopped
