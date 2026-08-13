@@ -1,7 +1,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, ShieldAlert, AlertTriangle, Lock, RefreshCw, Info, Edit2, Check, Save } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, AlertTriangle, Lock, RefreshCw, Info, Edit2, Check, Save, FileText } from 'lucide-react';
+
+export interface ClauseEvidence {
+  label: string;
+  formula: string;
+  components: Record<string, number>;
+}
 
 export interface ReadinessClause {
   clause_id: string;
@@ -11,18 +17,19 @@ export interface ReadinessClause {
   target_value: number | null;
   unit: string;
   is_legally_mandated: boolean;
-  readiness_tier: 'Strong Readiness' | 'Partial Readiness' | 'Needs Attention';
+  readiness_tier: 'Strong Readiness' | 'Partial Readiness' | 'Needs Attention' | 'Not Configured';
   rationale: string;
+  evidence?: ClauseEvidence;
 }
 
 export interface ReadinessSummaryResponse {
   disclaimer: string;
-  overall_readiness_indicator: 'Strong Readiness' | 'Partial Readiness' | 'Needs Attention';
+  overall_readiness_indicator: 'Strong Readiness' | 'Partial Readiness' | 'Needs Attention' | 'Not Configured';
   clause_readiness: ReadinessClause[];
   total_users: number;
   total_reports: number;
   total_clicks: number;
-  mean_time_to_close_hours: number;
+  mean_time_to_close_hours: number | null;
 }
 
 export interface ThresholdItem {
@@ -45,21 +52,28 @@ export const ComplianceReadinessSection: React.FC<ComplianceReadinessSectionProp
   const [data, setData] = useState<ReadinessSummaryResponse | null>(null);
   const [thresholds, setThresholds] = useState<ThresholdItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [editingValues, setEditingValues] = useState<Record<string, string>>({});
   const [saveStatus, setSaveStatus] = useState<Record<string, string>>({});
+  const [expandedEvidence, setExpandedEvidence] = useState<Record<string, boolean>>({});
 
   const fetchReadinessData = async () => {
     setIsLoading(true);
+    setFetchError(null);
     try {
       const [resSummary, resThresholds] = await Promise.all([
-        fetch('/api/compliance-summary'),
+        fetch('/api/admin/compliance-summary'),
         fetch('/api/admin/readiness-thresholds')
       ]);
 
       if (resSummary.ok) {
         const summaryData = await resSummary.json();
         setData(summaryData);
+      } else {
+        const errData = await resSummary.json().catch(() => ({}));
+        setFetchError(errData.error || 'Failed to fetch compliance summary');
       }
+
       if (resThresholds.ok) {
         const thresholdData = await resThresholds.json();
         setThresholds(thresholdData);
@@ -69,8 +83,9 @@ export const ComplianceReadinessSection: React.FC<ComplianceReadinessSectionProp
         });
         setEditingValues(initEdits);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to fetch readiness data:', err);
+      setFetchError('Connection error while reaching backend server');
     } finally {
       setIsLoading(false);
     }
@@ -106,6 +121,10 @@ export const ComplianceReadinessSection: React.FC<ComplianceReadinessSectionProp
     }
   };
 
+  const toggleEvidence = (clauseId: string) => {
+    setExpandedEvidence(prev => ({ ...prev, [clauseId]: !prev[clauseId] }));
+  };
+
   return (
     <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '20px', fontFamily: 'var(--font-sans, Inter, sans-serif)' }}>
       {/* PERSISTENT AUDIT DISCLAIMER BANNER */}
@@ -123,13 +142,31 @@ export const ComplianceReadinessSection: React.FC<ComplianceReadinessSectionProp
         <Info style={{ width: '24px', height: '24px', color: '#60a5fa', flexShrink: 0 }} />
         <div>
           <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#60a5fa', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Persistent Audit & Telemetry Disclaimer
+            Persistent Audit & Behavioral Telemetry Disclaimer
           </h4>
           <p style={{ fontSize: '12px', color: '#cbd5e1', margin: '4px 0 0 0', lineHeight: 1.5 }}>
-            Tingkat kesiapan ini merupakan <strong>indikator internal berdasarkan telemetri perilaku (human telemetry)</strong> dan bukan merupakan penentuan sertifikasi resmi atau hasil audit formal. Indikator ini berfungsi sebagai panduan sinyal risiko untuk persiapan audit sesungguhnya.
+            {data?.disclaimer || 'Tingkat kesiapan ini merupakan indikator internal berdasarkan telemetri perilaku (human telemetry) dan bukan merupakan penentuan sertifikasi resmi atau hasil audit formal. Indikator ini berfungsi sebagai panduan sinyal risiko untuk persiapan audit sesungguhnya.'}
           </p>
         </div>
       </div>
+
+      {/* ERROR DISPLAY */}
+      {fetchError && (
+        <div style={{
+          background: 'rgba(239,68,68,0.1)',
+          border: '1px solid rgba(239,68,68,0.3)',
+          borderRadius: '8px',
+          padding: '12px 16px',
+          color: '#f87171',
+          fontSize: '13px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px'
+        }}>
+          <AlertTriangle style={{ width: '18px', height: '18px' }} />
+          <span>{fetchError}</span>
+        </div>
+      )}
 
       {/* OVERALL READINESS STATUS CARD */}
       {data && (
@@ -159,12 +196,15 @@ export const ComplianceReadinessSection: React.FC<ComplianceReadinessSectionProp
                 fontWeight: 800,
                 textTransform: 'uppercase',
                 background: data.overall_readiness_indicator === 'Strong Readiness' ? 'rgba(16,185,129,0.15)' :
-                            data.overall_readiness_indicator === 'Partial Readiness' ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)',
+                            data.overall_readiness_indicator === 'Partial Readiness' ? 'rgba(245,158,11,0.15)' :
+                            data.overall_readiness_indicator === 'Needs Attention' ? 'rgba(239,68,68,0.15)' : 'rgba(148,163,184,0.15)',
                 color: data.overall_readiness_indicator === 'Strong Readiness' ? '#34d399' :
-                       data.overall_readiness_indicator === 'Partial Readiness' ? '#fbbf24' : '#f87171',
+                       data.overall_readiness_indicator === 'Partial Readiness' ? '#fbbf24' :
+                       data.overall_readiness_indicator === 'Needs Attention' ? '#f87171' : '#94a3b8',
                 border: `1px solid ${
                   data.overall_readiness_indicator === 'Strong Readiness' ? 'rgba(16,185,129,0.3)' :
-                  data.overall_readiness_indicator === 'Partial Readiness' ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)'
+                  data.overall_readiness_indicator === 'Partial Readiness' ? 'rgba(245,158,11,0.3)' :
+                  data.overall_readiness_indicator === 'Needs Attention' ? 'rgba(239,68,68,0.3)' : 'rgba(148,163,184,0.3)'
                 }`
               }}>
                 {data.overall_readiness_indicator}
@@ -210,7 +250,13 @@ export const ComplianceReadinessSection: React.FC<ComplianceReadinessSectionProp
             badgeBg = 'rgba(245,158,11,0.15)';
             badgeColor = '#fbbf24';
             badgeBorder = 'rgba(245,158,11,0.3)';
+          } else if (c.readiness_tier === 'Not Configured') {
+            badgeBg = 'rgba(148,163,184,0.15)';
+            badgeColor = '#94a3b8';
+            badgeBorder = 'rgba(148,163,184,0.3)';
           }
+
+          const isEvidenceOpen = !!expandedEvidence[c.clause_id];
 
           return (
             <div key={idx} style={{
@@ -253,6 +299,57 @@ export const ComplianceReadinessSection: React.FC<ComplianceReadinessSectionProp
                     </span>
                   </div>
                 </div>
+
+                {/* FRAMEWORK MAPPING EVIDENCE BREAKDOWN (NEW) */}
+                {c.evidence && (
+                  <div style={{ marginBottom: '12px' }}>
+                    <button
+                      onClick={() => toggleEvidence(c.clause_id)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#60a5fa',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: 0,
+                        marginBottom: isEvidenceOpen ? '8px' : '0'
+                      }}
+                    >
+                      <FileText style={{ width: '12px', height: '12px' }} />
+                      {isEvidenceOpen ? 'Hide Evidence Breakdown ▲' : 'Show Evidence Breakdown ▼'}
+                    </button>
+
+                    {isEvidenceOpen && (
+                      <div style={{
+                        background: 'rgba(15,23,42,0.8)',
+                        borderRadius: '6px',
+                        border: '1px solid rgba(59,130,246,0.2)',
+                        padding: '10px 12px',
+                        fontSize: '11px',
+                        color: '#cbd5e1'
+                      }}>
+                        <div style={{ fontWeight: 700, color: '#93c5fd', marginBottom: '4px' }}>
+                          {c.evidence.label}
+                        </div>
+                        <div style={{ fontFamily: 'monospace', fontSize: '10px', color: '#38bdf8', marginBottom: '6px', background: 'rgba(0,0,0,0.3)', padding: '3px 6px', borderRadius: '4px' }}>
+                          Formula: {c.evidence.formula}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '10px', color: '#94a3b8' }}>
+                          {Object.entries(c.evidence.components).map(([k, v]) => (
+                            <div key={k} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span>• {k.replace(/_/g, ' ')}:</span>
+                              <span style={{ fontWeight: 700, color: '#f1f5f9' }}>{v}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div style={{ paddingTop: '10px', borderTop: '1px solid rgba(148,163,184,0.1)', fontSize: '11px', color: '#94a3b8', lineHeight: 1.4, fontStyle: 'italic' }}>

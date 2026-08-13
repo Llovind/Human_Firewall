@@ -1689,114 +1689,6 @@ def get_user_profile(email):
         conn.close()
 
 
-# ---------------------------------------------------------------------------
-# COMPLIANCE SUMMARY (for Dashboard UU PDP & BSSN widgets)
-# ---------------------------------------------------------------------------
-
-def get_compliance_summary():
-    """Mengembalikan data kepatuhan regulasi untuk Dashboard SOC.
-    Mengkorelasikan poin karyawan dengan metrik kepatuhan UU PDP & BSSN."""
-    conn = get_connection()
-
-    try:
-        # 1. Rata-rata klik per user & tingkat penyelesaian training
-        stats_row = conn.execute('''
-            SELECT 
-                AVG(click_count) as avg_clicks,
-                AVG(CASE WHEN viewed_training_count > 0 THEN 1.0 ELSE 0.0 END) as training_rate,
-                COUNT(*) as total_users
-            FROM user_history
-        ''').fetchone()
-        
-        avg_clicks = stats_row["avg_clicks"] if stats_row and stats_row["avg_clicks"] else 0
-        training_rate = stats_row["training_rate"] if stats_row and stats_row["training_rate"] else 0
-        total_users = stats_row["total_users"] if stats_row else 0
-
-        # 2. Insiden kebocoran kredensial (dari event 'submitted_data')
-        cred_incidents_row = conn.execute(
-            "SELECT COUNT(*) as cnt FROM events WHERE event_type = 'submitted_data'"
-        ).fetchone()
-        cred_incidents = cred_incidents_row["cnt"] if cred_incidents_row else 0
-
-        # Kalkulasi 3 Pilar GRC
-        # A. Phishing Resilience Rate (Bobot 40%) - Turun jika rata-rata klik naik
-        resilience_score = max(0, 100 - (avg_clicks * 20))
-        
-        # B. Training Completion Rate (Bobot 30%)
-        training_score = training_rate * 100
-        
-        # C. Credential Protection Rate (Bobot 30%) - Turun jika banyak kredensial bocor
-        cred_protection_score = max(0, 100 - ((cred_incidents / max(total_users, 1)) * 50))
-
-        # Total Persentase Kepatuhan
-        compliance_pct = round((resilience_score * 0.4) + (training_score * 0.3) + (cred_protection_score * 0.3), 1)
-
-        # Grade Audit
-        if compliance_pct >= 80:
-            compliance_grade = "A"
-        elif compliance_pct >= 65:
-            compliance_grade = "B"
-        elif compliance_pct >= 50:
-            compliance_grade = "C"
-        else:
-            compliance_grade = "D"
-
-        # Estimasi Kerugian Finansial yang Diselamatkan (ROI Awareness)
-        # Setiap insiden (closed) = dicegah potensi rugi Rp 75 juta
-        # Setiap user yang lulus training = avoided risk Rp 5 juta
-        closed_row = conn.execute("SELECT COUNT(*) as cnt FROM incidents WHERE status = 'closed'").fetchone()
-        incidents_prevented = closed_row["cnt"] if closed_row else 0
-
-        trained_users_row = conn.execute("SELECT COUNT(*) as cnt FROM user_history WHERE viewed_training_count > 0").fetchone()
-        trained_users = trained_users_row["cnt"] if trained_users_row else 0
-
-        estimated_savings = (incidents_prevented * 75_000_000) + (trained_users * 5_000_000)
-
-        total_inc_row = conn.execute("SELECT COUNT(*) as cnt FROM incidents").fetchone()
-        total_incidents = total_inc_row["cnt"] if total_inc_row else 0
-
-        # Peta risiko per divisi (tetap menggunakan rata-rata poin klasifikasi lama untuk perbandingan tim)
-        divisi_rows = conn.execute('''
-            SELECT divisi, AVG(points) as avg_pts, COUNT(*) as member_count
-            FROM user_history
-            WHERE divisi IS NOT NULL
-            GROUP BY divisi
-            ORDER BY avg_pts ASC
-        ''').fetchall()
-
-        divisi_risk_map = []
-        for d_row in divisi_rows:
-            avg_pts = round(d_row["avg_pts"], 1)
-            if avg_pts >= 120:
-                risk_level = "Low"
-            elif avg_pts >= 70:
-                risk_level = "Medium"
-            else:
-                risk_level = "High"
-            divisi_risk_map.append({
-                "divisi": d_row["divisi"],
-                "avg_points": avg_pts,
-                "member_count": d_row["member_count"],
-                "risk_level": risk_level
-            })
-
-        # Rata-rata poin general untuk display text
-        avg_row = conn.execute('SELECT AVG(points) as avg_pts FROM user_history').fetchone()
-        avg_points = round(avg_row["avg_pts"], 1) if avg_row and avg_row["avg_pts"] else 100
-
-        return {
-            "compliance_pct": compliance_pct,
-            "compliance_grade": compliance_grade,
-            "resilience_score": round(resilience_score, 1),
-            "training_score": round(training_score, 1),
-            "cred_protection_score": round(cred_protection_score, 1),
-            "estimated_savings_idr": estimated_savings,
-            "incidents_prevented": incidents_prevented,
-            "divisi_risk_map": divisi_risk_map,
-            "avg_points": avg_points
-        }
-    finally:
-        conn.close()
 
 def get_readiness_thresholds():
     """Mengembalikan daftar ambang batas kesiapan GRC."""
@@ -1829,10 +1721,10 @@ def update_readiness_threshold(clause_id: str, target_value: float = None):
 
 
 def get_compliance_summary():
-    """Mengembalikan skor Kesiapan Kepatuhan (Readiness Level) terklasifikasi
-    berdasarkan klausul resmi ISO 27001:2022 dan UU PDP No. 27/2022.
-    
-    TIDAK menggunakan kata 'Compliant/Non-Compliant' dan TIDAK menggunakan Rupiah arbitrer.
+    """Returns Compliance Readiness Level classified per ISO 27001:2022 and UU PDP No. 27/2022.
+
+    Scoring is derived from real behavioral telemetry. Each clause includes an 'evidence' dict
+    showing exactly which data and formula were used — Framework Mapping Transparency.
     """
     conn = get_connection()
 
@@ -1843,17 +1735,20 @@ def get_compliance_summary():
 
         # 1. Telemetri Karyawan
         stats_row = conn.execute('''
-            SELECT 
-                AVG(click_count) as avg_clicks,
+            SELECT
                 AVG(CASE WHEN viewed_training_count > 0 THEN 1.0 ELSE 0.0 END) as training_rate,
                 COUNT(*) as total_users,
-                SUM(click_count) as total_clicks
+                SUM(click_count) as total_clicks,
+                SUM(CASE WHEN viewed_training_count > 0 THEN 1 ELSE 0 END) as trained_users,
+                SUM(CASE WHEN points > 100 AND is_active = 1 THEN 1 ELSE 0 END) as above_baseline_users
             FROM user_history
         ''').fetchone()
-        
+
         training_rate = stats_row["training_rate"] if stats_row and stats_row["training_rate"] else 0
         total_users = stats_row["total_users"] if stats_row else 0
         total_clicks = stats_row["total_clicks"] if stats_row and stats_row["total_clicks"] else 0
+        trained_users = stats_row["trained_users"] if stats_row and stats_row["trained_users"] else 0
+        above_baseline_users = stats_row["above_baseline_users"] if stats_row and stats_row["above_baseline_users"] else 0
 
         # Laporan Phishing Simulasi vs Real World
         reports_row = conn.execute("SELECT COUNT(*) as cnt FROM threat_reports").fetchone()
@@ -1864,6 +1759,11 @@ def get_compliance_summary():
         cred_users = cred_users_row["cnt"] if cred_users_row else 0
 
         # MTTC (Mean Time to Close) dalam jam untuk insiden closed
+        closed_incidents_row = conn.execute(
+            "SELECT COUNT(*) as cnt FROM incidents WHERE status = 'closed' AND closed_at IS NOT NULL"
+        ).fetchone()
+        closed_incidents_count = closed_incidents_row["cnt"] if closed_incidents_row else 0
+
         mttc_row = conn.execute('''
             SELECT AVG(
                 (julianday(closed_at) - julianday(created_at)) * 24
@@ -1874,7 +1774,7 @@ def get_compliance_summary():
         mttc_hours = round(mttc_row["avg_hours"], 1) if mttc_row and mttc_row["avg_hours"] is not None else 0.0
 
         # -------------------------------------------------------------------
-        # EVAULASI KLAUSUL MAPPED READINESS
+        # CLAUSE EVALUATION with bug fixes and evidence breakdown
         # -------------------------------------------------------------------
 
         # A. ISO 27001:2022 Annex A.6.3 — Awareness & Training
@@ -1888,42 +1788,60 @@ def get_compliance_summary():
             iso_a63_tier = "Needs Attention"
 
         # B. ISO 27001:2022 Annex A.6.8 — Event Reporting
-        reporting_ratio = round((total_reports / max(1, total_reports + total_clicks)) * 100, 1)
+        # BUG FIX: fresh system with 0 reports AND 0 clicks = Not Configured, not Needs Attention
         iso_a68_target = thresholds.get("ISO_A68", {}).get("target_value", 70.0)
-        if reporting_ratio >= (iso_a68_target or 70.0):
-            iso_a68_tier = "Strong Readiness"
-        elif reporting_ratio >= 35.0:
-            iso_a68_tier = "Partial Readiness"
+        if total_reports == 0 and total_clicks == 0:
+            reporting_ratio = None
+            iso_a68_tier = "Not Configured"
         else:
-            iso_a68_tier = "Needs Attention"
+            reporting_ratio = round((total_reports / max(1, total_reports + total_clicks)) * 100, 1)
+            if reporting_ratio >= (iso_a68_target or 70.0):
+                iso_a68_tier = "Strong Readiness"
+            elif reporting_ratio >= 35.0:
+                iso_a68_tier = "Partial Readiness"
+            else:
+                iso_a68_tier = "Needs Attention"
 
         # C. ISO 27001:2022 Annex A.8.12 — Data Leakage Prevention (Human Vector)
         cred_rate = round((cred_users / max(1, total_users)) * 100, 1)
         iso_a812_target = thresholds.get("ISO_A812", {}).get("target_value")
+        # BUG FIX: add Partial tier (was jumping directly Strong -> Needs Attention)
         if iso_a812_target is None:
             iso_a812_tier = "Not Configured"
-        elif cred_rate <= iso_a812_target:
+        elif cred_rate <= (iso_a812_target * 0.5):
             iso_a812_tier = "Strong Readiness"
+        elif cred_rate <= iso_a812_target:
+            iso_a812_tier = "Partial Readiness"
         else:
             iso_a812_tier = "Needs Attention"
 
         # D. UU PDP Pasal 35 — Internal Security System & PII Risk Profile
+        # BUG FIX: compute a proxy score (% employees above neutral baseline)
+        # instead of hardcoding current_value=None permanently
+        uu_pdp_35_value = round((above_baseline_users / max(1, total_users)) * 100, 1)
         uu_pdp_35_target = thresholds.get("UU_PDP_35", {}).get("target_value")
         if uu_pdp_35_target is None:
             uu_pdp_35_tier = "Not Configured"
-        else:
+        elif uu_pdp_35_value >= uu_pdp_35_target:
+            uu_pdp_35_tier = "Strong Readiness"
+        elif uu_pdp_35_value >= (uu_pdp_35_target * 0.6):
             uu_pdp_35_tier = "Partial Readiness"
+        else:
+            uu_pdp_35_tier = "Needs Attention"
 
         # E. UU PDP Pasal 46 — Written Breach Notification (72 Hours Statutory Limit)
+        # BUG FIX: mttc_hours=0.0 means NO closed incidents yet -> Not Configured
         uu_pdp_46_limit = 72.0
-        if mttc_hours == 0.0 or mttc_hours <= 24.0:
+        if mttc_hours == 0.0:
+            uu_pdp_46_tier = "Not Configured"
+        elif mttc_hours <= 24.0:
             uu_pdp_46_tier = "Strong Readiness"
         elif mttc_hours <= uu_pdp_46_limit:
             uu_pdp_46_tier = "Partial Readiness"
         else:
             uu_pdp_46_tier = "Needs Attention"
 
-        # List Klausul Evaluasi
+        # Build clause list with evidence breakdown per clause
         clauses = [
             {
                 "clause_id": "ISO_A63",
@@ -1934,7 +1852,15 @@ def get_compliance_summary():
                 "unit": "percent",
                 "is_legally_mandated": False,
                 "readiness_tier": iso_a63_tier,
-                "rationale": thresholds.get("ISO_A63", {}).get("rationale", "")
+                "rationale": thresholds.get("ISO_A63", {}).get("rationale", ""),
+                "evidence": {
+                    "label": "Training Completion Rate",
+                    "formula": "employees_with_training / total_employees x 100",
+                    "components": {
+                        "employees_with_training": int(trained_users),
+                        "total_employees": int(total_users)
+                    }
+                }
             },
             {
                 "clause_id": "ISO_A68",
@@ -1945,7 +1871,15 @@ def get_compliance_summary():
                 "unit": "percent",
                 "is_legally_mandated": False,
                 "readiness_tier": iso_a68_tier,
-                "rationale": thresholds.get("ISO_A68", {}).get("rationale", "")
+                "rationale": thresholds.get("ISO_A68", {}).get("rationale", ""),
+                "evidence": {
+                    "label": "Threat Report-to-Click Resilience Ratio",
+                    "formula": "threat_reports / (threat_reports + simulation_clicks) x 100",
+                    "components": {
+                        "threat_reports_submitted": int(total_reports),
+                        "simulation_clicks_total": int(total_clicks)
+                    }
+                }
             },
             {
                 "clause_id": "ISO_A812",
@@ -1956,29 +1890,53 @@ def get_compliance_summary():
                 "unit": "percent",
                 "is_legally_mandated": False,
                 "readiness_tier": iso_a812_tier,
-                "rationale": thresholds.get("ISO_A812", {}).get("rationale", "")
+                "rationale": thresholds.get("ISO_A812", {}).get("rationale", ""),
+                "evidence": {
+                    "label": "Credential Submission Rate (Human Vector)",
+                    "formula": "employees_who_submitted_credentials / total_employees x 100",
+                    "components": {
+                        "employees_submitted_credentials": int(cred_users),
+                        "total_employees": int(total_users)
+                    }
+                }
             },
             {
                 "clause_id": "UU_PDP_35",
                 "clause_number": "UU PDP Pasal 35",
                 "clause_title": "Internal policy & security system obligations for Personal Data Controllers",
-                "current_value": None,
+                "current_value": uu_pdp_35_value,
                 "target_value": uu_pdp_35_target,
-                "unit": "score",
+                "unit": "percent",
                 "is_legally_mandated": False,
                 "readiness_tier": uu_pdp_35_tier,
-                "rationale": thresholds.get("UU_PDP_35", {}).get("rationale", "")
+                "rationale": thresholds.get("UU_PDP_35", {}).get("rationale", ""),
+                "evidence": {
+                    "label": "Security Posture Proxy (Above Neutral Baseline)",
+                    "formula": "employees_with_points_above_100 / total_active_employees x 100",
+                    "components": {
+                        "employees_above_baseline": int(above_baseline_users),
+                        "total_employees": int(total_users)
+                    }
+                }
             },
             {
                 "clause_id": "UU_PDP_46",
                 "clause_number": "UU PDP Pasal 46",
                 "clause_title": "Written breach notification obligation within 3x24 hours (72 hours) to the Data Subject and the supervisory institution",
-                "current_value": mttc_hours,
+                "current_value": mttc_hours if mttc_hours > 0.0 else None,
                 "target_value": uu_pdp_46_limit,
                 "unit": "hours",
                 "is_legally_mandated": True,
                 "readiness_tier": uu_pdp_46_tier,
-                "rationale": thresholds.get("UU_PDP_46", {}).get("rationale", "")
+                "rationale": thresholds.get("UU_PDP_46", {}).get("rationale", ""),
+                "evidence": {
+                    "label": "Mean Time to Close Incidents (MTTC)",
+                    "formula": "AVG(closed_at - created_at) in hours across all closed incidents",
+                    "components": {
+                        "closed_incidents_measured": int(closed_incidents_count),
+                        "statutory_limit_hours": 72
+                    }
+                }
             }
         ]
 
@@ -1994,13 +1952,13 @@ def get_compliance_summary():
             overall_tier = "Strong Readiness"
 
         return {
-            "disclaimer": "Tingkat kesiapan ini merupakan indikator internal berdasarkan telemetri perilaku (human telemetry) dan bukan merupakan penentuan sertifikasi resmi atau hasil audit formal.",
+            "disclaimer": "Readiness indicators are internal signals derived from behavioral telemetry (human telemetry). They are not a formal certification determination or official audit result. Use as a risk signal to prepare for actual audits.",
             "overall_readiness_indicator": overall_tier,
             "clause_readiness": clauses,
             "total_users": total_users,
             "total_reports": total_reports,
             "total_clicks": total_clicks,
-            "mean_time_to_close_hours": mttc_hours
+            "mean_time_to_close_hours": mttc_hours if mttc_hours > 0.0 else None
         }
     finally:
         conn.close()
