@@ -45,10 +45,10 @@
 ## Afferent System Architecture
 
 ```text
-               +-----------------------------------------------------+
-               |       Next.js 16 Role-Based Dashboard (:3000)        |
+               +-------------------------------------------------------+
+               |       Next.js 16 Role-Based Dashboard (:3000)         |
                | (Phishing Admin | SOC Analyst | GRC | CISO Executive) |
-               +--------------------------+--------------------------+
+               +--------------------------+----------------------------+
                                           |
                                 /api/admin/* proxy
                                           |
