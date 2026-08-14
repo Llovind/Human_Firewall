@@ -88,7 +88,7 @@ export default function AdminLoginPage() {
           <Logo variant="mark" size={96} />
         </div>
 
-        <h2 className="admin-login-title">Human <strong>Firewall</strong></h2>
+        <h2 className="admin-login-title">Afferent <strong>Platform</strong></h2>
         <p className="admin-login-subtitle">Command Center Access</p>
 
         {errorMsg && (
