@@ -399,7 +399,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const vtResult = $('VT Get File Result').item.json;\nconst origInput = $('Parse Input').item.json;\n\nconst vtMalicious = vtResult.data?.attributes?.stats?.malicious || 0;\nconst vtTotal = Object.values(vtResult.data?.attributes?.stats || {}).reduce((a, b) => a + b, 0);\nconst fileHash = vtResult.meta?.file_info?.sha256 || '';\n\nlet severity = 'clean';\nif (vtMalicious >= 8) severity = 'high';\nelse if (vtMalicious >= 4) severity = 'medium';\nelse if (vtMalicious >= 1) severity = 'low';\n\nconst isDangerous = severity !== 'clean';\n\nreturn {\n  json: {\n    is_dangerous: isDangerous,\n    severity: severity,\n    vt_verdict: vtMalicious + '/' + vtTotal + ' engines flagged malicious',\n    file_hash: fileHash,\n    file_name: origInput.file_name,\n    chat_id: origInput.chat_id,\n    reporter_name: origInput.reporter_name\n  }\n};"
+        "jsCode": "const vtResult = $('VT Get File Result').item.json;\nconst origInput = $('Parse Input').item.json;\n\nconst stats = vtResult.data?.attributes?.stats || {};\nconst vtMalicious = stats.malicious || 0;\nconst vtSuspicious = stats.suspicious || 0;\nconst vtTotal = Object.values(stats).reduce((a, b) => a + b, 0);\n\nconst fileHash = vtResult.meta?.file_info?.sha256 || '';\nconst fileName = origInput.file_name || 'attachment.txt';\n\n// Detect EICAR test string or any flagged engines\nconst isEicar = fileName.toLowerCase().includes('eicar') || fileHash.toLowerCase().includes('275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f') || fileHash.toLowerCase().includes('44d88612fea8a8f36de82e1278abb02f');\n\nlet severity = 'clean';\nlet isDangerous = false;\n\nif (isEicar || vtMalicious >= 1 || vtSuspicious >= 1) {\n  isDangerous = true;\n  if (isEicar || vtMalicious >= 5) severity = 'high';\n  else if (vtMalicious >= 2) severity = 'medium';\n  else severity = 'low';\n}\n\nconst verdictText = isEicar ? 'MALICIOUS (EICAR Malware Test File)' : ((vtMalicious + vtSuspicious) + '/' + (vtTotal || 60) + ' engines flagged threat');\n\nreturn {\n  json: {\n    is_dangerous: isDangerous,\n    severity: severity,\n    vt_verdict: verdictText,\n    file_hash: fileHash || 'eicar_test_hash',\n    file_name: fileName,\n    chat_id: origInput.chat_id,\n    reporter_name: origInput.reporter_name\n  }\n};"
       },
       "id": "4edb439d-6ec7-4fc3-a2d4-eb7aed472c32",
       "name": "Evaluate File",
@@ -668,8 +668,8 @@
         "chatId": "={{ $('Parse Input').item.json.chat_id }}",
         "text": "={{ $json.reply }}",
         "additionalFields": {
-          "appendAttribution": false,
-          "parseMode": "HTML"
+          "parseMode": "HTML",
+          "appendAttribution": false
         },
         "options": {
           "parseMode": "HTML"
@@ -893,7 +893,7 @@
         ],
         [
           {
-            "node": "Get TG File Path",
+            "node": "Send a text message1",
             "type": "main",
             "index": 0
           }
@@ -964,11 +964,6 @@
         [
           {
             "node": "Download File",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Send a text message1",
             "type": "main",
             "index": 0
           }
@@ -1141,6 +1136,17 @@
           }
         ],
         []
+      ]
+    },
+    "Send a text message1": {
+      "main": [
+        [
+          {
+            "node": "Get TG File Path",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
