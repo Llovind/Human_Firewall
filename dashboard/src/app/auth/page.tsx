@@ -127,11 +127,11 @@ function AuthContent() {
             </div>
             <h2 className="auth-title">Akses Dashboard</h2>
             <p className="auth-subtitle">
-              Untuk mengakses Dashboard, buka <strong>Telegram Bot</strong> kami 
-              dan ketik <code>/dashboard</code> untuk mendapatkan link akses.
+              Klik tombol di bawah ini untuk membuka <b>Telegram Bot</b> kami 
+              dan tekan tombol <b>START</b> untuk mendapatkan bantuan &amp; link akses.
             </p>
             <a
-              href={`https://t.me/${botUsername}`}
+              href={`https://t.me/${botUsername}?start=welcome`}
               target="_blank"
               rel="noopener noreferrer"
               className="auth-telegram-btn"
