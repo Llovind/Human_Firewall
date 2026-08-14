@@ -27,7 +27,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const msg = $input.item.json.message;\n\nif (msg.text) {\n  const text = msg.text.trim();\n\n  if (text.startsWith('/')) {\n    return {\n      json: {\n        type: \"command\",\n        command: text,\n        chat_id: msg.chat.id,\n        reporter_name: msg.from.first_name || 'User'\n      }\n    };\n  }\n\n  const urlRegex = /^https?:\\/\\/\\S+$/i;\n\n  if (urlRegex.test(text)) {\n    return {\n      json: {\n        type: \"url\",\n        url: text,\n        chat_id: msg.chat.id,\n        reporter_name: msg.from.first_name || 'User'\n      }\n    };\n  }\n}\n\nif (msg.document) {\n  return {\n    json: {\n      type: \"file\",\n      file_id: msg.document.file_id,\n      file_name: msg.document.file_name,\n      mime_type: msg.document.mime_type,\n      chat_id: msg.chat.id,\n      reporter_name: msg.from.first_name || 'User'\n    }\n  };\n}\n\nreturn {\n  json: {\n    type: \"invalid\",\n    chat_id: msg.chat.id,\n    reporter_name: msg.from.first_name || 'User'\n  }\n};"
+        "jsCode": "const body = $input.item.json;\nconst msg = body.message || body.edited_message || body.channel_post || (body.text ? body : null);\n\nif (!msg) {\n  return {\n    json: {\n      type: \"invalid\",\n      chat_id: body.chat ? body.chat.id : (body.from ? body.from.id : null),\n      reporter_name: \"User\"\n    }\n  };\n}\n\nconst chat_id = msg.chat ? msg.chat.id : (msg.from ? msg.from.id : null);\nconst reporter_name = msg.from ? (msg.from.first_name || 'User') : 'User';\n\nif (msg.text) {\n  const text = msg.text.trim();\n\n  // Command, email, or 6-digit OTP\n  if (text.startsWith('/') || text.includes('@') || /^\\d{6}$/.test(text)) {\n    return {\n      json: {\n        type: \"command\",\n        command: text,\n        chat_id: chat_id,\n        reporter_name: reporter_name\n      }\n    };\n  }\n\n  const urlRegex = /^https?:\\/\\/\\S+$/i;\n  if (urlRegex.test(text)) {\n    return {\n      json: {\n        type: \"url\",\n        url: text,\n        chat_id: chat_id,\n        reporter_name: reporter_name\n      }\n    };\n  }\n}\n\nif (msg.document) {\n  return {\n    json: {\n      type: \"file\",\n      file_id: msg.document.file_id,\n      file_name: msg.document.file_name || \"attachment\",\n      mime_type: msg.document.mime_type || \"application/octet-stream\",\n      chat_id: chat_id,\n      reporter_name: reporter_name\n    }\n  };\n}\n\nreturn {\n  json: {\n    type: \"invalid\",\n    chat_id: chat_id,\n    reporter_name: reporter_name\n  }\n};"
       },
       "id": "602ae754-f089-4edb-8185-905b47da2375",
       "name": "Parse Input",
@@ -214,7 +214,7 @@
     {
       "parameters": {
         "chatId": "={{$env.SOC_CHAT_ID}}",
-        "text": "={{ $('Threat Intelligence API').item.json.analysis.providers.includes('Infranexia Phishing Simulator') ? '\ud83d\udd14 [SOC ALERT] \u2014 LAPORAN SIMULASI\\n\\n\ud83d\udccb ' + $json.ticket_id + '\\n\ud83d\udd17 ' + $('Threat Intelligence API').item.json.reported_url + '\\n\ud83d\udc64 Pelapor: ' + $('Telegram Trigger').item.json.message.from.first_name + ' (Berhasil dideteksi - Poin diberikan!)' : '\ud83d\udd14 [SOC ALERT] \u2014 LAPORAN ANCAMAN URL\\n\\n\ud83d\udccb ' + $json.ticket_id + '\\n\ud83d\udd17 ' + $('Threat Intelligence API').item.json.reported_url + '\\n\u26a0\ufe0f Severity: ' + $('Threat Intelligence API').item.json.policy.severity + '\\n\ud83d\udee1\ufe0f VT/URLScan: ' + $('Threat Intelligence API').item.json.policy.verdict + '\\n\ud83d\udcdd Alasan: ' + $('Threat Intelligence API').item.json.policy.reason + '\\n\ud83d\udc64 Pelapor: ' + $('Telegram Trigger').item.json.message.from.first_name }}",
+        "text": "\ud83d\udea8 <b>[SOC ALERT] INCIDENT REPORT \u2014 PHISHING URL</b>\n\n\ud83c\udfab Tiket ID: <code>{{ String($json.ticket_id || \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}</code>\n\ud83c\udf10 Targeted URL: <code>{{ String($(\"Threat Intelligence API\").item.json.reported_url || \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}</code>\n\ud83d\udea8 Severity: <b>{{ String($json.severity || \"HIGH\").toUpperCase() }}</b>\n\ud83d\udee1\ufe0f Verdict: <b>{{ String($(\"Threat Intelligence API\").item.json.policy.verdict || \"malicious\").toUpperCase() }}</b>\n\ud83d\udc64 Pelapor: <code>{{ String($(\"Threat Intelligence API\").item.json.reporter_name || \"User\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}</code>",
         "additionalFields": {
           "appendAttribution": false,
           "parseMode": "HTML"
@@ -472,7 +472,7 @@
     {
       "parameters": {
         "chatId": "={{$env.SOC_CHAT_ID}}",
-        "text": "\ud83d\udea8 <b>[SOC ALERT] INCIDENT REPORT \u2014 FILE MALWARE</b>\n\n\ud83c\udfab Tiket ID: <code>{{ $json.ticket_id }}</code>\n\ud83d\udcc1 Nama File: <code>{{ $(\"Evaluate File\").item.json.file_name }}</code>\n\ud83d\udea8 Severity: <b>{{ $json.severity.toUpperCase() }}</b>\n\ud83d\udd11 SHA256: <code>{{ $(\"Evaluate File\").item.json.file_hash }}</code>\n\ud83d\udee1\ufe0f VT Result: <b>{{ $(\"Evaluate File\").item.json.vt_verdict }}</b>\n\ud83d\udc64 Pelapor: <code>{{ $(\"Evaluate File\").item.json.reporter_name }}</code>",
+        "text": "\ud83d\udea8 <b>[SOC ALERT] INCIDENT REPORT \u2014 FILE MALWARE</b>\n\n\ud83c\udfab Tiket ID: <code>{{ String($json.ticket_id || \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}</code>\n\ud83d\udcc1 Nama File: <code>{{ String($(\"Evaluate File\").item.json.file_name || \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}</code>\n\ud83d\udea8 Severity: <b>{{ String($json.severity || \"high\").toUpperCase() }}</b>\n\ud83d\udd11 SHA256: <code>{{ String($(\"Evaluate File\").item.json.file_hash || \"N/A\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}</code>\n\ud83d\udee1\ufe0f VT Result: <b>{{ String($(\"Evaluate File\").item.json.vt_verdict || \"Malicious\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}</b>\n\ud83d\udc64 Pelapor: <code>{{ String($(\"Evaluate File\").item.json.reporter_name || \"User\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}</code>",
         "additionalFields": {
           "appendAttribution": false,
           "parseMode": "HTML"
@@ -500,7 +500,7 @@
     {
       "parameters": {
         "chatId": "={{ $('Evaluate File').item.json.chat_id }}",
-        "text": "\u26a0\ufe0f <b>[PERINGATAN ANCAMAN] File Berbahaya!</b>\n\n\ud83d\udcc1 File: <code>{{ $(\"Evaluate File\").item.json.file_name }}</code>\n\ud83d\udea8 Severity: <b>{{ $(\"Evaluate File\").item.json.severity.toUpperCase() }}</b>\n\ud83d\udee1\ufe0f Verdict: <b>{{ $(\"Evaluate File\").item.json.vt_verdict }}</b>\n\nTiket insiden telah otomatis dibuat dan tim SOC sedang menindaklanjuti. Terima kasih atas laporan Anda!",
+        "text": "\u26a0\ufe0f <b>[PERINGATAN ANCAMAN] File Berbahaya!</b>\n\n\ud83d\udcc1 File: <code>{{ String($(\"Evaluate File\").item.json.file_name || \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}</code>\n\ud83d\udea8 Severity: <b>{{ String($(\"Evaluate File\").item.json.severity || \"HIGH\").toUpperCase() }}</b>\n\ud83d\udee1\ufe0f Verdict: <b>{{ String($(\"Evaluate File\").item.json.vt_verdict || \"Malicious\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}</b>\n\nTiket insiden telah dibuat dan tim SOC telah diberitahu. Terima kasih atas laporan Anda!",
         "additionalFields": {
           "appendAttribution": false,
           "parseMode": "HTML"
@@ -528,7 +528,7 @@
     {
       "parameters": {
         "chatId": "={{ $json.chat_id }}",
-        "text": "\u2705 <b>Laporan File: AMAN</b>\n\n\ud83d\udcc1 File: <code>{{ $json.file_name || \"Document\" }}</code>\n\ud83d\udee1\ufe0f VirusTotal: <b>{{ $json.vt_verdict || \"Clean\" }}</b>\n\nTidak ditemukan indikasi malware atau ancaman. File ini aman untuk dibuka.",
+        "text": "\u2705 <b>Laporan File: AMAN</b>\n\n\ud83d\udcc1 File: <code>{{ String($json.file_name || \"Document\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}</code>\n\ud83d\udee1\ufe0f VirusTotal: <b>{{ String($json.vt_verdict || \"Clean\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}</b>\n\nTidak ditemukan indikasi malware atau ancaman pada file ini. Aman untuk dibuka.",
         "additionalFields": {
           "appendAttribution": false,
           "parseMode": "HTML"

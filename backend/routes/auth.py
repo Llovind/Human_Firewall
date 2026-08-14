@@ -157,51 +157,23 @@ def telegram_command():
 
     conn = database.get_connection()
     try:
-        # Check if user is registered
-        row = conn.execute(
-            'SELECT email, divisi, points, daily_streak, badge FROM user_history WHERE telegram_chat_id = ?',
-            (chat_id,)
-        ).fetchone()
 
-        if not row:
-            reply = (
-                f"Halo {first_name}! 👋\n\n"
-                f"Akun Telegram Anda belum terhubung dengan akun Human Firewall.\n"
-                f"Silakan daftarkan email perusahaan Anda melalui bot ini dengan mengetikkan email Anda."
-            )
-            return jsonify({"reply": reply}), 200
-
-        email = row["email"]
-        divisi = row["divisi"]
-        points = row["points"]
-        streak = row["daily_streak"] or 0
-        badge = row["badge"] or "None"
-
-        # Calculate rank
-        rank_row = conn.execute(
-            'SELECT count(*) + 1 as rank FROM user_history WHERE points > ?',
-            (points,)
-        ).fetchone()
-        rank = rank_row["rank"] if rank_row else 1
-        score_val = max(0, min(100, int(points / 2.0)))
 
         dashboard_base = os.environ.get('NEXT_PUBLIC_BASE_URL', 'http://localhost:3000')
 
+        # 1. Handle Email input (e.g. user@domain.com) for OTP generation
         if '@' in cmd or cmd.endswith('.local') or cmd.endswith('.com') or cmd.endswith('.id'):
-            # User submitted an email address for registration
             input_email = cmd.strip()
-            otp_code = str(database.random.randint(100000, 999999)) if hasattr(database, 'random') else str(int(database.time.time()) % 900000 + 100000)
-            
-            # Check if user email exists in user_history
+            import random, time
+            otp_code = str(random.randint(100000, 999999))
+
             user_row = conn.execute('SELECT email FROM user_history WHERE email = ?', (input_email,)).fetchone()
             if not user_row:
-                # Add default user_history entry
                 divisi = database.derive_divisi_from_email(input_email) if hasattr(database, 'derive_divisi_from_email') else 'General'
                 database.add_employee(input_email, divisi)
-            
+
             database.create_otp(input_email, chat_id, otp_code)
-            
-            # Log OTP in mock inbox so employee can read it from webmail
+
             subject = "Human Firewall — Kode Verifikasi OTP Telegram"
             body = (
                 f"Halo Karyawan,<br><br>"
@@ -212,14 +184,14 @@ def telegram_command():
             database.create_inbox_email(input_email, subject, body)
 
             reply = (
-                f"📧 Email `{input_email}` diterima.\n\n"
-                f"Kode OTP verifikasi telah dikirimkan ke Inbox Webmail Anda.\n"
-                f"Silakan ketikkan **6 digit kode OTP** tersebut di sini untuk menghubungkan akun Telegram Anda!"
+                f"📧 Email <code>{input_email}</code> diterima.\n\n"
+                f"Kode OTP verifikasi telah dikirimkan ke <b>Inbox Webmail</b> Anda.\n"
+                f"Silakan ketikkan <b>6 digit kode OTP</b> tersebut di sini untuk menghubungkan akun Telegram Anda!"
             )
             return jsonify({"reply": reply}), 200
 
+        # 2. Handle 6-digit OTP verification
         if cmd.isdigit() and len(cmd) == 6:
-            # User submitted a 6-digit OTP code
             otp_row = conn.execute(
                 'SELECT email, otp_code FROM telegram_otp WHERE telegram_chat_id = ? AND is_verified = 0 ORDER BY created_at DESC LIMIT 1',
                 (chat_id,)
@@ -231,26 +203,56 @@ def telegram_command():
                 conn.execute('UPDATE telegram_otp SET is_verified = 1 WHERE telegram_chat_id = ?', (chat_id,))
                 conn.commit()
                 reply = (
-                    f"✅ **Verifikasi Berhasil!**\n\n"
-                    f"Akun Telegram Anda resmi terhubung dengan email `{target_email}`.\n\n"
-                    f"Ketik `/profile` untuk melihat skor keamanan Anda, atau ketik `/dashboard` untuk mendapatkan link login otomatis!"
+                    f"✅ <b>Verifikasi Berhasil!</b>\n\n"
+                    f"Akun Telegram Anda resmi terhubung dengan email <code>{target_email}</code>.\n\n"
+                    f"Ketik <code>/profile</code> untuk melihat skor keamanan Anda, atau ketik <code>/dashboard</code> untuk mendapatkan link login otomatis!"
                 )
             else:
-                reply = "❌ Kode OTP salah atau sudah kedaluwarsa. Silakan ketik ulang email Anda untuk meminta OTP baru."
+                reply = "❌ Kode OTP salah atau telah kedaluwarsa. Silakan ketik ulang email Anda untuk meminta OTP baru."
             return jsonify({"reply": reply}), 200
 
-        if cmd in ('/start', '/help'):
-            reply = (
-                f"Halo {first_name}! 👋 Selamat datang di Afferent Security Bot.\n\n"
-                f"Berikut perintah yang tersedia:\n"
-                f"📊 `/profile` atau `/score` — Lihat statistik performa & skor Anda.\n"
-                f"🌐 `/dashboard` — Dapatkan link login otomatis ke Dashboard personal Anda.\n"
-                f"ℹ️ `/help` — Tampilkan pesan bantuan ini.\n\n"
-                f"💡 **Fitur Utama:**\n"
-                f"• Kirimkan *URL mencurigakan* atau *File Attachment* ke chat ini untuk dianalisis oleh AI & VirusTotal!\n"
-                f"• Jika belum terhubung, ketik **email perusahaan Anda** di chat ini untuk registrasi."
-            )
-        elif cmd in ('/profile', '/score'):
+        # 3. Check if user is linked in user_history
+        row = conn.execute(
+            'SELECT email, divisi, points, daily_streak, badge FROM user_history WHERE telegram_chat_id = ?',
+            (chat_id,)
+        ).fetchone()
+
+        if cmd in ('/start', '/help') or not row:
+            if not row:
+                reply = (
+                    f"Halo {first_name}! 👋 Selamat datang di <b>Afferent Security Bot</b>.\n\n"
+                    f"Akun Telegram Anda belum terhubung dengan akun perusahaan.\n\n"
+                    f"📧 <b>Langkah Pendaftaran Akun:</b>\n"
+                    f"1. Ketikkan <b>email perusahaan Anda</b> (contoh: <code>nama@domain.com</code>) di chat ini.\n"
+                    f"2. Buka Webmail Anda untuk melihat <b>6 digit kode OTP</b>.\n"
+                    f"3. Ketikkan kode OTP tersebut di sini.\n\n"
+                    f"💡 <i>Anda juga bisa langsung meneruskan/mengirimkan <b>URL mencurigakan</b> atau <b>File attachment</b> ke chat ini kapan saja untuk dianalisis otomatis!</i>"
+                )
+            else:
+                reply = (
+                    f"Halo {first_name}! 👋 Selamat datang kembali di <b>Afferent Security Bot</b>.\n\n"
+                    f"Berikut perintah yang bisa Anda gunakan:\n"
+                    f"📊 <code>/profile</code> — Lihat statistik performa & skor kepatuhan Anda.\n"
+                    f"🌐 <code>/dashboard</code> — Dapatkan link login otomatis ke Dashboard personal Anda.\n"
+                    f"ℹ️ <code>/help</code> — Tampilkan panduan ini.\n\n"
+                    f"💡 <i>Kirimkan URL atau File mencurigakan ke chat ini kapan saja untuk dianalisis oleh AI & VirusTotal!</i>"
+                )
+            return jsonify({"reply": reply}), 200
+
+        email = row["email"]
+        divisi = row["divisi"]
+        points = row["points"]
+        streak = row["daily_streak"] or 0
+        badge = row["badge"] or "None"
+
+        rank_row = conn.execute(
+            'SELECT count(*) + 1 as rank FROM user_history WHERE points > ?',
+            (points,)
+        ).fetchone()
+        rank = rank_row["rank"] if rank_row else 1
+        score_val = max(0, min(100, int(points / 2.0)))
+
+        if cmd in ('/profile', '/score'):
             reply = (
                 f"👤 <b>Profil Keamanan Anda</b> 👤\n\n"
                 f"📧 Email: <code>{email}</code>\n"
@@ -287,7 +289,7 @@ def telegram_command():
         else:
             reply = (
                 f"Perintah <code>{data['command']}</code> tidak dikenali.\n\n"
-                f"Ketik `/help` untuk melihat daftar perintah yang tersedia."
+                f"Ketik <code>/help</code> untuk melihat daftar perintah yang tersedia."
             )
 
         return jsonify({"reply": reply}), 200
