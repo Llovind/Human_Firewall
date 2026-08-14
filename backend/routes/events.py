@@ -46,11 +46,14 @@ def js_string_literal(value: str) -> str:
 
 
 def derive_divisi_from_email(email: str) -> str:
-    """Ambil bagian domain dari email, cocokkan ke mapping di atas."""
+    """Ekstrak nama perusahaan / divisi secara dinamis dari domain email karyawan tanpa hardcoding."""
     if not email or '@' not in email:
-        return 'Unknown'
+        return 'General'
     domain = email.split('@')[-1].lower()
-    return EMAIL_DOMAIN_TO_DIVISI.get(domain, 'Unknown')
+    company_part = domain.split('.')[0].replace('-', ' ').replace('_', ' ')
+    if not company_part:
+        return 'General'
+    return company_part.title()
 
 def build_history_note(click_count: int, viewed_training_count: int) -> str:
     """Bangun pesan personal untuk halaman tier1, berdasarkan riwayat klik user."""
