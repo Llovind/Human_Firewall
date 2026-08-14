@@ -9,20 +9,9 @@ ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
 
 @auth_bp.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
-    """Login page for SOC Dashboard. GET = show form, POST = validate password."""
-    if request.method == 'GET':
-        # Already logged in? Go straight to dashboard.
-        if session.get('is_admin'):
-            return redirect(url_for('dashboard'))
-        return render_template('admin_login.html', error=None)
-
-    # POST — validate password
-    password = request.form.get('password', '')
-    if password == ADMIN_PASSWORD:
-        session['is_admin'] = True
-        return redirect(url_for('dashboard'))
-    else:
-        return render_template('admin_login.html', error='Password salah. Coba lagi.'), 401
+    """Redirect legacy Flask /admin/login requests directly to Next.js React Login Page."""
+    dashboard_base = os.environ.get('NEXT_PUBLIC_BASE_URL', 'http://localhost:3000')
+    return redirect(f"{dashboard_base}/admin/login")
 
 
 @auth_bp.route('/admin/logout')

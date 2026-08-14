@@ -99,7 +99,8 @@ def require_admin_for_protected_routes():
         # 3. Return 401 JSON untuk endpoint API, atau 302 redirect untuk page biasa
         if request.path.startswith('/api/'):
             return jsonify({"error": "Unauthorized"}), 401
-        return redirect(url_for('auth.admin_login'))
+        dashboard_base = os.environ.get('NEXT_PUBLIC_BASE_URL', 'http://localhost:3000')
+        return redirect(f"{dashboard_base}/admin/login")
 
 @app.route('/')
 def dashboard():
