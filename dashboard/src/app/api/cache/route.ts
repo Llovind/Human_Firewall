@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { fetchFlaskBackend } from '@/lib/backendClient';
 import { dataStore } from '@/lib/store';
 import { seedIfEmpty } from '@/lib/seed';
 import type { ThreatCacheEntry } from '@/lib/store';
@@ -19,6 +20,18 @@ export async function POST(request: NextRequest) {
       detectedAt: body.detectedAt || new Date().toISOString(),
       lastChecked: body.lastChecked || new Date().toISOString(),
     };
+
+    // Forward to Flask if possible
+    try {
+      await fetchFlaskBackend('/api/admin/threat-cache', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entry),
+      });
+    } catch {
+      // ignore
+    }
+
     dataStore.addThreatCache(entry);
     return NextResponse.json({ success: true, id: entry.id }, { status: 201 });
   } catch {
@@ -29,7 +42,19 @@ export async function POST(request: NextRequest) {
 /**
  * GET /api/cache — React UI polls this for latest threat cache.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const queryString = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    const res = await fetchFlaskBackend(`/api/admin/threats/feed${queryString}`, { method: 'GET' });
+    if (res.ok) {
+      const data = await res.json();
+      return NextResponse.json(data);
+    }
+  } catch (err) {
+    console.warn('Flask threat feed fetch failed, using fallback store:', err);
+  }
+
   seedIfEmpty();
   return NextResponse.json({ cache: dataStore.getThreatCache() });
 }

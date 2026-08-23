@@ -97,6 +97,10 @@ class DataStore {
     this.incidents.unshift(incident); // newest first
     if (this.incidents.length > 100) this.incidents.pop();
   }
+  updateIncidentStatus(id: string, status: any) {
+    const inc = this.incidents.find(i => i.id === id);
+    if (inc) inc.status = status;
+  }
   getIncidents(): Incident[] {
     return [...this.incidents];
   }

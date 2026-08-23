@@ -281,8 +281,9 @@
   </div>
 
 <script>
-  // Email diselipkan oleh Flask saat render template (lihat app.py).
+  // Email & Campaign ID diselipkan oleh Flask saat render template (lihat events.py).
   const USER_EMAIL = "__USER_EMAIL__";
+  const CAMPAIGN_ID = "__CAMPAIGN_ID__";
 
   document.getElementById('fake-login-form').addEventListener('submit', function (e) {
     e.preventDefault();
@@ -291,15 +292,15 @@
     // bahwa user "submitted_data" (dipakai untuk skor & severity
     // incident) - kita TIDAK menyimpan isi username/password apa pun
     // ke database, karena ini cuma dummy form, bukan capture kredensial
-    // sungguhan. Body request sengaja TIDAK menyertakan nilai input.
+    // sungguhan. Body request sengaja TIDAK menyertakan nilai password.
     fetch('/api/fake-login-submit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: USER_EMAIL })
+      body: JSON.stringify({ email: USER_EMAIL, campaign_id: CAMPAIGN_ID })
     }).finally(() => {
       // Redirect ke teachable moment setelah submit, sesuai desain
       // tier 2: fake-login dulu, baru edukasi.
-      window.location.href = '/redirect-handler?email=' + encodeURIComponent(USER_EMAIL) + '&skip_fake_login=true';
+      window.location.href = '/redirect-handler?email=' + encodeURIComponent(USER_EMAIL) + '&rid=' + encodeURIComponent(CAMPAIGN_ID) + '&skip_fake_login=true';
     });
   });
 </script>

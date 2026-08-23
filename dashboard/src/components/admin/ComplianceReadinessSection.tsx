@@ -125,27 +125,174 @@ export const ComplianceReadinessSection: React.FC<ComplianceReadinessSectionProp
     setExpandedEvidence(prev => ({ ...prev, [clauseId]: !prev[clauseId] }));
   };
 
+  const renderClauseCard = (c: ReadinessClause, idx: number) => {
+    const isNotConfigured = c.readiness_tier === 'Not Configured' || c.target_value === null;
+    const isEvidenceOpen = !!expandedEvidence[c.clause_id];
+
+    let badgeBg = 'var(--bg-success)';
+    let badgeColor = 'var(--text-success)';
+    let badgeBorder = 'var(--border-success)';
+
+    if (c.readiness_tier === 'Needs Attention') {
+      badgeBg = 'var(--bg-danger)';
+      badgeColor = 'var(--text-danger)';
+      badgeBorder = 'var(--border-danger)';
+    } else if (c.readiness_tier === 'Partial Readiness') {
+      badgeBg = 'var(--bg-warning)';
+      badgeColor = 'var(--text-warning)';
+      badgeBorder = 'var(--border-warning)';
+    } else if (isNotConfigured) {
+      badgeBg = 'var(--bg-neutral)';
+      badgeColor = 'var(--text-neutral)';
+      badgeBorder = 'var(--border-neutral)';
+    }
+
+    return (
+      <div key={c.clause_id || idx} className="stat-card glass-card font-body" style={{
+        borderRadius: '14px',
+        padding: '20px',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        opacity: isNotConfigured ? 0.92 : 1,
+        textAlign: 'left'
+      }}>
+        <div style={{ textAlign: 'left' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '12px' }}>
+            <span className="font-mono-data" style={{ fontSize: '11px', fontWeight: 800, color: 'var(--accent)', background: 'rgba(33,150,243,0.1)', padding: '3px 8px', borderRadius: '4px', border: '1px solid var(--border)' }}>
+              {c.clause_number}
+            </span>
+
+            <span className="font-body" style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', background: badgeBg, color: badgeColor, border: `1px solid ${badgeBorder}` }}>
+              {c.readiness_tier}
+            </span>
+          </div>
+
+          <h3 className="font-body" style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 10px 0', lineHeight: 1.4, textAlign: 'left' }}>
+            {c.clause_title}
+          </h3>
+
+          {isNotConfigured ? (
+            <div style={{
+              background: 'var(--bg-base)',
+              borderRadius: '8px',
+              padding: '12px 14px',
+              border: '1px dashed var(--border)',
+              marginBottom: '12px',
+              textAlign: 'left'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-muted)', fontSize: '11.5px', fontWeight: 600, lineHeight: 1.4, textAlign: 'left' }}>
+                <Info style={{ width: '15px', height: '15px', flexShrink: 0, color: 'var(--text-muted)', marginTop: '2px' }} />
+                <span style={{ textAlign: 'left' }}>
+                  Threshold not set. Adjust the target benchmark in the admin panel below to activate readiness scoring.
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div style={{ background: 'var(--bg-base)', borderRadius: '8px', padding: '12px', border: '1px solid var(--border)', marginBottom: '12px', textAlign: 'left' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px', textAlign: 'left' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Telemetry Current Value:</span>
+                <span className="font-mono-data" style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                  {c.current_value !== null ? `${c.current_value} ${c.unit}` : 'Unset / N/A'}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', textAlign: 'left' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Readiness Target Benchmark:</span>
+                <span className="font-mono-data" style={{ fontWeight: 700, color: '#2196F3' }}>
+                  {c.target_value !== null ? `${c.target_value} ${c.unit}` : 'Unset (Org Specific)'}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* FRAMEWORK MAPPING EVIDENCE BREAKDOWN */}
+          {c.evidence && (
+            <div style={{ marginBottom: '12px', textAlign: 'left' }}>
+              <button
+                onClick={() => toggleEvidence(c.clause_id)}
+                className="font-body"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#2196F3',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: 0,
+                  marginBottom: isEvidenceOpen ? '8px' : '0',
+                  textAlign: 'left'
+                }}
+              >
+                <FileText style={{ width: '12px', height: '12px' }} />
+                {isEvidenceOpen ? 'Hide Evidence Breakdown ▲' : 'Show Evidence Breakdown ▼'}
+              </button>
+
+              {isEvidenceOpen && (
+                <div style={{
+                  background: 'var(--bg-elevated)',
+                  borderRadius: '6px',
+                  border: '1px solid var(--border)',
+                  padding: '10px 12px',
+                  fontSize: '11px',
+                  color: 'var(--text-secondary)',
+                  textAlign: 'left'
+                }}>
+                  <div style={{ fontWeight: 700, color: 'var(--accent)', marginBottom: '4px', textAlign: 'left' }}>
+                    {c.evidence.label}
+                  </div>
+                  <div className="font-mono-data" style={{ fontSize: '10px', color: 'var(--accent)', marginBottom: '6px', background: 'var(--bg-surface)', padding: '3px 6px', borderRadius: '4px', border: '1px solid var(--border)', textAlign: 'left' }}>
+                    Formula: {c.evidence.formula}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '10px', color: 'var(--text-muted)', textAlign: 'left' }}>
+                    {Object.entries(c.evidence.components).map(([k, v]) => (
+                      <div key={k} style={{ display: 'flex', justifyContent: 'space-between', textAlign: 'left' }}>
+                        <span>• {k.replace(/_/g, ' ')}:</span>
+                        <span className="font-mono-data" style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div style={{ paddingTop: '10px', borderTop: '1px solid var(--border)', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4, fontStyle: 'italic', textAlign: 'left' }}>
+          <strong>Source Rationale:</strong> {c.rationale}
+        </div>
+      </div>
+    );
+  };
+
+  const legalClauses = (data?.clause_readiness || []).filter(c =>
+    c.clause_id.startsWith('UU_PDP') || c.clause_number.includes('UU PDP') || c.is_legally_mandated
+  );
+  const frameworkClauses = (data?.clause_readiness || []).filter(c =>
+    !legalClauses.some(lc => lc.clause_id === c.clause_id)
+  );
+
   return (
-    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '20px', fontFamily: 'var(--font-sans, Inter, sans-serif)' }}>
+    <div className="font-body" style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* PERSISTENT AUDIT DISCLAIMER BANNER */}
-      <div style={{
-        background: '#0f172a',
-        borderRadius: '12px',
-        border: '1px solid rgba(59,130,246,0.3)',
-        borderLeft: '5px solid #3b82f6',
+      <div className="panel glass-card" style={{
+        borderLeft: '5px solid #2196F3',
         padding: '16px 20px',
         display: 'flex',
         alignItems: 'center',
         gap: '14px',
-        boxShadow: '0 8px 25px rgba(0,0,0,0.4)'
+        marginBottom: 0
       }}>
-        <Info style={{ width: '24px', height: '24px', color: '#60a5fa', flexShrink: 0 }} />
+        <Info style={{ width: '24px', height: '24px', color: '#2196F3', flexShrink: 0 }} />
         <div>
-          <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#60a5fa', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Persistent Audit & Behavioral Telemetry Disclaimer
+          <h4 className="font-heading" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--accent)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Persistent Audit &amp; Behavioral Telemetry Disclaimer
           </h4>
-          <p style={{ fontSize: '12px', color: '#cbd5e1', margin: '4px 0 0 0', lineHeight: 1.5 }}>
-            {data?.disclaimer || 'Tingkat kesiapan ini merupakan indikator internal berdasarkan telemetri perilaku (human telemetry) dan bukan merupakan penentuan sertifikasi resmi atau hasil audit formal. Indikator ini berfungsi sebagai panduan sinyal risiko untuk persiapan audit sesungguhnya.'}
+          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '4px 0 0 0', lineHeight: 1.5 }}>
+            {data?.disclaimer || 'This readiness level is an internal indicator derived from behavioral telemetry and does not constitute a formal certification determination or official audit finding. This indicator serves as a risk signal guide for audit preparedness.'}
           </p>
         </div>
       </div>
@@ -153,11 +300,11 @@ export const ComplianceReadinessSection: React.FC<ComplianceReadinessSectionProp
       {/* ERROR DISPLAY */}
       {fetchError && (
         <div style={{
-          background: 'rgba(239,68,68,0.1)',
-          border: '1px solid rgba(239,68,68,0.3)',
-          borderRadius: '8px',
+          background: 'var(--bg-danger)',
+          border: '1px solid var(--border-danger)',
+          borderRadius: '10px',
           padding: '12px 16px',
-          color: '#f87171',
+          color: 'var(--text-danger)',
           fontSize: '13px',
           display: 'flex',
           alignItems: 'center',
@@ -170,51 +317,43 @@ export const ComplianceReadinessSection: React.FC<ComplianceReadinessSectionProp
 
       {/* OVERALL READINESS STATUS CARD */}
       {data && (
-        <div style={{
-          background: '#0e172a',
-          borderRadius: '12px',
-          border: '1px solid rgba(148,163,184,0.15)',
-          padding: '20px',
+        <div className="panel glass-card" style={{
+          padding: '22px 24px',
           display: 'flex',
           flexWrap: 'wrap',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: '16px'
+          gap: '16px',
+          marginBottom: 0
         }}>
           <div>
-            <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: '#94a3b8', letterSpacing: '0.05em' }}>
+            <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
               Overall Human Telemetry Readiness Indicator
             </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
-              <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#ffffff', margin: 0 }}>
+            <div style={{ marginTop: '6px' }}>
+              <h2 className="font-heading" style={{
+                fontSize: '22px',
+                fontWeight: 600,
+                color: data.overall_readiness_indicator === 'Strong Readiness' ? 'var(--text-success)' :
+                       data.overall_readiness_indicator === 'Partial Readiness' ? 'var(--text-warning)' :
+                       data.overall_readiness_indicator === 'Needs Attention' ? 'var(--text-danger)' : 'var(--text-muted)',
+                margin: 0,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                {data.overall_readiness_indicator === 'Strong Readiness' && <ShieldCheck style={{ width: '22px', height: '22px', color: 'var(--text-success)' }} />}
+                {data.overall_readiness_indicator === 'Partial Readiness' && <ShieldAlert style={{ width: '22px', height: '22px', color: 'var(--text-warning)' }} />}
+                {data.overall_readiness_indicator === 'Needs Attention' && <AlertTriangle style={{ width: '22px', height: '22px', color: 'var(--text-danger)' }} />}
                 {data.overall_readiness_indicator}
               </h2>
-              <span style={{
-                padding: '4px 12px',
-                borderRadius: '20px',
-                fontSize: '11px',
-                fontWeight: 800,
-                textTransform: 'uppercase',
-                background: data.overall_readiness_indicator === 'Strong Readiness' ? 'rgba(16,185,129,0.15)' :
-                            data.overall_readiness_indicator === 'Partial Readiness' ? 'rgba(245,158,11,0.15)' :
-                            data.overall_readiness_indicator === 'Needs Attention' ? 'rgba(239,68,68,0.15)' : 'rgba(148,163,184,0.15)',
-                color: data.overall_readiness_indicator === 'Strong Readiness' ? '#34d399' :
-                       data.overall_readiness_indicator === 'Partial Readiness' ? '#fbbf24' :
-                       data.overall_readiness_indicator === 'Needs Attention' ? '#f87171' : '#94a3b8',
-                border: `1px solid ${
-                  data.overall_readiness_indicator === 'Strong Readiness' ? 'rgba(16,185,129,0.3)' :
-                  data.overall_readiness_indicator === 'Partial Readiness' ? 'rgba(245,158,11,0.3)' :
-                  data.overall_readiness_indicator === 'Needs Attention' ? 'rgba(239,68,68,0.3)' : 'rgba(148,163,184,0.3)'
-                }`
-              }}>
-                {data.overall_readiness_indicator}
-              </span>
             </div>
           </div>
 
           <button
             onClick={fetchReadinessData}
             disabled={isLoading}
+            className="font-body"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -223,9 +362,9 @@ export const ComplianceReadinessSection: React.FC<ComplianceReadinessSectionProp
               borderRadius: '8px',
               fontSize: '12px',
               fontWeight: 600,
-              background: '#1e293b',
-              color: '#e2e8f0',
-              border: '1px solid rgba(148,163,184,0.2)',
+              background: 'var(--bg-surface)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border)',
               cursor: 'pointer'
             }}
           >
@@ -235,175 +374,85 @@ export const ComplianceReadinessSection: React.FC<ComplianceReadinessSectionProp
         </div>
       )}
 
-      {/* CLAUSE-MAPPED READINESS CARDS GRID */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
-        {data?.clause_readiness.map((c, idx) => {
-          let badgeBg = 'rgba(16,185,129,0.15)';
-          let badgeColor = '#34d399';
-          let badgeBorder = 'rgba(16,185,129,0.3)';
+      {/* ── SECTION 1: LEGAL & REGULATORY OBLIGATIONS (UU PDP) ── */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Lock style={{ width: '18px', height: '18px', color: '#2196F3' }} />
+            <h3 className="font-heading" style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+              Legal &amp; Regulatory Obligations (Personal Data Protection / PDP)
+            </h3>
+          </div>
+          <span className="font-body" style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent)', background: 'rgba(33, 150, 243, 0.1)', padding: '3px 10px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+            {legalClauses.length} Mandatory Clauses
+          </span>
+        </div>
 
-          if (c.readiness_tier === 'Needs Attention') {
-            badgeBg = 'rgba(239,68,68,0.15)';
-            badgeColor = '#f87171';
-            badgeBorder = 'rgba(239,68,68,0.3)';
-          } else if (c.readiness_tier === 'Partial Readiness') {
-            badgeBg = 'rgba(245,158,11,0.15)';
-            badgeColor = '#fbbf24';
-            badgeBorder = 'rgba(245,158,11,0.3)';
-          } else if (c.readiness_tier === 'Not Configured') {
-            badgeBg = 'rgba(148,163,184,0.15)';
-            badgeColor = '#94a3b8';
-            badgeBorder = 'rgba(148,163,184,0.3)';
-          }
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+          {legalClauses.map(renderClauseCard)}
+        </div>
+      </div>
 
-          const isEvidenceOpen = !!expandedEvidence[c.clause_id];
+      {/* ── SECTION 2: SECURITY FRAMEWORK READINESS (ISO/IEC 27001:2022) ── */}
+      <div style={{ marginTop: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ShieldCheck style={{ width: '18px', height: '18px', color: '#2196F3' }} />
+            <h3 className="font-heading" style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+              Security Framework Readiness (ISO/IEC 27001:2022)
+            </h3>
+          </div>
+          <span className="font-body" style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent)', background: 'rgba(33, 150, 243, 0.1)', padding: '3px 10px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+            {frameworkClauses.length} Control Clauses
+          </span>
+        </div>
 
-          return (
-            <div key={idx} style={{
-              background: '#0e172a',
-              borderRadius: '12px',
-              border: '1px solid rgba(148,163,184,0.15)',
-              padding: '20px',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-              boxShadow: '0 4px 15px rgba(0,0,0,0.3)'
-            }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '12px' }}>
-                  <span style={{ fontSize: '11px', fontWeight: 800, color: '#38bdf8', fontFamily: 'monospace', background: 'rgba(56,189,248,0.1)', padding: '3px 8px', borderRadius: '4px', border: '1px solid rgba(56,189,248,0.2)' }}>
-                    {c.clause_number}
-                  </span>
-
-                  <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', background: badgeBg, color: badgeColor, border: `1px solid ${badgeBorder}` }}>
-                    {c.readiness_tier}
-                  </span>
-                </div>
-
-                <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#ffffff', margin: '0 0 10px 0', lineHeight: 1.4 }}>
-                  {c.clause_title}
-                </h3>
-
-                <div style={{ background: '#080d19', borderRadius: '8px', padding: '12px', border: '1px solid rgba(148,163,184,0.1)', marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-                    <span style={{ color: '#94a3b8' }}>Telemetry Current Value:</span>
-                    <span style={{ fontWeight: 700, color: '#f8fafc' }}>
-                      {c.current_value !== null ? `${c.current_value} ${c.unit}` : 'Unset / N/A'}
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-                    <span style={{ color: '#94a3b8' }}>Readiness Target Benchmark:</span>
-                    <span style={{ fontWeight: 700, color: c.target_value !== null ? '#60a5fa' : '#94a3b8' }}>
-                      {c.target_value !== null ? `${c.target_value} ${c.unit}` : 'Unset (Org Specific)'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* FRAMEWORK MAPPING EVIDENCE BREAKDOWN (NEW) */}
-                {c.evidence && (
-                  <div style={{ marginBottom: '12px' }}>
-                    <button
-                      onClick={() => toggleEvidence(c.clause_id)}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: '#60a5fa',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        padding: 0,
-                        marginBottom: isEvidenceOpen ? '8px' : '0'
-                      }}
-                    >
-                      <FileText style={{ width: '12px', height: '12px' }} />
-                      {isEvidenceOpen ? 'Hide Evidence Breakdown ▲' : 'Show Evidence Breakdown ▼'}
-                    </button>
-
-                    {isEvidenceOpen && (
-                      <div style={{
-                        background: 'rgba(15,23,42,0.8)',
-                        borderRadius: '6px',
-                        border: '1px solid rgba(59,130,246,0.2)',
-                        padding: '10px 12px',
-                        fontSize: '11px',
-                        color: '#cbd5e1'
-                      }}>
-                        <div style={{ fontWeight: 700, color: '#93c5fd', marginBottom: '4px' }}>
-                          {c.evidence.label}
-                        </div>
-                        <div style={{ fontFamily: 'monospace', fontSize: '10px', color: '#38bdf8', marginBottom: '6px', background: 'rgba(0,0,0,0.3)', padding: '3px 6px', borderRadius: '4px' }}>
-                          Formula: {c.evidence.formula}
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '10px', color: '#94a3b8' }}>
-                          {Object.entries(c.evidence.components).map(([k, v]) => (
-                            <div key={k} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                              <span>• {k.replace(/_/g, ' ')}:</span>
-                              <span style={{ fontWeight: 700, color: '#f1f5f9' }}>{v}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div style={{ paddingTop: '10px', borderTop: '1px solid rgba(148,163,184,0.1)', fontSize: '11px', color: '#94a3b8', lineHeight: 1.4, fontStyle: 'italic' }}>
-                <strong>Source Rationale:</strong> {c.rationale}
-              </div>
-            </div>
-          );
-        })}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+          {frameworkClauses.map(renderClauseCard)}
+        </div>
       </div>
 
       {/* ADMIN THRESHOLD CONFIGURATION PANEL */}
       {!readOnly && (
-        <div style={{
-          background: '#0e172a',
-          borderRadius: '12px',
-          border: '1px solid rgba(148,163,184,0.15)',
+        <div className="panel glass-card" style={{
           padding: '24px',
-          boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-          marginTop: '10px'
+          marginTop: '10px',
+          borderRadius: '16px'
         }}>
-          <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#ffffff', margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Edit2 style={{ width: '18px', height: '18px', color: '#60a5fa' }} />
+          <h3 className="font-heading" style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Edit2 style={{ width: '18px', height: '18px', color: '#2196F3' }} />
             Admin Readiness Threshold Configuration Panel
           </h3>
-          <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 20px 0' }}>
-            Configure risk-based organizational target values per clause. Statutory legal mandates (e.g. UU PDP Pasal 46) are immutably locked.
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 20px 0' }}>
+            Configure risk-based organizational target values per clause. Statutory legal mandates (e.g. UU PDP Article 46) are immutably locked.
           </p>
 
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', textAlign: 'left', fontSize: '12px', color: '#e2e8f0', borderCollapse: 'collapse' }}>
+            <table style={{ width: '100%', textAlign: 'left', fontSize: '12px', color: 'var(--text-primary)', borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ background: '#172544', color: '#93c5fd', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.05em', borderBottom: '1px solid rgba(148,163,184,0.2)' }}>
-                  <th style={{ padding: '12px 16px' }}>Clause Number & Title</th>
-                  <th style={{ padding: '12px 16px' }}>Legal Mandate Status</th>
-                  <th style={{ padding: '12px 16px' }}>Target Benchmark Value</th>
-                  <th style={{ padding: '12px 16px' }}>Sourced Rationale</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'right' }}>Actions</th>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  <th style={{ padding: '12px 16px', fontWeight: 700, color: 'var(--text-secondary)' }}>Clause Identifier &amp; Title</th>
+                  <th style={{ padding: '12px 16px', fontWeight: 700, color: 'var(--text-secondary)' }}>Legal Mandate Status</th>
+                  <th style={{ padding: '12px 16px', fontWeight: 700, color: 'var(--text-secondary)' }}>Target Benchmark Value</th>
+                  <th style={{ padding: '12px 16px', fontWeight: 700, color: 'var(--text-secondary)' }}>Sourced Rationale</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: 'var(--text-secondary)' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {thresholds.map((t, idx) => (
-                  <tr key={idx} style={{ borderBottom: '1px solid rgba(148,163,184,0.08)', background: idx % 2 === 0 ? 'transparent' : 'rgba(15,23,42,0.4)' }}>
+                  <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '12px 16px', fontWeight: 600 }}>
-                      <span style={{ color: '#38bdf8', fontFamily: 'monospace', display: 'block' }}>{t.clause_number}</span>
-                      <span style={{ fontSize: '11px', color: '#94a3b8' }}>{t.clause_title}</span>
+                      <span className="font-mono-data" style={{ color: 'var(--accent)', display: 'block' }}>{t.clause_number}</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{t.clause_title}</span>
                     </td>
 
                     <td style={{ padding: '12px 16px' }}>
                       {t.is_legally_mandated ? (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '4px', background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)', fontWeight: 700, fontSize: '10px' }} title="Fixed by law — not adjustable">
-                          <Lock style={{ width: '12px', height: '12px' }} /> Fixed by law — not adjustable
+                        <span className="font-body" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '4px', background: 'var(--bg-danger)', color: 'var(--text-danger)', border: '1px solid var(--border-danger)', fontWeight: 700, fontSize: '10px' }} title="Fixed by law: not adjustable">
+                          <Lock style={{ width: '12px', height: '12px' }} /> Fixed by law: not adjustable
                         </span>
                       ) : (
-                        <span style={{ padding: '3px 8px', borderRadius: '4px', background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)', fontWeight: 700, fontSize: '10px' }}>
+                        <span className="font-body" style={{ padding: '3px 8px', borderRadius: '4px', background: 'rgba(33,150,243,0.12)', color: 'var(--accent-dim)', border: '1px solid var(--border)', fontWeight: 700, fontSize: '10px' }}>
                           Risk-Based Editable Target
                         </span>
                       )}
@@ -411,7 +460,7 @@ export const ComplianceReadinessSection: React.FC<ComplianceReadinessSectionProp
 
                     <td style={{ padding: '12px 16px' }}>
                       {t.is_legally_mandated ? (
-                        <span style={{ fontWeight: 700, color: '#f8fafc', background: '#080d19', padding: '6px 12px', borderRadius: '6px', border: '1px solid rgba(148,163,184,0.15)', display: 'inline-block' }}>
+                        <span className="font-mono-data" style={{ fontWeight: 700, color: 'var(--text-primary)', background: 'var(--bg-base)', padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--border)', display: 'inline-block' }}>
                           {t.target_value} {t.unit} (Locked)
                         </span>
                       ) : (
@@ -421,23 +470,24 @@ export const ComplianceReadinessSection: React.FC<ComplianceReadinessSectionProp
                             placeholder="Unset"
                             value={editingValues[t.clause_id] ?? ''}
                             onChange={e => setEditingValues({ ...editingValues, [t.clause_id]: e.target.value })}
+                            className="font-mono-data"
                             style={{
                               width: '100px',
-                              background: '#080d19',
-                              border: '1px solid rgba(148,163,184,0.25)',
+                              background: 'var(--bg-base)',
+                              border: '1px solid var(--border)',
                               borderRadius: '6px',
                               padding: '6px 10px',
-                              color: '#f8fafc',
+                              color: 'var(--text-primary)',
                               fontSize: '12px',
                               outline: 'none'
                             }}
                           />
-                          <span style={{ fontSize: '11px', color: '#94a3b8' }}>{t.unit}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{t.unit}</span>
                         </div>
                       )}
                     </td>
 
-                    <td style={{ padding: '12px 16px', fontSize: '11px', color: '#94a3b8', maxWidth: '300px', lineHeight: 1.4 }}>
+                    <td style={{ padding: '12px 16px', fontSize: '11px', color: 'var(--text-muted)', maxWidth: '300px', lineHeight: 1.4 }}>
                       {t.rationale}
                     </td>
 
@@ -446,6 +496,7 @@ export const ComplianceReadinessSection: React.FC<ComplianceReadinessSectionProp
                         <button
                           onClick={() => handleSaveThreshold(t.clause_id)}
                           disabled={saveStatus[t.clause_id] === 'saving'}
+                          className="font-body"
                           style={{
                             display: 'inline-flex',
                             alignItems: 'center',
@@ -453,10 +504,10 @@ export const ComplianceReadinessSection: React.FC<ComplianceReadinessSectionProp
                             padding: '6px 12px',
                             borderRadius: '6px',
                             fontSize: '11px',
-                            fontWeight: 600,
-                            background: saveStatus[t.clause_id] === 'saved' ? '#10b981' : 'linear-gradient(135deg, #2563eb, #3b82f6)',
-                            color: '#ffffff',
-                            border: 'none',
+                            fontWeight: 700,
+                            background: saveStatus[t.clause_id] === 'saved' ? 'var(--bg-success)' : 'var(--accent)',
+                            color: saveStatus[t.clause_id] === 'saved' ? 'var(--text-success)' : '#ffffff',
+                            border: saveStatus[t.clause_id] === 'saved' ? '1px solid var(--border-success)' : 'none',
                             cursor: 'pointer'
                           }}
                         >
@@ -475,3 +526,5 @@ export const ComplianceReadinessSection: React.FC<ComplianceReadinessSectionProp
     </div>
   );
 };
+
+export default ComplianceReadinessSection;

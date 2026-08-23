@@ -1,11 +1,33 @@
 import type { Metadata } from "next";
+import { Poppins, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 
+const poppins = Poppins({
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  variable: "--font-heading",
+  display: "swap",
+});
+
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-body",
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-mono-data",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "Human Firewall — Centralized Security Dashboard",
-  description: "Unified security awareness platform combining phishing simulation, threat intelligence, and gamified employee training. Powered by Human Firewall.",
-  keywords: "cybersecurity, phishing, security awareness, human firewall, threat intelligence",
+  title: "Afferent: Centralized Security Dashboard",
+  description: "Unified security awareness platform combining phishing simulation, threat intelligence, and behavioral risk telemetry.",
+  keywords: "cybersecurity, phishing, security awareness, afferent, threat intelligence",
 };
 
 export default function RootLayout({
@@ -14,8 +36,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="id">
-      <body>
+    <html lang="en" className={`${poppins.variable} ${inter.variable} ${jetbrainsMono.variable}`}>
+      <body className="font-body">
         <AuthProvider>
           {children}
         </AuthProvider>

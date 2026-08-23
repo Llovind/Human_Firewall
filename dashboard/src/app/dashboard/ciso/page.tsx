@@ -55,8 +55,8 @@ export default function CISODashboard() {
     <DashboardLayout role="ciso" activeTab={activeTab} onTabChange={setActiveTab}>
       {/* CISO Executive Notice Banner */}
       <div style={{
-        background: 'rgba(251, 191, 36, 0.06)',
-        border: '1px solid rgba(251, 191, 36, 0.2)',
+        background: 'var(--bg-warning)',
+        border: '1px solid var(--border-warning)',
         borderRadius: '8px',
         padding: '12px 16px',
         marginBottom: '20px',
@@ -64,9 +64,9 @@ export default function CISODashboard() {
         alignItems: 'center',
         justifyContent: 'space-between',
         fontSize: '13px',
-        color: '#fbbf24',
+        color: 'var(--text-warning)',
       }}>
-        <span>👑 <strong>CISO Executive View:</strong> Anda berada dalam mode Read-Only dengan akses visibilitas penuh ke seluruh 17 komponen sistem.</span>
+        <span><strong>CISO Executive View:</strong> Anda berada dalam mode Read-Only dengan akses visibilitas penuh ke seluruh 17 komponen sistem.</span>
       </div>
 
       {activeTab === 'overview' && (

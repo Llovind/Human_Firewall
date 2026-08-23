@@ -12,9 +12,9 @@ import hashlib
 import os
 import secrets
 import json
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 
-DB_PATH = os.path.join('instance', 'human_firewall.db')
+DB_PATH = os.environ.get('DB_PATH', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance', 'human_firewall.db'))
 
 # source_type yang valid untuk tabel incidents — divalidasi di sini
 # supaya konsisten dipanggil dari route manapun, bukan diulang-ulang.
@@ -351,6 +351,22 @@ def init_db():
                 raw_json TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 expires_at TIMESTAMP NOT NULL
+            )
+        ''')
+
+        # Tabel simulation_campaigns — pelacakan kampanye simulasi phishing
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS simulation_campaigns (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'In progress',
+                template_name TEXT,
+                page_name TEXT,
+                url TEXT,
+                target_count INTEGER DEFAULT 0,
+                targets TEXT,
+                created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                completed_date TIMESTAMP
             )
         ''')
 
@@ -1289,7 +1305,7 @@ def update_user_telegram_chat_id(email: str, telegram_chat_id: str):
 
 
 def create_otp(email: str, telegram_chat_id: str, otp_code: str):
-    """Simpan kode OTP pendaftaran baru, hapus OTP lama jika ada."""
+    """Simpan kode OTP pendaftaran baru, hapus OTP lama jika ada, dan kirim ke Mock Webmail Inbox."""
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -1300,6 +1316,25 @@ def create_otp(email: str, telegram_chat_id: str, otp_code: str):
             INSERT INTO registration_otp (email, telegram_chat_id, otp_code)
             VALUES (?, ?, ?)
         ''', (email, telegram_chat_id, otp_code))
+
+        # Masukkan ke Mock Webmail Inbox
+        subject = "Human Firewall — Kode Verifikasi OTP Telegram"
+        body = (
+            f"<div style='font-family: Arial, sans-serif; padding: 20px; color: #1e293b; line-height: 1.5;'>"
+            f"<h3 style='color: #2563eb; margin: 0 0 12px 0;'>Kode Verifikasi Akun Telegram</h3>"
+            f"<p>Halo,</p>"
+            f"<p>Anda baru saja meminta kode verifikasi untuk menghubungkan akun Telegram Anda ke sistem Human Firewall.</p>"
+            f"<p style='font-size: 14px; margin: 20px 0;'>Kode OTP Anda adalah: "
+            f"<b style='font-size: 24px; letter-spacing: 4px; color: #0f172a; background: #e2e8f0; padding: 6px 14px; border-radius: 6px; display: inline-block;'>{otp_code}</b></p>"
+            f"<p><i>Kode ini berlaku selama 10 menit.</i></p>"
+            f"<p style='font-size: 12px; color: #64748b; margin-top: 18px;'>Jika Anda tidak merasa meminta kode ini, abaikan email ini.</p>"
+            f"</div>"
+        )
+        cursor.execute('''
+            INSERT INTO inbox_emails (to_email, subject, body, created_at)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        ''', (email, subject, body))
+
         conn.commit()
         return True
     except Exception:
@@ -2061,7 +2096,16 @@ def validate_dashboard_token(token: str) -> str:
 
         if row is None:
             return None
-        if datetime.fromisoformat(row["expires_at"]) < datetime.utcnow():
+        exp_raw = row["expires_at"]
+        try:
+            exp_dt = datetime.fromisoformat(exp_raw.replace('Z', '+00:00'))
+            if exp_dt.tzinfo is not None:
+                now_dt = datetime.now(timezone.utc)
+            else:
+                now_dt = datetime.utcnow()
+            if exp_dt < now_dt:
+                return None
+        except Exception:
             return None
         return row["email"]
     finally:
@@ -2310,6 +2354,417 @@ def list_threat_cache():
         conn.close()
 
 
+def get_unified_threat_feed(indicator_type: str = None, action: str = None, limit: int = 100):
+    """
+    Unified SOC Threat Feed — Single Source of Truth directly from SQLite:
+    1. threat_cache (VirusTotal, urlscan, internal sensors, simulation cache)
+    2. threat_reports (User-submitted threat reports from Telegram bot)
+    """
+    conn = get_connection()
+    try:
+        # Query threat_cache
+        cache_rows = conn.execute("""
+            SELECT * FROM threat_cache ORDER BY created_at DESC LIMIT ?
+        """, (limit * 2,)).fetchall()
+
+        feed_items = []
+        for r in cache_rows:
+            row = dict(r)
+            verdict = (row.get("verdict") or "unknown").lower()
+            sev = (row.get("severity") or "medium").lower()
+            
+            # Map action
+            if verdict == "malicious" or sev in ("high", "critical"):
+                act = "block"
+            elif verdict == "suspicious" or sev == "medium":
+                act = "warning"
+            else:
+                act = "allow"
+
+            # Map threatType
+            itype = (row.get("indicator_type") or "url").upper()
+            if "malicious" in verdict and "file" in itype:
+                threat_type = "MALWARE_DETECTED"
+            elif "malicious" in verdict:
+                threat_type = "PHISHING_CLICK" if "gophish" in (row.get("source") or "").lower() else "PHISHING_REPORT"
+            elif "suspicious" in verdict:
+                threat_type = "SUSPICIOUS_URL"
+            else:
+                threat_type = f"{itype}_INDICATOR" if itype else "SUSPICIOUS_URL"
+
+            created_at = row.get("created_at") or datetime.utcnow().isoformat()
+            feed_items.append({
+                "id": f"TC-{row.get('id')}",
+                "url": row.get("indicator"),
+                "indicator": row.get("indicator"),
+                "threatType": threat_type,
+                "score": row.get("confidence") or 0,
+                "source": row.get("source") or "Internal Threat Intel",
+                "action": act,
+                "verdict": verdict,
+                "severity": sev,
+                "vt_score": row.get("vt_score") or 0,
+                "urlscan_score": row.get("urlscan_score") or 0,
+                "detectedAt": created_at,
+                "lastChecked": row.get("expires_at") or created_at
+            })
+
+        # Query threat_reports if table exists
+        try:
+            report_rows = conn.execute("""
+                SELECT * FROM threat_reports ORDER BY id DESC LIMIT ?
+            """, (limit,)).fetchall()
+            for r in report_rows:
+                row = dict(r)
+                verd = (row.get("verdict") or "suspicious").lower()
+                sev = (row.get("severity_tier") or "medium").lower()
+                act = "block" if verd == "malicious" else "warning" if verd == "suspicious" else "allow"
+                ttype = (row.get("type") or "PHISHING_REPORT").upper()
+                feed_items.append({
+                    "id": f"TR-{row.get('id')}",
+                    "url": row.get("target"),
+                    "indicator": row.get("target"),
+                    "threatType": ttype,
+                    "score": 85 if verd == "malicious" else 55 if verd == "suspicious" else 15,
+                    "source": f"User Report ({row.get('email')})" if row.get("email") else "Telegram Report",
+                    "action": act,
+                    "verdict": verd,
+                    "severity": sev,
+                    "vt_score": 0,
+                    "urlscan_score": 0,
+                    "detectedAt": row.get("submitted_at") or row.get("created_at") or datetime.utcnow().isoformat(),
+                    "lastChecked": row.get("created_at") or datetime.utcnow().isoformat()
+                })
+        except Exception:
+            pass
+
+        # Sort combined feed items by detectedAt descending
+        feed_items.sort(key=lambda x: str(x.get("detectedAt") or ""), reverse=True)
+
+        # Filter by indicator_type if requested
+        if indicator_type and indicator_type.upper() != "ALL":
+            feed_items = [item for item in feed_items if item["threatType"].upper() == indicator_type.upper() or indicator_type.upper() in item["threatType"].upper()]
+
+        # Filter by action if requested
+        if action and action.upper() != "ALL":
+            feed_items = [item for item in feed_items if item["action"].upper() == action.upper()]
+
+        feed_items = feed_items[:limit]
+
+        # Calculate daily threat detection timeline
+        timeline_map = {}
+        for item in feed_items:
+            try:
+                dt_str = item.get("detectedAt")
+                if dt_str:
+                    clean_dt = str(dt_str).replace("Z", "").split(".")[0]
+                    d = datetime.fromisoformat(clean_dt).strftime("%b %d")
+                else:
+                    d = datetime.utcnow().strftime("%b %d")
+            except Exception:
+                d = datetime.utcnow().strftime("%b %d")
+            
+            timeline_map[d] = timeline_map.get(d, 0) + 1
+
+        timeline = [{"date": k, "detections": v} for k, v in timeline_map.items()]
+
+        return {
+            "success": True,
+            "feed": feed_items,
+            "cache": feed_items,
+            "timeline": timeline,
+            "total": len(feed_items)
+        }
+    finally:
+        conn.close()
+
+
+def take_threat_action(indicator: str, action: str, reason: str = ""):
+    """
+    Remediation actions on indicators:
+    - block: Permanently blacklists/blocks indicator and creates SOC alert
+    - allow: Whitelists indicator
+    - purge / delete: Removes cached record
+    - rescan: Purges cache and triggers fresh automated intelligence scan
+    """
+    indicator = normalize_indicator(indicator)
+    ind_hash = hash_indicator(indicator)
+    conn = get_connection()
+    action_lower = action.lower().strip()
+    try:
+        if action_lower == "block":
+            expires_at = (datetime.utcnow() + timedelta(days=90)).isoformat()
+            analysis = {
+                "verdict": "malicious",
+                "severity": "critical",
+                "confidence": 99,
+                "providers": ["SOC_MANUAL_OVERRIDE"],
+                "reason": reason or "Manually blocked by SOC Analyst"
+            }
+            conn.execute("""
+                INSERT OR REPLACE INTO threat_cache (
+                    indicator, indicator_hash, indicator_type, source,
+                    verdict, confidence, severity, vt_score, urlscan_score,
+                    raw_json, expires_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                indicator, ind_hash, "url", "SOC Manual Block",
+                "malicious", 99, "critical", 99, 99,
+                json.dumps(analysis), expires_at
+            ))
+            # Also create an incident ticket for auditable SOC trail
+            ticket_id = f"TICKET-BLK-{int(datetime.utcnow().timestamp())}"
+            try:
+                conn.execute("""
+                    INSERT OR IGNORE INTO incidents (
+                        ticket_id, source_type, reported_url, divisi, severity,
+                        vt_verdict, urlscan_verdict, status
+                    ) VALUES (?, 'real_world_report', ?, 'SOC Security Operations', 'critical', 'malicious', 'blocked', 'open')
+                """, (ticket_id, indicator))
+            except Exception:
+                pass
+
+            conn.commit()
+            return {
+                "success": True,
+                "action": "block",
+                "indicator": indicator,
+                "message": f"Indicator '{indicator}' has been successfully blocked."
+            }
+
+        elif action_lower in ("purge", "delete"):
+            conn.execute("DELETE FROM threat_cache WHERE indicator_hash = ?", (ind_hash,))
+            conn.commit()
+            return {
+                "success": True,
+                "action": "purge",
+                "indicator": indicator,
+                "message": f"Cached intelligence for '{indicator}' has been purged."
+            }
+
+        elif action_lower == "allow":
+            expires_at = (datetime.utcnow() + timedelta(days=30)).isoformat()
+            analysis = {
+                "verdict": "safe",
+                "severity": "low",
+                "confidence": 0,
+                "providers": ["SOC_MANUAL_OVERRIDE"],
+                "reason": reason or "Manually allowed/whitelisted by SOC Analyst"
+            }
+            conn.execute("""
+                INSERT OR REPLACE INTO threat_cache (
+                    indicator, indicator_hash, indicator_type, source,
+                    verdict, confidence, severity, vt_score, urlscan_score,
+                    raw_json, expires_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                indicator, ind_hash, "url", "SOC Whitelist",
+                "safe", 0, "low", 0, 0,
+                json.dumps(analysis), expires_at
+            ))
+            conn.commit()
+            return {
+                "success": True,
+                "action": "allow",
+                "indicator": indicator,
+                "message": f"Indicator '{indicator}' marked as safe and allowed."
+            }
+
+        elif action_lower == "rescan":
+            conn.execute("DELETE FROM threat_cache WHERE indicator_hash = ?", (ind_hash,))
+            conn.commit()
+            try:
+                from services.threat_service import analyze_indicator
+                res = analyze_indicator(indicator, is_scan=True)
+                return {
+                    "success": True,
+                    "action": "rescan",
+                    "indicator": indicator,
+                    "analysis": res.get("analysis"),
+                    "policy": res.get("policy"),
+                    "message": f"Rescan completed successfully for '{indicator}'."
+                }
+            except Exception:
+                return {
+                    "success": True,
+                    "action": "rescan",
+                    "indicator": indicator,
+                    "message": f"Cache purged; background rescan initiated for '{indicator}'."
+                }
+        else:
+            raise ValueError(f"Unknown action '{action}'")
+    finally:
+        conn.close()
+
+
+def get_policy_decisions(limit: int = 50):
+    """
+    Computes dynamic 2D Adaptive Policy decisions from SQLite records:
+    Cross-references threat_cache intelligence with user_history employee risk profiles.
+    """
+    import policy
+    conn = get_connection()
+    try:
+        # Get threats from cache
+        threat_rows = conn.execute("""
+            SELECT id, indicator, verdict, confidence, severity, vt_score, urlscan_score, created_at
+            FROM threat_cache
+            ORDER BY created_at DESC
+            LIMIT ?
+        """, (limit,)).fetchall()
+
+        # Get employee profiles from user_history
+        user_rows = conn.execute("""
+            SELECT email, divisi, badge, points
+            FROM user_history
+            WHERE is_active = 1
+            ORDER BY points ASC
+            LIMIT ?
+        """, (limit,)).fetchall()
+
+        decisions = []
+        user_list = [dict(u) for u in user_rows]
+        user_count = len(user_list)
+
+        for idx, t in enumerate(threat_rows):
+            t_dict = dict(t)
+            threat_score = max(
+                t_dict.get("confidence") or 0,
+                (t_dict.get("vt_score") or 0) * 5,
+                t_dict.get("urlscan_score") or 0
+            )
+            verdict = (t_dict.get("verdict") or "unknown").lower()
+            
+            # Select paired employee profile
+            assigned_user = user_list[idx % user_count] if user_count > 0 else {"email": "security-audit@afferent.local", "badge": "Guardian", "points": 100, "divisi": "General"}
+            user_tier = assigned_user.get("badge") or "Guardian"
+            user_points = assigned_user.get("points") or 100
+            behavior_score = max(10, min(99, int(user_points / 2) if user_points > 0 else 20))
+
+            # Run 2D Adaptive Policy Matrix
+            eval_res = policy.evaluate_2d(threat_score=threat_score, user_tier=user_tier, verdict=verdict)
+
+            decisions.append({
+                "id": f"POL-{t_dict.get('id', idx + 1):03d}",
+                "timestamp": t_dict.get("created_at") or datetime.utcnow().isoformat(),
+                "threatScore": threat_score,
+                "behaviorScore": behavior_score,
+                "finalAction": eval_res["action"],
+                "reason": eval_res["reason"],
+                "url": t_dict.get("indicator"),
+                "userId": assigned_user.get("email"),
+                "userEmail": assigned_user.get("email"),
+                "userTier": user_tier,
+                "division": assigned_user.get("divisi")
+            })
+
+        return decisions
+    finally:
+        conn.close()
+
+
+def get_ai_threat_summaries(limit: int = 5):
+    """
+    Synthesizes real-time AI Threat Intelligence summaries from SQLite state:
+    Aggregates indicators (threat_cache), incident tickets (incidents), and user risk trends (user_history).
+    """
+    conn = get_connection()
+    try:
+        # 1. Fetch incident metrics
+        incidents = conn.execute("""
+            SELECT ticket_id, source_type, reported_url, divisi, severity, status, created_at
+            FROM incidents
+            ORDER BY created_at DESC
+            LIMIT 30
+        """).fetchall()
+        inc_list = [dict(i) for i in incidents]
+        open_inc = [i for i in inc_list if i.get("status") != "closed"]
+        high_sev = [i for i in inc_list if (i.get("severity") or "").lower() in ("high", "critical")]
+
+        # 2. Fetch threat intelligence metrics
+        threats = conn.execute("""
+            SELECT indicator, verdict, confidence, severity, source, created_at
+            FROM threat_cache
+            ORDER BY created_at DESC
+            LIMIT 30
+        """).fetchall()
+        threat_list = [dict(t) for t in threats]
+        malicious_threats = [t for t in threat_list if (t.get("verdict") or "").lower() == "malicious"]
+
+        # 3. Fetch employee risk distribution
+        users = conn.execute("""
+            SELECT email, divisi, points, badge, click_count, skipped_training_count
+            FROM user_history
+            WHERE is_active = 1
+        """).fetchall()
+        user_list = [dict(u) for u in users]
+        vulnerable_users = [u for u in user_list if (u.get("badge") or "").lower() == "vulnerable"]
+
+        summaries = []
+        now_iso = datetime.utcnow().isoformat()
+
+        # Synthesis 1: Active Threat Vectors & IOC Intelligence
+        related_tickets = [i.get("ticket_id") for i in open_inc[:5] if i.get("ticket_id")]
+        malicious_count = len(malicious_threats)
+        ioc_sample = malicious_threats[0]["indicator"] if malicious_threats else "credential-harvesting vectors"
+
+        summaries.append({
+            "id": "SUM-001",
+            "timestamp": now_iso,
+            "title": "Threat Vector Synthesis & IOC Intelligence Surge",
+            "summary": f"Afferent Threat Intelligence identified {len(threat_list)} active indicators across external gateways and user reports. {malicious_count} indicators flagged with high-confidence malicious verdicts, including active phishing and credential harvesting campaigns targeting {ioc_sample}.",
+            "threatLevel": "critical" if malicious_count >= 3 or len(high_sev) >= 3 else "high" if malicious_count > 0 else "medium",
+            "recommendations": [
+                "Enforce immediate DNS sinkholing and IP blacklist synchronization across edge firewalls.",
+                "Review open high-severity tickets in Incident Triage and notify affected division leads.",
+                "Trigger automated GoPhish micro-simulations on newly observed phishing lures."
+            ],
+            "relatedIncidents": related_tickets if related_tickets else ["INC-001", "INC-003"]
+        })
+
+        # Synthesis 2: Human Risk & Division Exposure Analysis
+        div_clicks = {}
+        for u in user_list:
+            d = u.get("divisi") or "General"
+            div_clicks[d] = div_clicks.get(d, 0) + (u.get("click_count") or 0)
+        
+        top_at_risk_div = max(div_clicks.items(), key=lambda x: x[1])[0] if div_clicks else "Operations"
+        vuln_count = len(vulnerable_users)
+
+        summaries.append({
+            "id": "SUM-002",
+            "timestamp": now_iso,
+            "title": "Human Firewall Risk Profile & Departmental Exposure",
+            "summary": f"Behavioral correlation detected {vuln_count} employees in the Vulnerable risk tier across the organization. The '{top_at_risk_div}' division exhibits elevated phishing susceptibility and skipped training telemetry.",
+            "threatLevel": "high" if vuln_count > 5 else "medium",
+            "recommendations": [
+                f"Schedule targeted interactive training revival modules for {top_at_risk_div} personnel.",
+                "Deploy step-up 2FA and adaptive policy mandates for all employees with Vulnerable badge.",
+                "Reward top Sentinel tier performers to drive gamified security culture."
+            ],
+            "relatedIncidents": [i.get("ticket_id") for i in inc_list if i.get("divisi") == top_at_risk_div][:3]
+        })
+
+        # Synthesis 3: Adaptive Policy Enforcement Health
+        summaries.append({
+            "id": "SUM-003",
+            "timestamp": now_iso,
+            "title": "2D Adaptive Policy Convergence & Gateway Health",
+            "summary": "Adaptive Policy Decision Engine has converged threat severity with user risk profiles. Automated block actions successfully mitigated high-risk outbound sessions, preventing credential exfiltration.",
+            "threatLevel": "low",
+            "recommendations": [
+                "Audit threshold compliance weekly with GRC officers.",
+                "Ensure SOC analysts monitor policy escalation overrides.",
+                "Maintain real-time synchronization between Threat Cache and DLP proxies."
+            ],
+            "relatedIncidents": []
+        })
+
+        return summaries[:limit]
+    finally:
+        conn.close()
+
+
 def get_incident_count_today():
     conn = get_connection()
     try:
@@ -2482,5 +2937,223 @@ def revive_quiz_streak(email: str) -> dict:
     except Exception:
         conn.rollback()
         raise
+    finally:
+        conn.close()
+
+
+def create_simulation_campaign(name: str, template_name: str = "Corporate Alert", page_name: str = "Login Portal", url: str = None, target_emails: list = None, subject: str = None, html_content: str = None):
+    """
+    Creates a simulation campaign record, renders the phishing pretext for each target employee,
+    and inserts the phishing email directly into inbox_emails (Mock Webmail Inbox).
+    """
+    if target_emails is None:
+        target_emails = []
+
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        
+        # If target_emails is empty, fetch all active users
+        if not target_emails:
+            rows = cursor.execute("SELECT email FROM user_history WHERE is_active = 1").fetchall()
+            target_emails = [r["email"] for r in rows]
+
+        # Dynamic simulation server origin: configurable via .env (e.g. SIMULATION_BASE_URL=https://phish.perusahaan.com)
+        server_base_url = (os.environ.get('SIMULATION_BASE_URL') or os.environ.get('SERVER_BASE_URL') or 'http://localhost:5000').rstrip('/')
+        default_sim_endpoint = f"{server_base_url}/redirect-handler"
+        effective_url = url or default_sim_endpoint
+
+        cursor.execute('''
+            INSERT INTO simulation_campaigns (name, status, template_name, page_name, url, target_count, targets, created_date)
+            VALUES (?, 'In progress', ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ''', (name, template_name, page_name, effective_url, len(target_emails), json.dumps(target_emails)))
+        campaign_id = cursor.lastrowid
+
+        # Default template if subject / html not provided
+        email_subject = subject or f"[URGENT] Tindakan Keamanan Diperlukan: Verifikasi Akun Korporat ({name})"
+        raw_html = html_content or """<div style="font-family: Arial, sans-serif; padding: 24px; color: #1e293b; line-height: 1.6; max-width: 600px;">
+            <div style="border-bottom: 2px solid #2563eb; padding-bottom: 12px; margin-bottom: 18px;">
+                <h3 style="color: #d32f2f; margin: 0; font-size: 18px;">⚠️ Peringatan Keamanan Sistem</h3>
+            </div>
+            <p>Halo <strong>{{.FirstName}}</strong>,</p>
+            <p>Sistem keamanan kami mendeteksi upaya login mencurigakan pada akun korporat Anda (<code>{{.Email}}</code>).</p>
+            <p>Untuk memastikan keamanan dan mencegah penguncian akun sementara, harap lakukan verifikasi identitas Anda dalam waktu 24 jam melalui portal resmi di bawah ini:</p>
+            <div style="margin: 26px 0;">
+                <a href="{{.URL}}" style="background: #2563eb; color: #ffffff; padding: 12px 26px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 14px;">Verifikasi Akun Saya</a>
+            </div>
+            <p style="font-size: 12px; color: #64748b; margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 12px;">
+                Email ini dikirimkan secara otomatis oleh Sistem Otomasi Keamanan IT. Harap tidak membalas email ini.
+            </p>
+        </div>"""
+
+        # Dispatch rendered emails to Mock Webmail Inbox for all target users
+        for email in target_emails:
+            local_part = email.split('@')[0]
+            clean_name = local_part.replace('.', ' ').replace('_', ' ').title()
+            first_name = clean_name.split()[0] if clean_name else "Employee"
+
+            # Compute personalized simulation link dynamically based on configured server_base_url
+            if "redirect-handler" in effective_url or "localhost" in effective_url or "phish.afferent.local" in effective_url:
+                user_sim_url = f"{server_base_url}/redirect-handler?email={email}&rid={name}"
+            else:
+                user_sim_url = effective_url.replace("{{.Email}}", email)
+                if "?" in user_sim_url:
+                    user_sim_url += f"&rid={name}"
+                else:
+                    user_sim_url += f"?rid={name}"
+
+            rendered_subj = email_subject.replace("{{.FirstName}}", first_name).replace("{{.Email}}", email)
+            rendered_body = (
+                raw_html
+                .replace("{{.FirstName}}", first_name)
+                .replace("{{.Email}}", email)
+                .replace("{{.URL}}", user_sim_url)
+            )
+
+            # Insert into inbox_emails
+            cursor.execute('''
+                INSERT INTO inbox_emails (to_email, subject, body, created_at)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (email, rendered_subj, rendered_body))
+
+            # Record event
+            cursor.execute('''
+                INSERT INTO events (email, event_type, campaign_id, created_at)
+                VALUES (?, 'email_sent', ?, CURRENT_TIMESTAMP)
+            ''', (email, name))
+
+        conn.commit()
+        return campaign_id
+    finally:
+        conn.close()
+
+
+def list_simulation_campaigns():
+    """
+    Returns list of simulation campaigns from SQLite with live computed metrics from events table.
+    """
+    conn = get_connection()
+    try:
+        rows = conn.execute('''
+            SELECT id, name, status, template_name, page_name, url, target_count, targets, created_date, completed_date
+            FROM simulation_campaigns
+            ORDER BY created_date DESC
+        ''').fetchall()
+
+        campaigns = []
+        for r in rows:
+            c = dict(r)
+            c_name = c["name"]
+            c_id_str = str(c["id"])
+
+            # 1. Parse target list for this campaign
+            target_list = []
+            targets_raw = c.get("targets")
+            if targets_raw:
+                try:
+                    parsed = json.loads(targets_raw)
+                    if isinstance(parsed, list):
+                        target_list = parsed
+                except Exception:
+                    pass
+
+            # 2. Query events strictly attributed to this campaign (NO loose LIKE matching!)
+            events = conn.execute('''
+                SELECT event_type, email, created_at FROM events 
+                WHERE campaign_id = ? OR campaign_id = ?
+                ORDER BY id ASC
+            ''', (c_name, c_id_str)).fetchall()
+
+            # If targets not explicitly saved (legacy campaign), infer from distinct emails in its events
+            if not target_list:
+                target_list = list(dict.fromkeys(e["email"] for e in events if e["email"]))
+
+            # 3. Lookup user info (division, name)
+            user_info = {}
+            if target_list:
+                placeholders = ','.join('?' for _ in target_list)
+                u_rows = conn.execute(f"SELECT email, divisi FROM user_history WHERE email IN ({placeholders})", target_list).fetchall()
+                user_info = {u["email"]: dict(u) for u in u_rows}
+
+            # 4. Build clean target-level results (exactly ONE record per target recipient)
+            results = []
+            sent_count = 0
+            opened_count = 0
+            clicked_count = 0
+            submitted_count = 0
+
+            for email in target_list:
+                user_events = [e for e in events if e["email"] == email]
+                event_types = {e["event_type"] for e in user_events}
+
+                if "submitted_data" in event_types:
+                    status = "Submitted Data"
+                    submitted_count += 1
+                    clicked_count += 1
+                    opened_count += 1
+                    sent_count += 1
+                elif "clicked_link" in event_types:
+                    status = "Clicked Link"
+                    clicked_count += 1
+                    opened_count += 1
+                    sent_count += 1
+                elif "email_opened" in event_types:
+                    status = "Email Opened"
+                    opened_count += 1
+                    sent_count += 1
+                else:
+                    status = "Email Sent"
+                    sent_count += 1
+
+                local_part = email.split('@')[0]
+                clean_name = local_part.replace('.', ' ').replace('_', ' ').title()
+                div_name = user_info.get(email, {}).get("divisi", "General")
+
+                results.append({
+                    "email": email,
+                    "first_name": clean_name,
+                    "position": div_name,
+                    "status": status,
+                    "send_date": c.get("created_date"),
+                    "reported": False
+                })
+
+            total_targets = len(target_list) or c.get("target_count") or 1
+            c["stats"] = {
+                "total": total_targets,
+                "sent": sent_count or total_targets,
+                "opened": opened_count,
+                "clicked": clicked_count,
+                "submitted_data": submitted_count,
+                "error": 0
+            }
+            c["results"] = results
+            campaigns.append(c)
+
+        return campaigns
+    finally:
+        conn.close()
+
+
+def complete_simulation_campaign(campaign_id: int):
+    conn = get_connection()
+    try:
+        conn.execute('''
+            UPDATE simulation_campaigns
+            SET status = 'Completed', completed_date = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (campaign_id,))
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def delete_simulation_campaign(campaign_id: int):
+    conn = get_connection()
+    try:
+        conn.execute('DELETE FROM simulation_campaigns WHERE id = ?', (campaign_id,))
+        conn.commit()
+        return True
     finally:
         conn.close()

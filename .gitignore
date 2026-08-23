@@ -11,12 +11,27 @@ __pycache__/
 
 # Environment & Virtual Env
 .env
+.env.local
+.env.*.local
 venv/
 .venv/
 env/
 
+# Node & Next.js
+node_modules/
+.next/
+out/
+build/
+dist/
+
+# Logs & Temporary
+*.log
+*.tmp
+*.backup
+*.sqlite
+*.sqlite-*
+scratch/
+
 # IDE files
 .vscode/
 .idea/
-*.backup
-*.tmp

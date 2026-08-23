@@ -38,59 +38,70 @@ export default function IncidentTriageSection({
   const paginatedIncidents = (incidents || []).slice((incidentPage - 1) * INCIDENTS_PER_PAGE, incidentPage * INCIDENTS_PER_PAGE);
 
   return (
-              <div className={`panel glass-card fade-up-2`} style={{ marginBottom: 0, display: 'flex', flexDirection: 'column' }}>
-                <div className="panel-header">
-                  <h2 className="panel-title"><AlertTriangle size={20} style={{ marginRight: "8px", verticalAlign: "text-bottom" }} /> Insiden Terbaru</h2>
-                  <span className="panel-count">{incidents.length} total</span>
+    <div className="panel glass-card fade-up-2 font-body" style={{
+      marginBottom: 0,
+      display: 'flex',
+      flexDirection: 'column',
+      padding: '24px'
+    }}>
+      <div className="panel-header" style={{ marginBottom: '18px', borderBottom: '1px solid var(--border)', paddingBottom: '14px' }}>
+        <h2 className="panel-title font-heading" style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <AlertTriangle size={20} style={{ color: 'var(--text-danger)' }} /> Recent Threat Incidents
+        </h2>
+        <span className="font-mono-data" style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent)', background: 'rgba(33, 150, 243, 0.1)', padding: '4px 10px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+          {incidents.length} total
+        </span>
+      </div>
+      <div className="incident-list" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {incidents.length > 0 ? (
+          paginatedIncidents.map(inc => (
+            <div key={inc.id} className="incident-row" onClick={() => !readOnly && onSelectIncident(inc)} style={{ cursor: readOnly ? 'default' : 'pointer' }}>
+              <div className="incident-icon">{typeIcon[inc.type] || <FileWarning size={16} />}</div>
+              <div className="incident-info">
+                <div className="incident-title font-body">{inc.description}</div>
+                <div className="incident-meta" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                  <span className="font-mono-data" style={{ fontWeight: 700, color: 'var(--accent)' }}>{inc.id}</span>
+                  <span>•</span>
+                  <span>{inc.source}</span>
+                  <span>•</span>
+                  <span className="font-mono-data">{timeAgo(inc.timestamp)}</span>
                 </div>
-                <div className="incident-list" style={{ flex: 1 }}>
-                  {incidents.length > 0 ? (
-                    paginatedIncidents.map(inc => (
-                      <div key={inc.id} className="incident-row" onClick={() => !readOnly && onSelectIncident(inc)} style={{ cursor: readOnly ? 'default' : 'pointer' }}>
-                        <div className="incident-icon">{typeIcon[inc.type] || <FileWarning size={16} />}</div>
-                        <div className="incident-info">
-                          <div className="incident-title">{inc.description}</div>
-                          <div className="incident-meta">
-                            <span className="mono">{inc.id}</span>
-                            <span>·</span>
-                            <span>{inc.source}</span>
-                            <span>·</span>
-                            <span>{timeAgo(inc.timestamp)}</span>
-                          </div>
-                        </div>
-                        <span className={`badge badge-${inc.severity}`}>
-                          {severityIcon[inc.severity]} {inc.severity}
-                        </span>
-                      </div>
-                    ))
-                  ) : (
-                    <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                      Belum ada insiden tercatat.
-                    </div>
-                  )}
-                </div>
-                {/* Pagination Controls */}
-                {incidents.length > INCIDENTS_PER_PAGE && (
-                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
-                    <button 
-                      onClick={() => setIncidentPage(p => Math.max(1, p - 1))}
-                      disabled={incidentPage === 1}
-                      style={{ background: 'none', border: 'none', color: incidentPage === 1 ? 'var(--text-muted)' : 'var(--text-primary)', cursor: incidentPage === 1 ? 'default' : 'pointer', fontWeight: 600, padding: '4px 8px' }}
-                    >
-                      &laquo; Prev
-                    </button>
-                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                      Page {incidentPage} of {incidentTotalPages}
-                    </span>
-                    <button 
-                      onClick={() => setIncidentPage(p => Math.min(incidentTotalPages, p + 1))}
-                      disabled={incidentPage === incidentTotalPages}
-                      style={{ background: 'none', border: 'none', color: incidentPage === incidentTotalPages ? 'var(--text-muted)' : 'var(--text-primary)', cursor: incidentPage === incidentTotalPages ? 'default' : 'pointer', fontWeight: 600, padding: '4px 8px' }}
-                    >
-                      Next &raquo;
-                    </button>
-                  </div>
-                )}
               </div>
+              <span className={`badge badge-${inc.severity} font-body`} style={{ fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '6px' }}>
+                {severityIcon[inc.severity]} {inc.severity}
+              </span>
+            </div>
+          ))
+        ) : (
+          <div style={{ padding: '36px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
+            No security incidents recorded.
+          </div>
+        )}
+      </div>
+      {/* Pagination Controls */}
+      {incidents.length > INCIDENTS_PER_PAGE && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', paddingTop: '16px', borderTop: '1px solid var(--border)', marginTop: '16px' }}>
+          <button 
+            onClick={() => setIncidentPage(p => Math.max(1, p - 1))}
+            disabled={incidentPage === 1}
+            className="font-body"
+            style={{ background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: incidentPage === 1 ? 'var(--text-muted)' : 'var(--accent)', cursor: incidentPage === 1 ? 'default' : 'pointer', fontWeight: 700, padding: '6px 12px', fontSize: '12px' }}
+          >
+            &laquo; Prev
+          </button>
+          <span className="font-mono-data" style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
+            Page {incidentPage} of {incidentTotalPages}
+          </span>
+          <button 
+            onClick={() => setIncidentPage(p => Math.min(incidentTotalPages, p + 1))}
+            disabled={incidentPage === incidentTotalPages}
+            className="font-body"
+            style={{ background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: incidentPage === incidentTotalPages ? 'var(--text-muted)' : 'var(--accent)', cursor: incidentPage === incidentTotalPages ? 'default' : 'pointer', fontWeight: 700, padding: '6px 12px', fontSize: '12px' }}
+          >
+            Next &raquo;
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

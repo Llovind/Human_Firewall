@@ -1,23 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const FLASK_API = process.env.API_URL || 'http://localhost:5000';
-const SERVICE_API_KEY = process.env.SERVICE_API_KEY || '';
-
-function getAuthHeader(): Record<string, string> {
-  return SERVICE_API_KEY ? { 'Authorization': `Bearer ${SERVICE_API_KEY}` } : {};
-}
+import { fetchFlaskBackend } from '@/lib/backendClient';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const refresh = searchParams.get('refresh') || 'false';
 
   try {
-    const res = await fetch(
-      `${FLASK_API}/api/ai/classify-all?refresh=${refresh}`,
-      {
-        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-        cache: 'no-store',
-      }
+    const res = await fetchFlaskBackend(
+      `/api/ai/classify-all?refresh=${refresh}`,
+      { method: 'GET' }
     );
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });
@@ -29,9 +20,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   // Force invalidate cache
   try {
-    const res = await fetch(`${FLASK_API}/api/ai/cache/invalidate`, {
+    const res = await fetchFlaskBackend('/api/ai/cache/invalidate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      headers: { 'Content-Type': 'application/json' },
     });
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });

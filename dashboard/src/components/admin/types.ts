@@ -74,11 +74,13 @@ export interface GoPhishCampaign {
   name: string;
   status: string;
   created_date: string;
-  stats: {
+  stats?: {
+    total?: number;
     sent: number;
     opened: number;
     clicked: number;
     submitted_data: number;
+    error?: number;
   };
 }
 
@@ -149,12 +151,55 @@ export const ROLE_ROUTES: Record<AdminRole, string> = {
 
 /* ── Helper Functions ──────────────────────────────────── */
 
+/**
+ * Safely parse UTC timestamp from SQLite / backend (e.g. '2026-08-15 17:11:40' without timezone)
+ * into a Date object representing the exact point in time in UTC.
+ */
+export function parseUtcDate(ts: string | number | Date): Date {
+  if (ts instanceof Date) return ts;
+  if (typeof ts === 'number') return new Date(ts);
+  if (!ts) return new Date();
+
+  let str = String(ts).trim();
+  // If string does not have timezone indicator (no 'Z', no '+', no 'T...-07'), append 'Z'
+  if (!str.endsWith('Z') && !str.includes('+') && !/T.*-\d\d/.test(str)) {
+    str = str.replace(' ', 'T') + 'Z';
+  }
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? new Date(ts) : d;
+}
+
 export function timeAgo(ts: string): string {
-  const diff = Date.now() - new Date(ts).getTime();
+  const date = parseUtcDate(ts);
+  const diff = Math.max(0, Date.now() - date.getTime());
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'Baru saja';
   if (mins < 60) return `${mins} menit lalu`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs} jam lalu`;
   return `${Math.floor(hrs / 24)} hari lalu`;
+}
+
+/**
+ * Formats a timestamp into accurate Indonesian Western Time (WIB / Asia/Jakarta UTC+7) format.
+ * Example: "Minggu, 16 Agustus 2026, 00.11 WIB"
+ */
+export function formatWIB(ts: string): string {
+  const date = parseUtcDate(ts);
+  try {
+    const formatter = new Intl.DateTimeFormat('id-ID', {
+      timeZone: 'Asia/Jakarta',
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+    return `${formatter.format(date)} WIB`;
+  } catch {
+    return date.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB';
+  }
 }

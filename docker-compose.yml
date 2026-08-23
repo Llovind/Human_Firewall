@@ -119,7 +119,7 @@ services:
       - .env
     environment:
       - NEXT_PUBLIC_BASE_URL=http://localhost:3000
-      - NEXT_PUBLIC_API_URL=http://flask_api:5000
+      - NEXT_PUBLIC_API_URL=http://localhost:5000
       - NEXT_PUBLIC_BOT_USERNAME=${BOT_USERNAME}
       - API_URL=http://flask_api:5000
       - SERVICE_API_KEY=${SERVICE_API_KEY}

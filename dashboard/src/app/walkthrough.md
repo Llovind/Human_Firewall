@@ -42,7 +42,7 @@ We have successfully migrated the Presentation Layer to Next.js (`dashboard/`) a
   - **Behavioral Lock (Safe)**: If an employee's behavior score is `>= 70` (points `>= 140`) and they have never clicked a phishing link, the game is **locked** since they are already verified secure.
   - **retraining Unlock**: If their score drops below `70` (points `< 140`) or they get compromised by phishing, the game **unlocks** as a mandatory retraining exercise.
   - **Farming Protection**: Limit of **1 attempt per 24 hours**. If played today, a countdown timer is displayed.
-  - **Interactive Inspect Tool**: Users can hover over the mock portals to inspect security indicators (e.g. comparing `sso.infranexia-portal.xyz` vs `sso.infranexia.co.id`, copyright text, secure checkmarks) before selecting the fake one.
+  - **Interactive Inspect Tool**: Users can hover over the mock portals to inspect security indicators (e.g. comparing `sso.company-portal.xyz` vs `sso.company.co.id`, copyright text, secure checkmarks) before selecting the fake one.
   - **Educational Moment**: Upon answering, a detailed breakdown popup highlights the phishing indicators. A background call is sent to Flask `/api/event` to award `+5 points` (correct) or log the event (incorrect) so the Behavior Engine can react.
 
 ### 🛡️ SOC Admin Dashboard (`/admin`)

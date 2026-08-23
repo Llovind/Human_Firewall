@@ -62,7 +62,7 @@ PUBLIC_ROUTES = {
     'events.get_user_history', 'events.user_profile', 'events.create_otp', 'events.verify_otp',
     'events.register_telegram', 'events.list_emails', 'auth.admin_login', 'health',
     'static', 'auth.api_auth_admin', 'events.api_user_eligibility', 'events.api_user_activity',
-    'events.dns_check',
+    'events.dns_check', 'events.get_telegram_user',
     'gamification.get_employee_reports_summary',
     'gamification.post_quiz_complete',
     'gamification.get_quiz_today',

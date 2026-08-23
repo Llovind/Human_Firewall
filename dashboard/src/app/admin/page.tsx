@@ -3,6 +3,7 @@
 import { useAuth } from '@/context/AuthContext';
 import { usePolling } from '@/hooks/usePolling';
 import { useEffect, useState } from 'react';
+import { timeAgo, formatWIB } from '@/components/admin/types';
 import '../dashboard.css';
 
 /* ── Types matching API responses ─────────────────────────── */
@@ -56,16 +57,7 @@ interface GoPhishResource {
   pages: { id: number; name: string }[];
 }
 
-/* ── Helper: Time ago ─────────────────────────────────────── */
-function timeAgo(ts: string): string {
-  const diff = Date.now() - new Date(ts).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'Baru saja';
-  if (mins < 60) return `${mins} menit lalu`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs} jam lalu`;
-  return `${Math.floor(hrs / 24)} hari lalu`;
-}
+
 
 /* ── Severity / Action Icons ──────────────────────────────── */
 const severityIcon: Record<string, string> = {
@@ -169,7 +161,7 @@ export default function SOCAdminDashboard() {
     if (activeTab === 'gophish') {
       interval = setInterval(loadGoPhishCampaigns, 10000);
     } else if (activeTab === 'webmail') {
-      interval = setInterval(loadEmails, 10000);
+      interval = setInterval(loadEmails, 2500);
     }
     return () => {
       if (interval) clearInterval(interval);
@@ -271,7 +263,7 @@ export default function SOCAdminDashboard() {
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
               </svg>
             </div>
-            <span className="topbar-title">Human Firewall <strong>SOC Admin</strong></span>
+            <span className="topbar-title">Afferent <strong>SOC Admin</strong></span>
           </div>
           <nav className="topbar-nav">
             {(['overview', 'threats', 'behavior', 'policy', 'gophish', 'webmail'] as const).map(tab => (
@@ -312,22 +304,22 @@ export default function SOCAdminDashboard() {
             <div className="stats-grid fade-up">
               <div className={`stat-card glass-card ${incidentUpdated ? 'value-flash' : ''}`}>
                 <div className="stat-icon stat-icon-danger">🚨</div>
-                <div className="stat-value">{stats?.totalIncidents ?? '—'}</div>
+                <div className="stat-value">{stats?.totalIncidents ?? '-'}</div>
                 <div className="stat-label">Total Insiden</div>
               </div>
               <div className={`stat-card glass-card ${incidentUpdated ? 'value-flash' : ''}`}>
                 <div className="stat-icon stat-icon-warning">⚡</div>
-                <div className="stat-value">{stats?.openIncidents ?? '—'}</div>
+                <div className="stat-value">{stats?.openIncidents ?? '-'}</div>
                 <div className="stat-label">Insiden Terbuka</div>
               </div>
               <div className={`stat-card glass-card ${cacheUpdated ? 'value-flash' : ''}`}>
                 <div className="stat-icon stat-icon-accent">🛡️</div>
-                <div className="stat-value">{stats?.blockedUrls ?? '—'}</div>
+                <div className="stat-value">{stats?.blockedUrls ?? '-'}</div>
                 <div className="stat-label">URL Diblokir</div>
               </div>
               <div className={`stat-card glass-card ${behaviorUpdated ? 'value-flash' : ''}`}>
                 <div className="stat-icon stat-icon-success">📈</div>
-                <div className="stat-value">{stats?.avgBehaviorScore ?? '—'}</div>
+                <div className="stat-value">{stats?.avgBehaviorScore ?? '-'}</div>
                 <div className="stat-label">Avg. Behavior Score</div>
               </div>
             </div>
@@ -336,8 +328,8 @@ export default function SOCAdminDashboard() {
             {summaries.length > 0 && (
               <div className={`panel glass-card fade-up-1 ${summaryUpdated ? 'value-flash' : ''}`}>
                 <div className="panel-header">
-                  <h2 className="panel-title">🤖 AI Threat Summary</h2>
-                  <span className="panel-badge">Powered by LLM</span>
+                  <h2 className="panel-title">🛡️ Threat Intelligence & Risk Synthesis</h2>
+                  <span className="panel-badge" style={{ background: 'rgba(33, 150, 243, 0.08)', color: 'var(--accent)', borderColor: 'rgba(33, 150, 243, 0.3)' }}>Live Telemetry</span>
                 </div>
                 <div className="summary-list">
                   {summaries.slice(0, 3).map(s => (
@@ -631,7 +623,7 @@ export default function SOCAdminDashboard() {
                     <div className="webmail-meta">
                       <span>Ke: <strong>{selectedEmail.to_email}</strong></span>
                       <span style={{ margin: '0 8px' }}>·</span>
-                      <span>Diterima: {new Date(selectedEmail.created_at).toLocaleString('id-ID')}</span>
+                      <span>Diterima: <strong>{formatWIB(selectedEmail.created_at)}</strong></span>
                     </div>
                   </div>
                   <div className="webmail-body">
@@ -750,7 +742,7 @@ export default function SOCAdminDashboard() {
 
       {/* ── Footer ────────────────────────────────────────── */}
       <footer className="dashboard-footer">
-        Human Firewall · SOC Command Center · Live data updates automatically
+        Afferent · SOC Command Center · Live data updates automatically
       </footer>
     </div>
   );

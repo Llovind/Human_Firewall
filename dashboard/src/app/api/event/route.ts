@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { fetchFlaskBackend } from '@/lib/backendClient';
 
 export async function POST(request: NextRequest) {
   try {
@@ -7,8 +8,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Fields email dan event_type wajib diisi' }, { status: 400 });
     }
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://flask_api:5000';
-    const res = await fetch(`${apiUrl}/api/event`, {
+    const res = await fetchFlaskBackend('/api/event', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -17,11 +17,7 @@ export async function POST(request: NextRequest) {
     });
 
     const data = await res.json();
-    if (!res.ok) {
-      return NextResponse.json({ error: data.error || 'Gagal merekam event' }, { status: res.status });
-    }
-
-    return NextResponse.json(data);
+    return NextResponse.json(data, { status: res.status });
   } catch (error: any) {
     return NextResponse.json({ error: 'Gagal menghubungi server backend', detail: error.message }, { status: 500 });
   }

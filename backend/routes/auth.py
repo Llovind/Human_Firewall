@@ -86,16 +86,8 @@ def telegram_command():
 
         # ── 2. Handle 6-Digit OTP Verification Input ──
         if cmd.isdigit() and len(cmd) == 6:
-            otp_row = conn.execute(
-                'SELECT email, otp_code FROM telegram_otp WHERE telegram_chat_id = ? AND is_verified = 0 ORDER BY created_at DESC LIMIT 1',
-                (chat_id,)
-            ).fetchone()
-
-            if otp_row and otp_row["otp_code"] == cmd:
-                target_email = otp_row["email"]
-                database.update_user_telegram_chat_id(target_email, chat_id)
-                conn.execute('UPDATE telegram_otp SET is_verified = 1 WHERE telegram_chat_id = ?', (chat_id,))
-                conn.commit()
+            target_email = database.verify_otp(chat_id, cmd)
+            if target_email:
                 reply = (
                     "✅ <b>Verifikasi Berhasil!</b>\n\n"
                     f"Akun Telegram Anda resmi terhubung dengan email <code>{target_email}</code>.\n\n"
@@ -167,10 +159,10 @@ def telegram_command():
             )
         elif cmd_lower in ('/dashboard', 'dashboard'):
             import uuid
-            from datetime import datetime, timedelta
+            from datetime import datetime, timedelta, timezone
 
             token = str(uuid.uuid4())
-            expires_dt = (datetime.utcnow() + timedelta(days=30)).isoformat()
+            expires_dt = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
 
             conn.execute(
                 'INSERT INTO dashboard_tokens (token, email, expires_at) VALUES (?, ?, ?)',
@@ -195,3 +187,33 @@ def telegram_command():
         return jsonify({"reply": reply}), 200
     finally:
         conn.close()
+
+
+@auth_bp.route('/api/auth/validate-token', methods=['GET'])
+def validate_token_api():
+    token = request.args.get('token')
+    if not token:
+        return jsonify({"valid": False, "error": "Token required"}), 400
+
+    email = database.validate_dashboard_token(token)
+    if not email:
+        return jsonify({"valid": False, "error": "Invalid or expired token"}), 401
+
+    conn = database.get_connection()
+    try:
+        user_row = conn.execute('SELECT email, divisi, telegram_chat_id FROM user_history WHERE email = ?', (email,)).fetchone()
+        divisi = user_row["divisi"] if user_row else 'General'
+        tg_id = user_row["telegram_chat_id"] if user_row else None
+        user_name = email.split('@')[0].replace('.', ' ').title()
+        return jsonify({
+            "valid": True,
+            "user": {
+                "email": email,
+                "userName": user_name,
+                "division": divisi,
+                "telegramId": tg_id
+            }
+        }), 200
+    finally:
+        conn.close()
+

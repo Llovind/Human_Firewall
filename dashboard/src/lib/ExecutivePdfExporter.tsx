@@ -199,7 +199,7 @@ const ReportPdfDocument: React.FC<ReportPdfDocumentProps> = ({
 
       {/* Footer Page Bar */}
       <View style={styles.footer} fixed>
-        <Text style={styles.footerText}>CONFIDENTIAL — AFFERENT HUMAN RISK PLATFORM</Text>
+        <Text style={styles.footerText}>CONFIDENTIAL | AFFERENT HUMAN RISK PLATFORM</Text>
         <Text
           style={styles.footerText}
           render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`}

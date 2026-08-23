@@ -4,6 +4,7 @@ import { useEffect, useState, ReactNode } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import Logo from '@/components/Logo';
+import ThemeToggle from '@/components/ThemeToggle';
 import type { AdminRole } from '@/components/admin/types';
 import { ROLE_ROUTES } from '@/components/admin/types';
 import {
@@ -77,7 +78,7 @@ export default function DashboardLayout({ role, activeTab, onTabChange, children
     return (
       <div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <Logo size={52} variant="mark" logoAnimation="loading" />
-        <p>Memuat Command Center...</p>
+        <p className="font-body">Loading Command Center...</p>
       </div>
     );
   }
@@ -101,7 +102,7 @@ export default function DashboardLayout({ role, activeTab, onTabChange, children
   const roleInfo = ROLE_LABELS[role];
 
   return (
-    <div className="app-shell">
+    <div className="app-shell font-body">
       {/* ── Sidebar ─────────────────────────────────────── */}
       <aside className="sidebar-nav" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', paddingTop: '8px' }}>
         <div className="radar-sweep-bg" />
@@ -113,8 +114,8 @@ export default function DashboardLayout({ role, activeTab, onTabChange, children
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
           padding: '6px 12px', margin: '0 12px 16px', borderRadius: '6px',
-          background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.15)',
-          fontSize: '11px', fontWeight: 600, color: '#94a3b8', letterSpacing: '0.5px',
+          background: 'rgba(33, 150, 243, 0.08)', border: '1px solid var(--border)',
+          fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.5px',
           textTransform: 'uppercase',
         }}>
           {roleInfo.icon}
@@ -126,7 +127,7 @@ export default function DashboardLayout({ role, activeTab, onTabChange, children
           {tabs.map(tab => (
             <button
               key={tab.id}
-              className={`sidebar-item ${activeTab === tab.id ? 'active' : ''}`}
+              className={`sidebar-item font-body ${activeTab === tab.id ? 'active' : ''}`}
               onClick={() => onTabChange(tab.id)}
             >
               {tab.icon}
@@ -139,10 +140,20 @@ export default function DashboardLayout({ role, activeTab, onTabChange, children
       {/* ── Main Content ────────────────────────────────── */}
       <div className="app-shell-main">
         {/* Topbar */}
-        <header className="topbar-slim" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <header className="topbar-slim" style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          background: 'var(--bg-surface)',
+          borderRadius: '16px',
+          border: '1px solid var(--border)',
+          boxShadow: 'var(--shadow-md)',
+          padding: '16px 24px',
+          marginBottom: '24px'
+        }}>
           <div>
-            <h1 style={{ fontSize: '20px', fontWeight: 600 }}>
-              {role === 'ciso' ? 'Executive Overview — Read Only' : 'Security Culture & Threat Triage Platform'}
+            <h1 className="font-heading" style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.2px' }}>
+              {role === 'ciso' ? 'Executive Overview: Read-Only' : 'Security Culture & Threat Triage Platform'}
             </h1>
           </div>
           <div className="topbar-right" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -150,12 +161,13 @@ export default function DashboardLayout({ role, activeTab, onTabChange, children
               <span className="live-dot" />
               <span>Live</span>
             </div>
-            <span className="clock mono">{clock}</span>
+            <span className="clock font-mono-data">{clock}</span>
+            <ThemeToggle />
             {role === 'ciso' && (
               <span style={{
-                fontSize: '11px', fontWeight: 600, color: '#fbbf24',
-                background: 'rgba(251, 191, 36, 0.08)', border: '1px solid rgba(251, 191, 36, 0.2)',
-                padding: '4px 10px', borderRadius: '4px', letterSpacing: '0.5px',
+                fontSize: '11px', fontWeight: 700, color: 'var(--text-warning)',
+                background: 'var(--bg-warning)', border: '1px solid var(--border-warning)',
+                padding: '4px 10px', borderRadius: '6px', letterSpacing: '0.5px',
               }}>
                 READ-ONLY
               </span>
@@ -163,14 +175,14 @@ export default function DashboardLayout({ role, activeTab, onTabChange, children
             <div
               className="user-badge"
               onClick={logout}
-              title="Klik untuk logout"
+              title="Click to log out"
               style={{
-                border: '1px solid rgba(248,113,113,0.3)', background: 'rgba(248,113,113,0.05)',
-                cursor: 'pointer', padding: '4px 12px', borderRadius: '4px',
+                border: '1px solid var(--border-danger)', background: 'var(--bg-danger)',
+                cursor: 'pointer', padding: '6px 14px', borderRadius: '8px',
                 display: 'flex', alignItems: 'center', gap: '8px',
               }}
             >
-              <span className="user-name" style={{ color: 'var(--danger)', fontSize: '13px', fontWeight: 600 }}>Logout</span>
+              <span className="user-name font-body" style={{ color: 'var(--text-danger)', fontSize: '13px', fontWeight: 700 }}>Logout</span>
             </div>
           </div>
         </header>

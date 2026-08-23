@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { fetchFlaskBackend } from '@/lib/backendClient';
 import { dataStore } from '@/lib/store';
 import { seedIfEmpty } from '@/lib/seed';
 import type { AISummary } from '@/lib/store';
@@ -28,7 +29,19 @@ export async function POST(request: NextRequest) {
 /**
  * GET /api/summary — React UI polls this for AI summaries.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const queryString = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    const res = await fetchFlaskBackend(`/api/admin/ai/summaries${queryString}`, { method: 'GET' });
+    if (res.ok) {
+      const data = await res.json();
+      return NextResponse.json(data);
+    }
+  } catch (err) {
+    console.warn('Flask AI summaries fetch failed, using fallback store:', err);
+  }
+
   seedIfEmpty();
   return NextResponse.json({ summaries: dataStore.getAISummaries() });
 }

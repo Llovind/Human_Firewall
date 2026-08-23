@@ -1,11 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const FLASK_API = process.env.API_URL || 'http://localhost:5000';
-const SERVICE_API_KEY = process.env.SERVICE_API_KEY || '';
-
-function getAuthHeader(): Record<string, string> {
-  return SERVICE_API_KEY ? { 'Authorization': `Bearer ${SERVICE_API_KEY}` } : {};
-}
+import { fetchFlaskBackend } from '@/lib/backendClient';
 
 export async function GET(
   req: NextRequest,
@@ -18,12 +12,9 @@ export async function GET(
   const email = decodeURIComponent(rawEmail);
 
   try {
-    const res = await fetch(
-      `${FLASK_API}/api/ai/user/${encodeURIComponent(email)}?days=${days}&refresh=${refresh}`,
-      {
-        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-        cache: 'no-store',
-      }
+    const res = await fetchFlaskBackend(
+      `/api/ai/user/${encodeURIComponent(email)}?days=${days}&refresh=${refresh}`,
+      { method: 'GET' }
     );
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });

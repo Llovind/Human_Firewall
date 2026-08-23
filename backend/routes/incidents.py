@@ -38,17 +38,27 @@ def create_incident():
         }), 400
 
     divisi = data.get('divisi')
+    reporter_chat_id = data.get('reporter_chat_id')
+    if reporter_chat_id:
+        conn = database.get_connection()
+        try:
+            row = conn.execute(
+                'SELECT email, divisi FROM user_history WHERE telegram_chat_id = ?',
+                (str(reporter_chat_id),)
+            ).fetchone()
+            if row and row['divisi'] and (not divisi or divisi == 'User Report'):
+                divisi = row['divisi']
+        finally:
+            conn.close()
+
     if not divisi:
-        return jsonify({"error": "field 'divisi' wajib diisi"}), 400
+        divisi = 'User Report'
 
     ticket_id = f"INC-{uuid.uuid4().hex[:8].upper()}"
 
-    severity = data.get('severity', 'low')
+    severity = (data.get('severity') or '').lower()
     if severity not in database.VALID_SEVERITIES:
-        return jsonify({
-            "error": f"severity harus salah satu dari {database.VALID_SEVERITIES}",
-            "received": severity
-        }), 400
+        severity = 'high' if verdict in ('malicious', 'suspicious') else 'low'
 
     try:
         database.create_incident(

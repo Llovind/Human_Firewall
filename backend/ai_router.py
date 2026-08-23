@@ -158,11 +158,19 @@ def _call_gemini(system_prompt: str, user_prompt: str, expect_json: bool) -> dic
         raise RuntimeError(f"Gemini Native gagal: {type(e).__name__}: {e}")
 
 
+# ─── Model list untuk Groq ───────────────────────────────────────────────────
+GROQ_FALLBACK_MODELS = [
+    os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b"),
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b",
+    "qwen/qwen3.6-27b",
+]
+
 # ─── Provider 3: Groq ────────────────────────────────────────────────────────
 
 def _call_groq(system_prompt: str, user_prompt: str, expect_json: bool) -> dict | str:
     """
-    Panggil Groq API (Llama 3.3 70B — cepat dan gratis).
+    Panggil Groq API (Ultra-low latency LPU).
     Raise RuntimeError jika gagal atau key tidak tersedia.
     """
     try:
@@ -172,30 +180,37 @@ def _call_groq(system_prompt: str, user_prompt: str, expect_json: bool) -> dict 
 
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
-        raise RuntimeError("GROQ_API_KEY belum diset di environment. Daftar gratis di console.groq.com")
+        raise RuntimeError("GROQ_API_KEY belum diset di environment.")
 
     client = openai.OpenAI(
         base_url="https://api.groq.com/openai/v1",
         api_key=api_key,
         max_retries=0,
-        timeout=20.0,
+        timeout=15.0,
     )
 
-    groq_model = "llama-3.3-70b-versatile"
-    try:
-        response = client.chat.completions.create(
-            model=groq_model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.3,
-        )
-        raw_text = response.choices[0].message.content or ""
-        logger.info(f"[ai_router][Groq] Berhasil: {groq_model}")
-        return _parse_response(raw_text, expect_json)
-    except Exception as e:
-        raise RuntimeError(f"Groq gagal: {type(e).__name__}: {e}")
+    unique_models = list(dict.fromkeys(GROQ_FALLBACK_MODELS))
+    last_err = None
+
+    for model in unique_models:
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.3,
+            )
+            raw_text = response.choices[0].message.content or ""
+            logger.info(f"[ai_router][Groq] Berhasil: {model}")
+            return _parse_response(raw_text, expect_json)
+        except Exception as e:
+            logger.warning(f"[ai_router][Groq] Model '{model}' gagal: {e}")
+            last_err = e
+            continue
+
+    raise RuntimeError(f"Semua model Groq gagal. Error terakhir: {last_err}")
 
 
 # ─── Main Entry Point ─────────────────────────────────────────────────────────
@@ -210,9 +225,9 @@ def call_llm(
     Entry point utama untuk memanggil LLM dari mana saja di codebase.
 
     Urutan failover:
-      1. OpenRouter (model list internal)
-      2. Google Gemini Native (jika GEMINI_API_KEY ada)
-      3. Groq (jika GROQ_API_KEY ada)
+      1. Groq (jika GROQ_API_KEY ada — ultra-fast < 1s)
+      2. OpenRouter (model list internal)
+      3. Google Gemini Native (jika GEMINI_API_KEY ada)
 
     Args:
         system_prompt: Instruksi sistem untuk LLM.
@@ -227,9 +242,9 @@ def call_llm(
         RuntimeError: Jika semua provider gagal (caller harus return HTTP 503).
     """
     providers = [
+        ("Groq",       _call_groq),
         ("OpenRouter", _call_openrouter),
         ("Gemini",     _call_gemini),
-        ("Groq",       _call_groq),
     ]
 
     last_error = None

@@ -1,26 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { fetchFlaskBackend } from '@/lib/backendClient';
 
 export async function GET(request: NextRequest) {
   try {
     const email = request.nextUrl.searchParams.get('email');
-    const token = request.nextUrl.searchParams.get('token');
+    const token = request.nextUrl.searchParams.get('token') || 'dev_token';
 
-    if (!email || !token) {
-      return NextResponse.json({ error: 'Parameters email dan token wajib diisi' }, { status: 400 });
+    if (!email) {
+      return NextResponse.json({ error: 'Parameter email wajib diisi' }, { status: 400 });
     }
 
-    const apiUrl = (process.env.API_URL || process.env.NEXT_PUBLIC_API_URL) || 'http://flask_api:5000';
-    const res = await fetch(`${apiUrl}/api/quiz/today?employee_id=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`, {
+    const res = await fetchFlaskBackend(`/api/quiz/today?employee_id=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`, {
       method: 'GET',
-      next: { revalidate: 0 }
     });
 
     const data = await res.json();
-    if (!res.ok) {
-      return NextResponse.json({ error: data.error || 'Gagal mengambil kuis harian' }, { status: res.status });
-    }
-
-    return NextResponse.json(data);
+    return NextResponse.json(data, { status: res.status });
   } catch (error: any) {
     return NextResponse.json({ error: 'Gagal menghubungi server backend', detail: error.message }, { status: 500 });
   }

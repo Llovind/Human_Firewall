@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+'use client';
+
+import React, { useEffect, useMemo, useState } from 'react';
 import { Shield, Flame, Trophy, ShieldAlert } from 'lucide-react';
 
 interface BadgeItem {
@@ -22,21 +24,21 @@ interface ReportsSummary {
   next_badge: NextBadge | null;
 }
 
-// ── Legacy behavior badges (dari myScore.badges, points-based) ──
+// ── Legacy behavior badges (from myScore.badges, points-based) ──
 const LEGACY_BADGES = [
-  { key: 'First Report', label: 'First Report', sub: 'Melaporkan phishing pertama kali', icon: 'flag', color: 'var(--success)' },
-  { key: 'Streak Master', label: 'Streak Master', sub: '4+ minggu bebas insiden', icon: 'flame-link', color: 'var(--warning)' },
-  { key: 'Guardian', label: 'Guardian', sub: 'Skor perilaku >= 60', icon: 'shield-check', color: 'var(--info)' },
-  { key: 'Quiz Champion', label: 'Quiz Champion', sub: 'Menang Spot the Fake', icon: 'target-check', color: '#8b5cf6' },
-  { key: 'Sentinel', label: 'Sentinel', sub: 'Skor perilaku >= 130', icon: 'radar', color: '#ec4899' },
+  { key: 'First Report', label: 'First Report', sub: 'First reported phishing threat', icon: 'flag', color: 'var(--success)' },
+  { key: 'Streak Master', label: 'Streak Master', sub: '4+ weeks incident-free', icon: 'flame-link', color: 'var(--warning)' },
+  { key: 'Guardian', label: 'Guardian', sub: 'Behavior score >= 60', icon: 'shield-check', color: 'var(--info)' },
+  { key: 'Quiz Champion', label: 'Quiz Champion', sub: 'Won Spot the Fake challenge', icon: 'target-check', color: 'var(--accent)' },
+  { key: 'Sentinel', label: 'Sentinel', sub: 'Behavior score >= 130', icon: 'radar', color: 'var(--accent-dim)' },
 ] as const;
 
-// ── Reporting badges (dari reports_count_malicious) — bahasa pangkat ──
+// ── Reporting badges (from reports_count_malicious) ──
 const REPORTING_RANKS: Record<string, { icon: string; color: string; sub: string }> = {
-  sentinel_troops: { icon: 'chevron-1', color: '#c97a3d', sub: '1 laporan' },       // bronze
-  front_line_defender: { icon: 'chevron-2', color: '#9ca8b8', sub: '3 laporan' },   // silver
-  the_front_man: { icon: 'chevron-3', color: '#e0b13d', sub: '5 laporan' },         // gold
-  cyber_shield_elite: { icon: 'chevron-star', color: '#5ce1e6', sub: '10 laporan' }, // platinum
+  sentinel_troops: { icon: 'chevron-1', color: 'var(--brand-sky)', sub: '1 report' },
+  front_line_defender: { icon: 'chevron-2', color: 'var(--accent)', sub: '3 reports' },
+  the_front_man: { icon: 'chevron-3', color: 'var(--warning)', sub: '5 reports' },
+  cyber_shield_elite: { icon: 'chevron-star', color: 'var(--success)', sub: '10 reports' },
 };
 
 const REPORTING_FALLBACK: BadgeItem[] = [
@@ -46,7 +48,6 @@ const REPORTING_FALLBACK: BadgeItem[] = [
   { id: 'cyber_shield_elite', label: 'Cyber Shield Elite', threshold: 10, achieved: false },
 ];
 
-// ── Icon set — hand-drawn, satu bahasa visual (stroke 1.6, currentColor) ──
 function BadgeIcon({ icon, size = 26 }: { icon: string; size?: number }) {
   const common = {
     width: size,
@@ -60,7 +61,7 @@ function BadgeIcon({ icon, size = 26 }: { icon: string; size?: number }) {
   };
 
   switch (icon) {
-    case 'flag': // laporan pertama — tiang & bendera ditancapkan
+    case 'flag':
       return (
         <svg {...common}>
           <path d="M9 27V5" />
@@ -68,7 +69,7 @@ function BadgeIcon({ icon, size = 26 }: { icon: string; size?: number }) {
           <circle cx="9" cy="27" r="1.4" fill="currentColor" stroke="none" />
         </svg>
       );
-    case 'flame-link': // streak — api di atas dua mata rantai (hari yang tersambung)
+    case 'flame-link':
       return (
         <svg {...common}>
           <path d="M16 6c2 3-1 4-1 6.5a3 3 0 0 0 6 0c2 2 2 6-1 8.5a7 7 0 0 1-10-9C11 9 13 7 16 6z" fill="currentColor" fillOpacity="0.85" stroke="none" />
@@ -76,14 +77,14 @@ function BadgeIcon({ icon, size = 26 }: { icon: string; size?: number }) {
           <ellipse cx="18" cy="26.5" rx="3.2" ry="2.2" transform="rotate(20 18 26.5)" />
         </svg>
       );
-    case 'shield-check': // guardian — perisai + centang
+    case 'shield-check':
       return (
         <svg {...common}>
           <path d="M16 4l10 3.5v7C26 21 22 25.5 16 28 10 25.5 6 21 6 14.5v-7L16 4z" />
           <path d="M11.5 16.5l3 3 6-6.5" />
         </svg>
       );
-    case 'target-check': // quiz champion — target + centang di tengah
+    case 'target-check':
       return (
         <svg {...common}>
           <circle cx="16" cy="16" r="10" />
@@ -91,7 +92,7 @@ function BadgeIcon({ icon, size = 26 }: { icon: string; size?: number }) {
           <path d="M12.5 16.3l2.4 2.4 5-5.4" fill="currentColor" fillOpacity="0.15" />
         </svg>
       );
-    case 'radar': // sentinel — sapuan radar, tier tertinggi behavior
+    case 'radar':
       return (
         <svg {...common}>
           <circle cx="16" cy="16" r="11" strokeOpacity="0.4" />
@@ -101,21 +102,21 @@ function BadgeIcon({ icon, size = 26 }: { icon: string; size?: number }) {
           <circle cx="16" cy="16" r="1.6" fill="currentColor" stroke="none" />
         </svg>
       );
-    case 'chevron-1': // sentinel troops — 1 strip pangkat
+    case 'chevron-1':
       return (
         <svg {...common}>
           <path d="M16 5l11 6-2 4-9 -5-9 5-2-4z" fill="currentColor" fillOpacity="0.15" />
           <path d="M7 21l9-5 9 5" />
         </svg>
       );
-    case 'chevron-2': // front line defender — 2 strip
+    case 'chevron-2':
       return (
         <svg {...common}>
           <path d="M7 14l9-5 9 5" />
           <path d="M7 22l9-5 9 5" />
         </svg>
       );
-    case 'chevron-3': // the front man — 3 strip
+    case 'chevron-3':
       return (
         <svg {...common}>
           <path d="M7 10l9-5 9 5" />
@@ -123,7 +124,7 @@ function BadgeIcon({ icon, size = 26 }: { icon: string; size?: number }) {
           <path d="M7 24l9-5 9 5" />
         </svg>
       );
-    case 'chevron-star': // cyber shield elite — 3 strip + bintang, pangkat puncak
+    case 'chevron-star':
       return (
         <svg {...common}>
           <path d="M16 4.5l1.7 3.6 3.9.4-2.9 2.7.8 3.9-3.5-2-3.5 2 .8-3.9-2.9-2.7 3.9-.4z" fill="currentColor" stroke="none" />
@@ -142,15 +143,15 @@ function BadgeIcon({ icon, size = 26 }: { icon: string; size?: number }) {
 
 function impactStatement(reportsCount: number): string {
   if (reportsCount === 0) {
-    return 'Belum ada laporan tercatat. Setiap link atau file mencurigakan yang kamu laporkan adalah satu celah yang gak sempet dimanfaatkan penyerang — mulai dari laporan pertamamu.';
+    return 'No threat reports submitted yet. Every suspicious link or file you report is an attack vector closed: start with your first report today.';
   }
   if (reportsCount === 1) {
-    return `Laporanmu udah membantu tim keamanan menetralisir ${reportsCount} ancaman nyata sebelum sempat menyebar ke rekan kerja lain. Ini baru permulaan.`;
+    return `Your report has helped the security team neutralize 1 verified threat before reaching other colleagues. This is just the beginning.`;
   }
   if (reportsCount < 5) {
-    return `Berkat ${reportsCount} laporan validmu, tim keamanan berhasil menetralisir ancaman itu sebelum menjangkau rekan kerja lain. Kamu udah jadi bagian aktif dari garis pertahanan perusahaan.`;
+    return `Thanks to your ${reportsCount} verified reports, security analysts neutralized incoming threats before reaching other team members. You are actively fortifying the defense line.`;
   }
-  return `${reportsCount} laporan validmu udah membantu tim keamanan mencegah ancaman menyebar ke seluruh perusahaan. Reputasimu di radar keamanan sekarang solid — kamu beneran garda terdepan Human Firewall.`;
+  return `${reportsCount} verified reports from you have prevented threats from propagating across the organization. Your security posture is outstanding: a true front-line defender.`;
 }
 
 interface UnifiedBadge {
@@ -168,7 +169,7 @@ export default function ReportingBadgesWidget({ email, token, legacyBadges }: { 
 
   useEffect(() => {
     if (!email || !token) return;
-    const authToken = token; // narrowed to string, aman dipakai di closure load()
+    const authToken = token;
     let cancelled = false;
 
     async function load() {
@@ -178,7 +179,7 @@ export default function ReportingBadgesWidget({ email, token, legacyBadges }: { 
         const json = await res.json();
         if (!cancelled) setData(json);
       } catch (err) {
-        if (!cancelled) setError('Gagal memuat data lencana pelaporan.');
+        if (!cancelled) setError('Failed to load reporting achievements.');
         console.error('ReportingBadgesWidget fetch error:', err);
       }
     }
@@ -200,7 +201,7 @@ export default function ReportingBadgesWidget({ email, token, legacyBadges }: { 
 
     const reportingSource = data?.badges || REPORTING_FALLBACK;
     const reporting: UnifiedBadge[] = reportingSource.map(b => {
-      const rank = REPORTING_RANKS[b.id] || { icon: 'chevron-1', color: 'var(--accent)', sub: `${b.threshold} laporan` };
+      const rank = REPORTING_RANKS[b.id] || { icon: 'chevron-1', color: 'var(--accent)', sub: `${b.threshold} reports` };
       return {
         id: b.id,
         label: b.label,
@@ -217,12 +218,12 @@ export default function ReportingBadgesWidget({ email, token, legacyBadges }: { 
   const achievedCount = badges.filter(b => b.achieved).length;
 
   return (
-    <div className="panel glass-card">
+    <div className="panel glass-card font-body">
       <div className="panel-header">
-        <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Shield size={18} /> Pencapaian Keamanan
+        <h2 className="panel-title font-heading" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Shield size={18} /> Security Achievements
         </h2>
-        <span className="panel-count">{achievedCount} / {badges.length}</span>
+        <span className="panel-count font-mono-data">{achievedCount} / {badges.length}</span>
       </div>
 
       {/* ── Impact statement ── */}
@@ -239,7 +240,7 @@ export default function ReportingBadgesWidget({ email, token, legacyBadges }: { 
       }}>
         <ShieldAlert size={18} style={{ color: 'var(--success)', flexShrink: 0, marginTop: '1px' }} />
         <p style={{ fontSize: '13px', lineHeight: 1.5, color: 'var(--text-primary)', margin: 0 }}>
-          {data ? impactStatement(data.reports_count_malicious) : 'Memuat dampak laporanmu...'}
+          {data ? impactStatement(data.reports_count_malicious) : 'Loading threat prevention impact...'}
         </p>
       </div>
 
@@ -248,16 +249,16 @@ export default function ReportingBadgesWidget({ email, token, legacyBadges }: { 
         <div style={{ display: 'flex', gap: '24px', marginBottom: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Trophy size={16} style={{ color: 'var(--accent)' }} />
-            <span style={{ fontSize: '13px' }}><strong>{data.reports_count_malicious}</strong> laporan valid</span>
+            <span style={{ fontSize: '13px' }}><strong className="font-mono-data">{data.reports_count_malicious}</strong> verified reports</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Flame size={16} style={{ color: 'var(--warning)' }} />
-            <span style={{ fontSize: '13px' }}><strong>{data.daily_streak}</strong> hari beruntun</span>
+            <span style={{ fontSize: '13px' }}><strong className="font-mono-data">{data.daily_streak}</strong> day streak</span>
           </div>
         </div>
       )}
 
-      {/* ── Satu grid, satu keluarga lencana ── */}
+      {/* ── Badge Grid ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '16px', textAlign: 'center' }}>
         {badges.map(badge => (
           <div key={badge.id} style={{
@@ -284,7 +285,7 @@ export default function ReportingBadgesWidget({ email, token, legacyBadges }: { 
 
       {data?.next_badge && (
         <div style={{ fontSize: '12px', color: 'var(--text-secondary)', textAlign: 'center', marginTop: '18px' }}>
-          Butuh <strong>{data.next_badge.remaining}</strong> laporan lagi untuk unlock <strong>{data.next_badge.id.replace(/_/g, ' ')}</strong>
+          Need <strong className="font-mono-data">{data.next_badge.remaining}</strong> more reports to unlock <strong>{data.next_badge.id.replace(/_/g, ' ')}</strong>
         </div>
       )}
 

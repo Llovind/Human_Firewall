@@ -29,121 +29,109 @@ function BlockedContent() {
     <div style={{
       maxWidth: '560px',
       width: '100%',
-      background: 'rgba(22, 10, 10, 0.65)',
-      backdropFilter: 'blur(16px)',
-      border: '1px solid rgba(239, 68, 68, 0.25)',
-      borderRadius: '16px',
-      padding: '40px',
+      background: 'var(--bg-surface)',
+      border: '1px solid var(--border)',
+      borderTop: '3px solid var(--danger)',
+      borderRadius: '12px',
+      padding: '40px 32px',
       textAlign: 'center',
-      boxShadow: '0 0 40px rgba(239, 68, 68, 0.1)',
+      boxShadow: 'var(--shadow-md)',
       position: 'relative'
     }}>
-      {/* Animated radar/shield scan top bar decoration */}
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: '10%',
-        right: '10%',
-        height: '2px',
-        background: 'linear-gradient(90deg, transparent, var(--danger), transparent)',
-        boxShadow: '0 0 10px var(--danger)'
-      }} />
-
-      <div style={{ display: 'inline-flex', justifyContent: 'center', marginBottom: '24px' }}>
+      <div style={{ display: 'inline-flex', justifyContent: 'center', marginBottom: '20px' }}>
         <Logo variant="mark" size={48} />
       </div>
 
       <div style={{
-        width: '72px',
-        height: '72px',
-        background: 'rgba(239, 68, 68, 0.12)',
-        border: '2px solid #ef4444',
-        borderRadius: '50%',
+        width: '56px',
+        height: '56px',
+        background: 'rgba(239, 68, 68, 0.1)',
+        border: '1px solid var(--danger)',
+        borderRadius: '8px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: '#ef4444',
-        margin: '0 auto 24px',
-        boxShadow: '0 0 20px rgba(239, 68, 68, 0.2)',
+        color: 'var(--danger)',
+        margin: '0 auto 20px',
       }}>
-        <ShieldAlert size={36} />
+        <ShieldAlert size={28} />
       </div>
 
-      <h1 style={{
-        fontSize: '22px',
+      <h1 className="font-heading" style={{
+        fontSize: '20px',
         fontWeight: 700,
-        letterSpacing: '-0.5px',
-        color: '#f87171',
-        marginBottom: '12px'
+        letterSpacing: '-0.3px',
+        color: 'var(--danger)',
+        marginBottom: '10px'
       }}>
         ACCESS BLOCKED BY SECURE GATEWAY
       </h1>
       
       <p style={{
         fontSize: '13px',
-        color: '#94a3b8',
+        color: 'var(--text-secondary)',
         lineHeight: '1.6',
-        marginBottom: '32px'
+        marginBottom: '28px'
       }}>
-        Adaptive Secure Gateway mendeteksi ancaman tingkat tinggi (**HIGH Risk**) pada URL/file yang Anda coba akses. Akses dibatalkan demi keamanan data perusahaan.
+        The adaptive secure gateway detected a critical risk factor on the requested URL. Access was terminated to prevent credential harvesting and data exposure.
       </p>
 
       {/* Threat cache card */}
       <div style={{
-        background: 'rgba(0, 0, 0, 0.25)',
-        border: '1px solid rgba(255, 255, 255, 0.05)',
-        borderRadius: '10px',
-        padding: '20px',
+        background: 'var(--bg-base)',
+        border: '1px solid var(--border)',
+        borderRadius: '8px',
+        padding: '16px',
         textAlign: 'left',
-        marginBottom: '32px',
+        marginBottom: '28px',
         fontSize: '13px'
       }}>
         <div style={{
           fontSize: '11px',
-          color: '#ef4444',
+          color: 'var(--danger)',
           fontWeight: 700,
           textTransform: 'uppercase',
-          letterSpacing: '1px',
-          marginBottom: '14px',
-          fontFamily: 'monospace'
+          letterSpacing: '0.8px',
+          marginBottom: '12px',
+          fontFamily: 'var(--font-mono-data)'
         }}>
-          🛡️ Threat Intelligence Cache Details
+          Threat Intelligence Telemetry
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div>
-            <span style={{ color: '#64748b' }}>Blocked Source (URL):</span>
+            <span style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>Blocked Target URL:</span>
             <div style={{
-              fontFamily: 'monospace',
+              fontFamily: 'var(--font-mono-data)',
               fontSize: '12px',
-              color: '#e2e8f0',
-              background: 'rgba(255,255,255,0.03)',
-              padding: '8px',
+              color: 'var(--text-primary)',
+              background: 'var(--bg-elevated)',
+              padding: '8px 10px',
               borderRadius: '6px',
               marginTop: '4px',
               wordBreak: 'break-all',
-              border: '1px solid rgba(255,255,255,0.02)'
+              border: '1px solid var(--border)'
             }}>{rawUrl}</div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '4px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div>
-              <span style={{ color: '#64748b' }}>Detection Engine:</span>
-              <div style={{ fontWeight: 600, color: '#e2e8f0', marginTop: '2px' }}>{source}</div>
+              <span style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>Detection Source:</span>
+              <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px', fontSize: '12px' }}>{source}</div>
             </div>
             <div>
-              <span style={{ color: '#64748b' }}>Threat Type:</span>
-              <div style={{ fontWeight: 600, color: '#e2e8f0', marginTop: '2px' }}>{threatType}</div>
+              <span style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>Classification:</span>
+              <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px', fontSize: '12px' }}>{threatType}</div>
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div>
-              <span style={{ color: '#64748b' }}>Cache ID:</span>
-              <div style={{ fontFamily: 'monospace', color: '#e2e8f0', marginTop: '2px' }}>{cacheId}</div>
+              <span style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>Cache Identifier:</span>
+              <div style={{ fontFamily: 'var(--font-mono-data)', color: 'var(--text-primary)', marginTop: '2px', fontSize: '12px' }}>{cacheId}</div>
             </div>
             <div>
-              <span style={{ color: '#64748b' }}>Threat Score:</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>Risk Score:</span>
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -153,17 +141,17 @@ function BlockedContent() {
                 <div style={{
                   width: '60px',
                   height: '6px',
-                  background: 'rgba(255,255,255,0.1)',
+                  background: 'var(--bg-elevated)',
                   borderRadius: '3px',
                   overflow: 'hidden'
                 }}>
                   <div style={{
                     width: `${score}%`,
                     height: '100%',
-                    background: '#ef4444'
+                    background: 'var(--danger)'
                   }} />
                 </div>
-                <span className="mono" style={{ color: '#ef4444', fontWeight: 700 }}>{score}/100</span>
+                <span className="font-mono-data" style={{ color: 'var(--danger)', fontWeight: 700, fontSize: '12px' }}>{score}/100</span>
               </div>
             </div>
           </div>
@@ -171,39 +159,38 @@ function BlockedContent() {
       </div>
 
       {/* Actions Button */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <button
           onClick={() => window.location.href = '/'}
           style={{
-            padding: '12px 24px',
-            background: '#ef4444',
+            padding: '11px 20px',
+            background: 'var(--danger)',
             color: 'white',
             border: 'none',
             borderRadius: '8px',
             fontWeight: 600,
-            fontSize: '14px',
+            fontSize: '13px',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             gap: '8px',
-            boxShadow: '0 4px 12px rgba(239, 68, 68, 0.2)',
-            transition: 'all 0.2s ease'
+            transition: 'background-color 0.15s ease'
           }}
           onMouseOver={(e) => e.currentTarget.style.background = '#dc2626'}
-          onMouseOut={(e) => e.currentTarget.style.background = '#ef4444'}
+          onMouseOut={(e) => e.currentTarget.style.background = 'var(--danger)'}
         >
-          <ArrowLeft size={16} /> Kembali ke Halaman Aman
+          <ArrowLeft size={16} /> Return to Secure Workspace
         </button>
 
         <button
           onClick={handleReport}
           disabled={reported || isReporting}
           style={{
-            padding: '12px 24px',
+            padding: '11px 20px',
             background: 'transparent',
-            color: reported ? '#34d399' : '#94a3b8',
-            border: `1px solid ${reported ? '#34d399' : 'rgba(255,255,255,0.15)'}`,
+            color: reported ? 'var(--success)' : 'var(--text-secondary)',
+            border: `1px solid ${reported ? 'var(--success)' : 'var(--border)'}`,
             borderRadius: '8px',
             fontWeight: 500,
             fontSize: '13px',
@@ -212,15 +199,15 @@ function BlockedContent() {
             alignItems: 'center',
             justifyContent: 'center',
             gap: '8px',
-            transition: 'all 0.2s ease'
+            transition: 'all 0.15s ease'
           }}
         >
           {reported ? (
-            <><ShieldCheck size={16} /> Tiket Discrepancy Telah Dikirim ke SOC</>
+            <><ShieldCheck size={16} /> Discrepancy Ticket Sent to SOC</>
           ) : isReporting ? (
-            'Mengirim Laporan...'
+            'Submitting telemetry report...'
           ) : (
-            <><HelpCircle size={16} /> Laporkan Salah Deteksi (False Positive)</>
+            <><HelpCircle size={16} /> Report False Positive to SOC</>
           )}
         </button>
       </div>
@@ -231,33 +218,18 @@ function BlockedContent() {
 export default function BlockedPage() {
   return (
     <div className="app" style={{
-      background: 'radial-gradient(circle at center, #110606 0%, #060202 100%)',
+      backgroundColor: 'var(--bg-deep)',
       minHeight: '100vh',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      fontFamily: 'Inter, sans-serif',
-      color: '#f1f5f9',
+      fontFamily: 'var(--font-body)',
+      color: 'var(--text-primary)',
       padding: '24px'
     }}>
-      {/* Background glow lines */}
-      <div style={{
-        position: 'absolute',
-        top: '20%',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        width: '500px',
-        height: '500px',
-        background: 'rgba(239, 68, 68, 0.05)',
-        filter: 'blur(100px)',
-        borderRadius: '50%',
-        pointerEvents: 'none'
-      }} />
-
       <Suspense fallback={
-        <div style={{ textAlign: 'center', color: '#94a3b8' }}>
-          <div className="loading-spinner" style={{ margin: '0 auto 16px' }} />
-          <p>Mengevaluasi Keamanan Gateway...</p>
+        <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+          <p>Evaluating Gateway Security State...</p>
         </div>
       }>
         <BlockedContent />

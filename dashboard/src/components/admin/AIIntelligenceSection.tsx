@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  Sparkles, Copy, Check, Download, FileText, ShieldCheck, RefreshCw,
-  Search, Filter, ShieldAlert, Shield, Users, ChevronRight, X, AlertTriangle
+  Copy, Check, Download, FileText, ShieldCheck, RefreshCw,
+  Search, Filter, ShieldAlert, Shield, Users, ChevronRight,
+  AlertTriangle, Zap, CheckCircle2, Info, Activity, UserCheck
 } from 'lucide-react';
 import { exportExecutivePdf } from '@/lib/ExecutivePdfExporter';
 
@@ -66,7 +67,7 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
   const [selectedDivision, setSelectedDivision] = useState('ALL');
   const [selectedRiskFilter, setSelectedRiskFilter] = useState('ALL');
 
-  // Deep-Dive Modal State
+  // Master-Detail Selection State
   const [selectedUserEmail, setSelectedUserEmail] = useState<string | null>(null);
   const [userDeepDive, setUserDeepDive] = useState<UserDeepDive | null>(null);
   const [isDeepDiveLoading, setIsDeepDiveLoading] = useState(false);
@@ -101,8 +102,8 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
     fetchHeatmapData();
   }, [role]);
 
-  // Fetch Individual User Deep Dive
-  const handleOpenUserModal = async (email: string) => {
+  // Fetch Individual User Deep Dive in-place
+  const handleSelectUser = async (email: string) => {
     setSelectedUserEmail(email);
     setIsDeepDiveLoading(true);
     setUserDeepDive(null);
@@ -176,7 +177,7 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
     }
   };
 
-  // Filtered User List
+  // Filtered & Sorted User List (DANGER first -> VULNERABLE -> SAFE)
   const divisions = Array.from(new Set(classifications.map(c => c.divisi).filter(Boolean)));
   const filteredUsers = classifications.filter(u => {
     const matchesSearch = u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -186,6 +187,16 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
     const matchesRisk = selectedRiskFilter === 'ALL' || u.risk_level === selectedRiskFilter;
     return matchesSearch && matchesDiv && matchesRisk;
   });
+
+  const sortedUsers = [...filteredUsers].sort((a, b) => {
+    const riskRank = { DANGER: 0, VULNERABLE: 1, SAFE: 2 };
+    const rankDiff = (riskRank[a.risk_level] ?? 1) - (riskRank[b.risk_level] ?? 1);
+    if (rankDiff !== 0) return rankDiff;
+    return a.risk_score - b.risk_score;
+  });
+
+  // Selected Employee object from classification list (instant preview before deep-dive finishes)
+  const activeSelectedUser = classifications.find(u => u.email === selectedUserEmail);
 
   // Custom Markdown Parser with Explicit Cyber-Security Styling Tokens
   const renderFormattedMarkdown = (content: string) => {
@@ -203,30 +214,30 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
       const rows = tableBuffer.slice(2).map(r => r.split('|').map(cell => cell.trim()).filter(Boolean));
 
       elements.push(
-        <div key={`table-${keyIndex}`} style={{ margin: '20px 0', overflow: 'hidden', borderRadius: '10px', border: '1px solid rgba(148,163,184,0.15)', background: '#0b1329', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
+        <div key={`table-${keyIndex}`} style={{ margin: '20px 0', overflow: 'hidden', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-surface)', boxShadow: 'var(--shadow-sm)' }}>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', textAlign: 'left', fontSize: '12px', color: '#e2e8f0', borderCollapse: 'collapse' }}>
+            <table style={{ width: '100%', textAlign: 'left', fontSize: '12px', color: 'var(--text-primary)', borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ background: '#172544', color: '#93c5fd', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.05em', borderBottom: '1px solid rgba(148,163,184,0.2)' }}>
+                <tr style={{ background: 'var(--bg-elevated)', color: 'var(--accent)', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.05em', borderBottom: '1px solid var(--border)' }}>
                   {headers.map((h, idx) => (
-                    <th key={idx} style={{ padding: '12px 16px', borderRight: '1px solid rgba(148,163,184,0.1)' }}>{h}</th>
+                    <th key={idx} style={{ padding: '12px 16px', borderRight: '1px solid var(--border)', fontWeight: 700 }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row, rIdx) => (
-                  <tr key={rIdx} style={{ borderBottom: '1px solid rgba(148,163,184,0.08)', background: rIdx % 2 === 0 ? 'transparent' : 'rgba(15,23,42,0.4)' }}>
+                  <tr key={rIdx} style={{ borderBottom: '1px solid var(--border)' }}>
                     {row.map((cell, cIdx) => {
                       let badgeStyle: React.CSSProperties | null = null;
                       if (cell.includes('HIGH') || cell.includes('DANGER') || cell.includes('CRITICAL')) {
-                        badgeStyle = { background: 'rgba(239,68,68,0.2)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.3)', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, fontSize: '10px', display: 'inline-block' };
+                        badgeStyle = { background: 'var(--bg-danger)', color: 'var(--text-danger)', border: '1px solid var(--border-danger)', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, fontSize: '10px', display: 'inline-block' };
                       } else if (cell.includes('MODERATE') || cell.includes('VULNERABLE')) {
-                        badgeStyle = { background: 'rgba(245,158,11,0.2)', color: '#fcd34d', border: '1px solid rgba(245,158,11,0.3)', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, fontSize: '10px', display: 'inline-block' };
+                        badgeStyle = { background: 'var(--bg-warning)', color: 'var(--text-warning)', border: '1px solid var(--border-warning)', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, fontSize: '10px', display: 'inline-block' };
                       } else if (cell.includes('SAFE')) {
-                        badgeStyle = { background: 'rgba(16,185,129,0.2)', color: '#6ee7b7', border: '1px solid rgba(16,185,129,0.3)', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, fontSize: '10px', display: 'inline-block' };
+                        badgeStyle = { background: 'var(--bg-success)', color: 'var(--text-success)', border: '1px solid var(--border-success)', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, fontSize: '10px', display: 'inline-block' };
                       }
                       return (
-                        <td key={cIdx} style={{ padding: '12px 16px', borderRight: '1px solid rgba(148,163,184,0.08)' }}>
+                        <td key={cIdx} style={{ padding: '12px 16px', borderRight: '1px solid var(--border)' }}>
                           {badgeStyle ? <span style={badgeStyle}>{cell}</span> : cell}
                         </td>
                       );
@@ -249,49 +260,36 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
         flushTable(idx);
       }
 
-      const trimmed = line.trim();
-      if (!trimmed) {
-        elements.push(<div key={idx} style={{ height: '8px' }} />);
-        return;
-      }
-
-      if (trimmed.startsWith('# ')) {
+      if (line.startsWith('# ')) {
         elements.push(
-          <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid rgba(148,163,184,0.15)', marginTop: '8px', marginBottom: '16px' }}>
-            <h1 style={{ fontSize: '20px', fontWeight: 800, background: 'linear-gradient(135deg, #60a5fa, #93c5fd)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Sparkles style={{ width: '20px', height: '20px', color: '#60a5fa' }} />
-              {trimmed.replace('# ', '')}
-            </h1>
-            <span style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.1em', padding: '4px 10px', borderRadius: '20px', background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)' }}>
-              GFM AI REPORT
-            </span>
-          </div>
+          <h1 key={idx} className="font-heading" style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)', margin: '24px 0 12px 0', borderBottom: '2px solid var(--border)', paddingBottom: '8px' }}>
+            {line.replace('# ', '')}
+          </h1>
         );
-      } else if (trimmed.startsWith('## ')) {
+      } else if (line.startsWith('## ')) {
         elements.push(
-          <h2 key={idx} style={{ fontSize: '14px', fontWeight: 700, color: '#38bdf8', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '24px', marginBottom: '12px', borderLeft: '4px solid #3b82f6', paddingLeft: '12px' }}>
-            {trimmed.replace('## ', '')}
+          <h2 key={idx} className="font-heading" style={{ fontSize: '16px', fontWeight: 600, color: 'var(--accent)', margin: '20px 0 10px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ width: '4px', height: '16px', background: '#2196F3', borderRadius: '2px', display: 'inline-block' }} />
+            {line.replace('## ', '')}
           </h2>
         );
-      } else if (trimmed.startsWith('> ')) {
+      } else if (line.startsWith('### ')) {
         elements.push(
-          <div key={idx} style={{ margin: '16px 0', padding: '16px', borderRadius: '10px', background: '#0b1329', border: '1px solid rgba(148,163,184,0.15)', borderLeft: '4px solid #3b82f6', fontSize: '13px', color: '#cbd5e1', lineHeight: '1.6' }}>
-            {trimmed.replace('> ', '')}
+          <h3 key={idx} className="font-heading" style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: '14px 0 6px 0' }}>
+            {line.replace('### ', '')}
+          </h3>
+        );
+      } else if (line.startsWith('- ') || line.startsWith('* ')) {
+        elements.push(
+          <div key={idx} className="font-body" style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', margin: '4px 0', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+            <span style={{ color: '#2196F3', fontWeight: 800, marginTop: '-1px' }}>•</span>
+            <span>{line.substring(2)}</span>
           </div>
         );
-      } else if (trimmed.startsWith('- ')) {
-        const text = trimmed.replace('- ', '');
-        const parts = text.split('**');
+      } else if (line.trim().length > 0) {
         elements.push(
-          <li key={idx} style={{ marginLeft: '20px', listStyleType: 'disc', fontSize: '13px', color: '#cbd5e1', margin: '6px 0', lineHeight: '1.6' }}>
-            {parts.map((p, pIdx) => (pIdx % 2 === 1 ? <strong key={pIdx} style={{ fontWeight: 700, color: '#f8fafc' }}>{p}</strong> : p))}
-          </li>
-        );
-      } else {
-        const parts = trimmed.split('**');
-        elements.push(
-          <p key={idx} style={{ fontSize: '13px', color: '#cbd5e1', lineHeight: '1.6', margin: '8px 0' }}>
-            {parts.map((p, pIdx) => (pIdx % 2 === 1 ? <strong key={pIdx} style={{ fontWeight: 700, color: '#f8fafc' }}>{p}</strong> : p))}
+          <p key={idx} className="font-body" style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '8px 0', lineHeight: 1.6 }}>
+            {line}
           </p>
         );
       }
@@ -302,34 +300,34 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
   };
 
   return (
-    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '20px', fontFamily: 'var(--font-sans, Inter, sans-serif)' }}>
+    <div className="font-body" style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Top Banner Navigation & Sub-Tabs */}
-      <div style={{
-        background: '#0e172a',
-        borderRadius: '12px',
-        border: '1px solid rgba(148,163,184,0.15)',
-        padding: '16px 20px',
+      <div className="panel glass-card" style={{
+        padding: '18px 24px',
         display: 'flex',
         flexWrap: 'wrap',
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: '16px',
-        boxShadow: '0 10px 25px rgba(0,0,0,0.4)'
+        borderRadius: '16px',
+        marginBottom: 0
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'linear-gradient(135deg, #2563eb, #3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(59,130,246,0.3)' }}>
-            <Sparkles style={{ width: '20px', height: '20px', color: '#ffffff' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: '#0D47A1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <ShieldCheck style={{ width: '22px', height: '22px', color: '#ffffff' }} />
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#f8fafc', margin: 0 }}>AI Risk Intelligence Command Center</h2>
-              <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', padding: '2px 8px', borderRadius: '4px', background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)' }}>
+              <h2 className="font-heading" style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+                AI Risk Intelligence Command Center
+              </h2>
+              <span className="font-body" style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', padding: '2px 8px', borderRadius: '4px', background: 'rgba(33,150,243,0.12)', color: 'var(--accent)', border: '1px solid var(--border)' }}>
                 ROLE: {role}
               </span>
             </div>
-            <p style={{ fontSize: '12px', color: '#94a3b8', margin: '4px 0 0 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#34d399', fontWeight: 600 }}>
-                <ShieldCheck style={{ width: '14px', height: '14px' }} /> PII Masked (EMP-Tokens)
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--text-success)', fontWeight: 600 }}>
+                <ShieldCheck style={{ width: '14px', height: '14px', color: 'var(--text-success)' }} /> PII Masked (EMP-Tokens)
               </span>
               <span>•</span>
               <span>Multi-LLM Failover Engine Active</span>
@@ -338,274 +336,617 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
         </div>
 
         {/* Sub-Tab Navigation Switcher */}
-        <div style={{ display: 'flex', alignItems: 'center', background: '#080d19', padding: '4px', borderRadius: '8px', border: '1px solid rgba(148,163,184,0.15)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-elevated)', padding: '4px', borderRadius: '10px', border: '1px solid var(--border)' }}>
           <button
             onClick={() => setActiveSubTab('heatmap')}
+            className="font-body"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: '8px',
               padding: '8px 16px',
-              borderRadius: '6px',
+              borderRadius: '8px',
               fontSize: '12px',
-              fontWeight: 600,
+              fontWeight: 700,
               border: 'none',
               cursor: 'pointer',
               transition: 'all 0.2s',
-              background: activeSubTab === 'heatmap' ? 'linear-gradient(135deg, #2563eb, #3b82f6)' : 'transparent',
-              color: activeSubTab === 'heatmap' ? '#ffffff' : '#94a3b8',
-              boxShadow: activeSubTab === 'heatmap' ? '0 4px 12px rgba(37,99,235,0.3)' : 'none'
+              background: activeSubTab === 'heatmap' ? 'var(--accent)' : 'transparent',
+              color: activeSubTab === 'heatmap' ? '#ffffff' : 'var(--text-secondary)',
+              boxShadow: 'none'
             }}
           >
             <Users style={{ width: '14px', height: '14px' }} />
-            User & Division Risk Heatmap
+            User &amp; Division Risk Heatmap
           </button>
           <button
             onClick={() => setActiveSubTab('report')}
+            className="font-body"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: '8px',
               padding: '8px 16px',
-              borderRadius: '6px',
+              borderRadius: '8px',
               fontSize: '12px',
-              fontWeight: 600,
+              fontWeight: 700,
               border: 'none',
               cursor: 'pointer',
               transition: 'all 0.2s',
-              background: activeSubTab === 'report' ? 'linear-gradient(135deg, #2563eb, #3b82f6)' : 'transparent',
-              color: activeSubTab === 'report' ? '#ffffff' : '#94a3b8',
-              boxShadow: activeSubTab === 'report' ? '0 4px 12px rgba(37,99,235,0.3)' : 'none'
+              background: activeSubTab === 'report' ? 'var(--accent)' : 'transparent',
+              color: activeSubTab === 'report' ? '#ffffff' : 'var(--text-secondary)',
+              boxShadow: 'none'
             }}
           >
             <FileText style={{ width: '14px', height: '14px' }} />
-            Executive Narrative & PDF Report
+            Executive Narrative &amp; PDF Report
           </button>
         </div>
       </div>
 
-      {/* SUB-TAB 1: HEATMAP & USER CLASSIFICATION GRID */}
+      {/* SUB-TAB 1: HEATMAP & USER CLASSIFICATION — MASTER-DETAIL SPLIT CONSOLE */}
       {activeSubTab === 'heatmap' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Org Metrics Overview Cards */}
           {orgSummary && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-              <div style={{ background: '#0e172a', borderRadius: '12px', border: '1px solid rgba(148,163,184,0.15)', padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
+              <div className="stat-card glass-card font-body" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '14px' }}>
                 <div>
-                  <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0, fontWeight: 500 }}>Safe Employees</p>
-                  <p style={{ fontSize: '24px', fontWeight: 800, color: '#34d399', margin: '4px 0 0 0' }}>{orgSummary.safe_count}</p>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, fontWeight: 600 }}>Safe Employees</p>
+                  <p className="font-mono-data" style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-success)', margin: '2px 0 0 0' }}>{orgSummary.safe_count}</p>
                 </div>
-                <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#34d399' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--bg-success)', border: '1px solid var(--border-success)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-success)' }}>
                   <ShieldCheck style={{ width: '20px', height: '20px' }} />
                 </div>
               </div>
 
-              <div style={{ background: '#0e172a', borderRadius: '12px', border: '1px solid rgba(148,163,184,0.15)', padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div className="stat-card glass-card font-body" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '14px' }}>
                 <div>
-                  <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0, fontWeight: 500 }}>Vulnerable / Moderate</p>
-                  <p style={{ fontSize: '24px', fontWeight: 800, color: '#fbbf24', margin: '4px 0 0 0' }}>{orgSummary.vulnerable_count}</p>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, fontWeight: 600 }}>Vulnerable / Moderate</p>
+                  <p className="font-mono-data" style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-warning)', margin: '2px 0 0 0' }}>{orgSummary.vulnerable_count}</p>
                 </div>
-                <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fbbf24' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--bg-warning)', border: '1px solid var(--border-warning)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-warning)' }}>
                   <ShieldAlert style={{ width: '20px', height: '20px' }} />
                 </div>
               </div>
 
-              <div style={{ background: '#0e172a', borderRadius: '12px', border: '1px solid rgba(148,163,184,0.15)', padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div className="stat-card glass-card font-body" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '14px' }}>
                 <div>
-                  <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0, fontWeight: 500 }}>Danger / High Risk</p>
-                  <p style={{ fontSize: '24px', fontWeight: 800, color: '#f87171', margin: '4px 0 0 0' }}>{orgSummary.danger_count}</p>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, fontWeight: 600 }}>Danger / High Risk</p>
+                  <p className="font-mono-data" style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-danger)', margin: '2px 0 0 0' }}>{orgSummary.danger_count}</p>
                 </div>
-                <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f87171' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--bg-danger)', border: '1px solid var(--border-danger)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-danger)' }}>
                   <Shield style={{ width: '20px', height: '20px' }} />
                 </div>
               </div>
 
-              <div style={{ background: '#0e172a', borderRadius: '12px', border: '1px solid rgba(148,163,184,0.15)', padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div className="stat-card glass-card font-body" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '14px' }}>
                 <div>
-                  <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0, fontWeight: 500 }}>Most At Risk Division</p>
-                  <p style={{ fontSize: '14px', fontWeight: 800, color: '#60a5fa', margin: '4px 0 0 0' }}>{orgSummary.most_at_risk_division || 'Network Operations'}</p>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, fontWeight: 600 }}>Most At Risk Division</p>
+                  <p style={{ fontSize: '14px', fontWeight: 800, color: 'var(--accent)', margin: '2px 0 0 0' }}>{orgSummary.most_at_risk_division || 'Network Operations'}</p>
                 </div>
-                <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#60a5fa' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(144,202,249,0.25)', border: '1px solid #90CAF9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0D47A1' }}>
                   <AlertTriangle style={{ width: '20px', height: '20px' }} />
                 </div>
               </div>
             </div>
           )}
 
-          {/* Controls & Filter Bar */}
-          <div style={{ background: '#0e172a', borderRadius: '12px', border: '1px solid rgba(148,163,184,0.15)', padding: '14px 18px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '14px' }}>
-            <div style={{ position: 'relative', width: '280px' }}>
-              <Search style={{ width: '16px', height: '16px', color: '#64748b', position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-              <input
-                type="text"
-                placeholder="Search employee or division..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                style={{
-                  width: '100%',
-                  background: '#080d19',
-                  border: '1px solid rgba(148,163,184,0.2)',
-                  borderRadius: '8px',
-                  padding: '8px 12px 8px 36px',
-                  fontSize: '13px',
-                  color: '#f8fafc',
-                  outline: 'none'
-                }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-              {/* Division Filter */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#080d19', border: '1px solid rgba(148,163,184,0.2)', borderRadius: '8px', padding: '6px 12px', fontSize: '12px', color: '#cbd5e1' }}>
-                <Filter style={{ width: '14px', height: '14px', color: '#64748b' }} />
-                <span>Division:</span>
-                <select
-                  value={selectedDivision}
-                  onChange={e => setSelectedDivision(e.target.value)}
-                  style={{ background: 'transparent', border: 'none', color: '#60a5fa', fontWeight: 600, fontSize: '12px', outline: 'none', cursor: 'pointer' }}
-                >
-                  <option value="ALL" style={{ background: '#0e172a', color: '#f8fafc' }}>All Divisions</option>
-                  {divisions.map(d => (
-                    <option key={d} value={d} style={{ background: '#0e172a', color: '#f8fafc' }}>{d}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Risk Level Filter */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#080d19', border: '1px solid rgba(148,163,184,0.2)', borderRadius: '8px', padding: '6px 12px', fontSize: '12px', color: '#cbd5e1' }}>
-                <span>Risk:</span>
-                <select
-                  value={selectedRiskFilter}
-                  onChange={e => setSelectedRiskFilter(e.target.value)}
-                  style={{ background: 'transparent', border: 'none', color: '#60a5fa', fontWeight: 600, fontSize: '12px', outline: 'none', cursor: 'pointer' }}
-                >
-                  <option value="ALL" style={{ background: '#0e172a', color: '#f8fafc' }}>All Levels</option>
-                  <option value="DANGER" style={{ background: '#0e172a', color: '#f87171' }}>DANGER</option>
-                  <option value="VULNERABLE" style={{ background: '#0e172a', color: '#fbbf24' }}>VULNERABLE</option>
-                  <option value="SAFE" style={{ background: '#0e172a', color: '#34d399' }}>SAFE</option>
-                </select>
-              </div>
-
-              <button
-                onClick={() => fetchHeatmapData(true)}
-                disabled={isHeatmapLoading}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '8px 14px',
-                  borderRadius: '8px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  background: '#1e293b',
-                  color: '#e2e8f0',
-                  border: '1px solid rgba(148,163,184,0.2)',
-                  cursor: 'pointer'
-                }}
-              >
-                <RefreshCw style={{ width: '14px', height: '14px', animation: isHeatmapLoading ? 'spin 1s linear infinite' : 'none' }} />
-                Refresh Batch
-              </button>
-            </div>
-          </div>
-
-          {/* User Grid Cards */}
-          {isHeatmapLoading ? (
-            <div style={{ padding: '60px 0', textAlign: 'center', background: '#0e172a', borderRadius: '12px', border: '1px solid rgba(148,163,184,0.15)' }}>
-              <RefreshCw style={{ width: '32px', height: '32px', color: '#3b82f6', animation: 'spin 1s linear infinite', margin: '0 auto 12px auto' }} />
-              <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0, fontWeight: 500 }}>Running AI Batch Classification Engine...</p>
-            </div>
-          ) : filteredUsers.length === 0 ? (
-            <div style={{ padding: '50px 0', textAlign: 'center', color: '#94a3b8', background: '#0e172a', borderRadius: '12px', border: '1px solid rgba(148,163,184,0.15)', fontSize: '13px' }}>
-              No employee classifications found matching filter criteria.
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
-              {filteredUsers.map((user, idx) => {
-                let badgeBg = 'rgba(16,185,129,0.15)';
-                let badgeColor = '#34d399';
-                let badgeBorder = 'rgba(16,185,129,0.3)';
-                let barBg = '#10b981';
-
-                if (user.risk_level === 'DANGER') {
-                  badgeBg = 'rgba(239,68,68,0.15)';
-                  badgeColor = '#f87171';
-                  badgeBorder = 'rgba(239,68,68,0.3)';
-                  barBg = '#ef4444';
-                } else if (user.risk_level === 'VULNERABLE') {
-                  badgeBg = 'rgba(245,158,11,0.15)';
-                  badgeColor = '#fbbf24';
-                  badgeBorder = 'rgba(245,158,11,0.3)';
-                  barBg = '#f59e0b';
-                }
-
-                return (
-                  <div
-                    key={idx}
-                    onClick={() => handleOpenUserModal(user.email)}
+          {/* ── MASTER-DETAIL SPLIT CONSOLE (WAZUH / CROWDSTRIKE STYLE) ── */}
+          <div style={{
+            display: 'flex',
+            gap: '18px',
+            minHeight: '600px',
+            height: 'calc(100vh - 280px)',
+            width: '100%'
+          }}>
+            {/* ── LEFT COLUMN: MASTER LIST (38% width, independent scroll) ── */}
+            <div className="panel glass-card" style={{
+              width: '38%',
+              minWidth: '320px',
+              maxWidth: '430px',
+              display: 'flex',
+              flexDirection: 'column',
+              padding: '16px',
+              borderRadius: '16px',
+              marginBottom: 0,
+              height: '100%',
+              overflow: 'hidden'
+            }}>
+              {/* Search & Quick Filters Header */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '14px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}>
+                {/* Search Bar */}
+                <div style={{ position: 'relative', width: '100%' }}>
+                  <Search style={{ width: '15px', height: '15px', color: 'var(--text-muted)', position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+                  <input
+                    type="text"
+                    placeholder="Filter by name, email, division..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    className="font-body"
                     style={{
-                      background: '#0e172a',
-                      borderRadius: '12px',
-                      border: '1px solid rgba(148,163,184,0.15)',
-                      padding: '18px',
+                      width: '100%',
+                      background: 'var(--bg-base)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '8px',
+                      padding: '7px 10px 7px 32px',
+                      fontSize: '12px',
+                      color: 'var(--text-primary)',
+                      outline: 'none'
+                    }}
+                  />
+                </div>
+
+                {/* Filter Dropdowns & Refresh */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1 }}>
+                    <select
+                      value={selectedDivision}
+                      onChange={e => setSelectedDivision(e.target.value)}
+                      className="font-body"
+                      style={{
+                        flex: 1,
+                        background: 'var(--bg-base)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '6px',
+                        color: 'var(--text-secondary)',
+                        fontSize: '11px',
+                        padding: '5px 6px',
+                        outline: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="ALL">All Divisions</option>
+                      {divisions.map(d => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={selectedRiskFilter}
+                      onChange={e => setSelectedRiskFilter(e.target.value)}
+                      className="font-body"
+                      style={{
+                        background: 'var(--bg-base)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '6px',
+                        color: 'var(--text-secondary)',
+                        fontSize: '11px',
+                        padding: '5px 6px',
+                        outline: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="ALL">All Risk Levels</option>
+                      <option value="DANGER">DANGER</option>
+                      <option value="VULNERABLE">VULNERABLE</option>
+                      <option value="SAFE">SAFE</option>
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={() => fetchHeatmapData(true)}
+                    disabled={isHeatmapLoading}
+                    title="Refresh AI telemetry"
+                    style={{
                       display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: '6px',
+                      background: 'var(--bg-base)',
+                      border: '1px solid var(--border)',
+                      color: 'var(--accent)',
                       cursor: 'pointer',
-                      boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
-                      transition: 'all 0.2s'
+                      flexShrink: 0
                     }}
                   >
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '12px' }}>
-                        <div>
-                          <p style={{ fontSize: '14px', fontWeight: 700, color: '#ffffff', margin: 0, fontFamily: 'monospace' }}>
-                            {user.email}
-                          </p>
-                          <p style={{ fontSize: '12px', color: '#94a3b8', margin: '2px 0 0 0' }}>{user.divisi || 'General'}</p>
-                        </div>
-                        <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', background: badgeBg, color: badgeColor, border: `1px solid ${badgeBorder}` }}>
-                          {user.risk_level}
-                        </span>
-                      </div>
+                    <RefreshCw style={{ width: '13px', height: '13px', animation: isHeatmapLoading ? 'spin 1s linear infinite' : 'none' }} />
+                  </button>
+                </div>
 
-                      <div style={{ marginBottom: '14px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px' }}>
-                          <span style={{ color: '#94a3b8' }}>Risk Score:</span>
-                          <span style={{ fontWeight: 700, color: '#f8fafc' }}>{user.risk_score}/100</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: 'var(--text-muted)' }}>
+                  <span>Priority: Highest Risk (Danger First)</span>
+                  <span className="font-mono-data" style={{ fontWeight: 700, color: 'var(--accent)' }}>{sortedUsers.length} Personnel</span>
+                </div>
+              </div>
+
+              {/* Scrollable Master List */}
+              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', paddingRight: '4px' }}>
+                {isHeatmapLoading ? (
+                  <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
+                    <RefreshCw style={{ width: '24px', height: '24px', color: '#2196F3', animation: 'spin 1s linear infinite', margin: '0 auto 10px auto' }} />
+                    Loading risk telemetry profiles...
+                  </div>
+                ) : sortedUsers.length === 0 ? (
+                  <div style={{ padding: '40px 10px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
+                    No employees matched the active search filters.
+                  </div>
+                ) : (
+                  sortedUsers.map(user => {
+                    const isSelected = selectedUserEmail === user.email;
+                    const displayName = user.email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    const initials = displayName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+
+                    let badgeBg = 'var(--bg-success)';
+                    let badgeColor = 'var(--text-success)';
+                    let badgeBorder = 'var(--border-success)';
+                    let avatarBg = 'var(--bg-success)';
+                    let avatarColor = 'var(--text-success)';
+
+                    if (user.risk_level === 'DANGER') {
+                      badgeBg = 'var(--bg-danger)';
+                      badgeColor = 'var(--text-danger)';
+                      badgeBorder = 'var(--border-danger)';
+                      avatarBg = 'var(--bg-danger)';
+                      avatarColor = 'var(--text-danger)';
+                    } else if (user.risk_level === 'VULNERABLE') {
+                      badgeBg = 'var(--bg-warning)';
+                      badgeColor = 'var(--text-warning)';
+                      badgeBorder = 'var(--border-warning)';
+                      avatarBg = 'var(--bg-warning)';
+                      avatarColor = 'var(--text-warning)';
+                    }
+
+                    return (
+                      <div
+                        key={user.email}
+                        onClick={() => handleSelectUser(user.email)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '10px 12px',
+                          borderRadius: '10px',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                          background: isSelected ? 'var(--bg-elevated)' : 'var(--bg-surface)',
+                          border: isSelected ? '1px solid var(--accent)' : '1px solid var(--border)',
+                          borderLeft: isSelected ? '4px solid #2196F3' : '1px solid var(--border)',
+                          boxShadow: 'none'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+                          <div className="font-mono-data" style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '8px',
+                            background: avatarBg,
+                            color: avatarColor,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 800,
+                            fontSize: '11px',
+                            flexShrink: 0
+                          }}>
+                            {initials}
+                          </div>
+
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div className="font-mono-data" style={{
+                              fontSize: '13px',
+                              fontWeight: 700,
+                              color: isSelected ? 'var(--accent)' : 'var(--text-primary)',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              lineHeight: 1.2
+                            }}>
+                              {user.email}
+                            </div>
+                            <div style={{
+                              fontSize: '11px',
+                              color: 'var(--text-muted)',
+                              marginTop: '2px',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis'
+                            }}>
+                              {user.divisi || 'General'}
+                            </div>
+                          </div>
                         </div>
-                        <div style={{ width: '100%', background: '#080d19', height: '6px', borderRadius: '3px', overflow: 'hidden', border: '1px solid rgba(148,163,184,0.1)' }}>
-                          <div style={{ width: `${user.risk_score}%`, height: '100%', background: barBg, borderRadius: '3px' }} />
+
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', flexShrink: 0, marginLeft: '8px' }}>
+                          <span className="font-body" style={{
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            fontSize: '9px',
+                            fontWeight: 800,
+                            textTransform: 'uppercase',
+                            background: badgeBg,
+                            color: badgeColor,
+                            border: `1px solid ${badgeBorder}`
+                          }}>
+                            {user.risk_level}
+                          </span>
+                          <span className="font-mono-data" style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                            {user.risk_score} pts
+                          </span>
                         </div>
-                        <p style={{ fontSize: '12px', color: '#cbd5e1', margin: '10px 0 0 0', lineHeight: 1.5, fontStyle: 'italic' }}>
-                          "{user.one_line_assessment}"
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* ── RIGHT COLUMN: DETAIL CONSOLE (62% width, independent scroll) ── */}
+            <div className="panel glass-card" style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              padding: '24px',
+              borderRadius: '16px',
+              marginBottom: 0,
+              height: '100%',
+              overflowY: 'auto'
+            }}>
+              {!selectedUserEmail || !activeSelectedUser ? (
+                /* Empty State */
+                <div style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  textAlign: 'center',
+                  padding: '40px 20px',
+                  color: 'var(--text-muted)'
+                }}>
+                  <div style={{
+                    width: '64px',
+                    height: '64px',
+                    borderRadius: '16px',
+                    background: 'rgba(33,150,243,0.10)',
+                    border: '1px solid rgba(33,150,243,0.25)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: '16px',
+                    color: '#2196F3'
+                  }}>
+                    <Users style={{ width: '32px', height: '32px' }} />
+                  </div>
+                  <h3 className="font-heading" style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 6px 0' }}>
+                    Select an Employee for Live AI Risk Analysis
+                  </h3>
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '420px', margin: 0, lineHeight: 1.5 }}>
+                    Select an employee entity from the left investigation list to inspect behavioral risk profiling, vulnerability factors, and AI-tailored educational interventions.
+                  </p>
+                </div>
+              ) : (
+                /* In-Place Detail View */
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  {/* Entity Header Banner */}
+                  <div style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '16px',
+                    paddingBottom: '18px',
+                    borderBottom: '1px solid var(--border)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <div className="font-mono-data" style={{
+                        width: '46px',
+                        height: '46px',
+                        borderRadius: '12px',
+                        background: activeSelectedUser.risk_level === 'DANGER' ? 'var(--bg-danger)' : activeSelectedUser.risk_level === 'VULNERABLE' ? 'var(--bg-warning)' : 'var(--bg-success)',
+                        color: activeSelectedUser.risk_level === 'DANGER' ? 'var(--text-danger)' : activeSelectedUser.risk_level === 'VULNERABLE' ? 'var(--text-warning)' : 'var(--text-success)',
+                        border: `1px solid ${activeSelectedUser.risk_level === 'DANGER' ? 'var(--border-danger)' : activeSelectedUser.risk_level === 'VULNERABLE' ? 'var(--border-warning)' : 'var(--border-success)'}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: 800,
+                        fontSize: '15px'
+                      }}>
+                        {activeSelectedUser.email.substring(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <h3 className="font-mono-data" style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+                            {activeSelectedUser.email}
+                          </h3>
+                          <span className="font-body" style={{
+                            padding: '3px 8px',
+                            borderRadius: '4px',
+                            fontSize: '10px',
+                            fontWeight: 800,
+                            textTransform: 'uppercase',
+                            background: activeSelectedUser.risk_level === 'DANGER' ? 'var(--bg-danger)' : activeSelectedUser.risk_level === 'VULNERABLE' ? 'var(--bg-warning)' : 'var(--bg-success)',
+                            color: activeSelectedUser.risk_level === 'DANGER' ? 'var(--text-danger)' : activeSelectedUser.risk_level === 'VULNERABLE' ? 'var(--text-warning)' : 'var(--text-success)',
+                            border: `1px solid ${activeSelectedUser.risk_level === 'DANGER' ? 'var(--border-danger)' : activeSelectedUser.risk_level === 'VULNERABLE' ? 'var(--border-warning)' : 'var(--border-success)'}`
+                          }}>
+                            {activeSelectedUser.risk_level}
+                          </span>
+                        </div>
+                        <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
+                          Division: <strong style={{ color: 'var(--text-primary)' }}>{activeSelectedUser.divisi || 'General'}</strong> • Human Risk Telemetry Profile
                         </p>
                       </div>
                     </div>
 
-                    <div style={{ paddingTop: '12px', borderTop: '1px solid rgba(148,163,184,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px', color: '#60a5fa', fontWeight: 600 }}>
-                      <span>Click Deep-Dive AI Analysis</span>
-                      <ChevronRight style={{ width: '16px', height: '16px' }} />
+                    {/* Risk Score Meter */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '10px', padding: '8px 14px' }}>
+                      <div>
+                        <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Security Score</span>
+                        <div className="font-mono-data" style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                          {activeSelectedUser.risk_score} <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 400 }}>/ 100</span>
+                        </div>
+                      </div>
+                      <div style={{ width: '70px', background: 'var(--bg-elevated)', height: '8px', borderRadius: '4px', overflow: 'hidden', border: '1px solid var(--border)' }}>
+                        <div style={{
+                          width: `${activeSelectedUser.risk_score}%`,
+                          height: '100%',
+                          background: activeSelectedUser.risk_level === 'DANGER' ? 'var(--danger)' : activeSelectedUser.risk_level === 'VULNERABLE' ? 'var(--warning)' : 'var(--success)',
+                          borderRadius: '4px'
+                        }} />
+                      </div>
                     </div>
                   </div>
-                );
-              })}
+
+                  {/* AI Quick Assessment Quote Box */}
+                  <div style={{
+                    padding: '14px 18px',
+                    borderRadius: '10px',
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border)',
+                    fontSize: '13px',
+                    color: 'var(--text-secondary)',
+                    lineHeight: 1.5,
+                    fontStyle: 'italic'
+                  }}>
+                    <span style={{ fontWeight: 700, fontStyle: 'normal', color: 'var(--accent)', display: 'block', marginBottom: '2px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      AI Executive Assessment
+                    </span>
+                    "{activeSelectedUser.one_line_assessment}"
+                  </div>
+
+                  {/* Deep-Dive Analysis Content */}
+                  {isDeepDiveLoading ? (
+                    <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+                      <RefreshCw style={{ width: '28px', height: '28px', color: '#2196F3', animation: 'spin 1s linear infinite', margin: '0 auto 10px auto' }} />
+                      <p style={{ fontSize: '13px', margin: 0, fontWeight: 600 }}>Executing Deep-Dive AI Behavioral Telemetry Analysis...</p>
+                    </div>
+                  ) : userDeepDive ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      {/* Priority Action Alert Box */}
+                      {userDeepDive.priority_action && (
+                        <div style={{
+                          padding: '14px 16px',
+                          borderRadius: '10px',
+                          background: 'var(--bg-danger)',
+                          border: '1px solid var(--border-danger)',
+                          color: 'var(--text-danger)'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            <AlertTriangle style={{ width: '14px', height: '14px' }} />
+                            Priority SOC / Admin Action
+                          </div>
+                          <p style={{ fontSize: '13px', fontWeight: 700, margin: '6px 0 0 0', lineHeight: 1.4 }}>
+                            {userDeepDive.priority_action}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Education & Coaching Guidance */}
+                      {userDeepDive.education_message && (
+                        <div style={{
+                          padding: '14px 16px',
+                          borderRadius: '10px',
+                          background: 'rgba(33,150,243,0.08)',
+                          border: '1px solid rgba(33,150,243,0.25)',
+                          color: 'var(--accent)'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            <Info style={{ width: '14px', height: '14px' }} />
+                            Targeted Education &amp; Coaching Insight
+                          </div>
+                          <p style={{ fontSize: '13px', margin: '6px 0 0 0', lineHeight: 1.5, color: 'var(--text-primary)' }}>
+                            {userDeepDive.education_message}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Two-Column Telemetry Factors: Vulnerabilities vs Resilience */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                        {/* Risk Factors / Vulnerabilities */}
+                        <div style={{
+                          padding: '14px',
+                          borderRadius: '10px',
+                          background: 'var(--bg-base)',
+                          border: '1px solid var(--border)'
+                        }}>
+                          <div style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-danger)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <ShieldAlert style={{ width: '14px', height: '14px' }} />
+                            Identified Risk &amp; Vulnerability Factors
+                          </div>
+                          {userDeepDive.risk_factors && userDeepDive.risk_factors.length > 0 ? (
+                            <ul style={{ paddingLeft: '16px', margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                              {userDeepDive.risk_factors.map((factor, fIdx) => (
+                                <li key={fIdx} style={{ margin: '4px 0' }}>{factor}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>
+                              No critical vulnerability anomalies detected.
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Positive Resilience Factors */}
+                        <div style={{
+                          padding: '14px',
+                          borderRadius: '10px',
+                          background: 'var(--bg-base)',
+                          border: '1px solid var(--border)'
+                        }}>
+                          <div style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-success)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <CheckCircle2 style={{ width: '14px', height: '14px', color: 'var(--text-success)' }} />
+                            Positive Resilience Factors
+                          </div>
+                          {userDeepDive.positive_factors && userDeepDive.positive_factors.length > 0 ? (
+                            <ul style={{ paddingLeft: '16px', margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                              {userDeepDive.positive_factors.map((factor, fIdx) => (
+                                <li key={fIdx} style={{ margin: '4px 0' }}>{factor}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>
+                              No positive resilience streak tracked yet.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Tailored Remediation Recommendations */}
+                      {userDeepDive.recommendations && userDeepDive.recommendations.length > 0 && (
+                        <div style={{
+                          padding: '16px',
+                          borderRadius: '10px',
+                          background: 'var(--bg-surface)',
+                          border: '1px solid var(--border)',
+                          boxShadow: 'var(--shadow-sm)'
+                        }}>
+                          <div style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-primary)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <Zap style={{ width: '14px', height: '14px', color: '#2196F3' }} />
+                            AI Remediation &amp; Coaching Recommendations
+                          </div>
+                          <ul style={{ paddingLeft: '18px', margin: 0, fontSize: '12.5px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                            {userDeepDive.recommendations.map((rec, rIdx) => (
+                              <li key={rIdx} style={{ margin: '4px 0' }}>{rec}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
+                      Deep telemetry data is being prepared.
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       )}
 
       {/* SUB-TAB 2: EXECUTIVE GFM MARKDOWN & PDF REPORT */}
       {activeSubTab === 'report' && (
-        <div style={{ background: '#0e172a', borderRadius: '12px', border: '1px solid rgba(148,163,184,0.15)', padding: '24px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
+        <div className="panel glass-card" style={{ padding: '24px', borderRadius: '16px' }}>
           {/* Action Bar */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '16px', paddingBottom: '18px', borderBottom: '1px solid rgba(148,163,184,0.15)', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '16px', paddingBottom: '18px', borderBottom: '1px solid var(--border)', marginBottom: '24px' }}>
             <div>
-              <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#ffffff', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <FileText style={{ width: '18px', height: '18px', color: '#60a5fa' }} />
-                Executive GFM Markdown & Vector PDF Report Generator
+              <h3 className="font-heading" style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <FileText style={{ width: '18px', height: '18px', color: '#2196F3' }} />
+                Executive GFM Markdown &amp; Vector PDF Report Generator
               </h3>
-              <p style={{ fontSize: '12px', color: '#94a3b8', margin: '4px 0 0 0' }}>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
                 Generates a formal, audit-ready Markdown document and compiles it into a high-res vector PDF.
               </p>
             </div>
@@ -614,7 +955,8 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
               <button
                 onClick={() => fetchReportData(true)}
                 disabled={isReportBusy}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: '#1e293b', color: '#e2e8f0', border: '1px solid rgba(148,163,184,0.2)', cursor: 'pointer' }}
+                className="font-body"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid var(--border)', cursor: 'pointer' }}
               >
                 <RefreshCw style={{ width: '14px', height: '14px', animation: isReportBusy ? 'spin 1s linear infinite' : 'none' }} />
                 Regenerate
@@ -623,24 +965,27 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
               <button
                 onClick={handleCopyMarkdown}
                 disabled={!activeReport}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: '#1e293b', color: '#e2e8f0', border: '1px solid rgba(148,163,184,0.2)', cursor: 'pointer' }}
+                className="font-body"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid var(--border)', cursor: 'pointer' }}
               >
-                {copied ? <Check style={{ width: '14px', height: '14px', color: '#34d399' }} /> : <Copy style={{ width: '14px', height: '14px', color: '#94a3b8' }} />}
+                {copied ? <Check style={{ width: '14px', height: '14px', color: 'var(--text-success)' }} /> : <Copy style={{ width: '14px', height: '14px', color: 'var(--accent)' }} />}
                 {copied ? 'Copied .md!' : 'Copy .md'}
               </button>
 
               <button
                 onClick={handleDownloadMarkdown}
                 disabled={!activeReport}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: '#1e293b', color: '#e2e8f0', border: '1px solid rgba(148,163,184,0.2)', cursor: 'pointer' }}
+                className="font-body"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid var(--border)', cursor: 'pointer' }}
               >
-                <Download style={{ width: '14px', height: '14px', color: '#60a5fa' }} />
+                <Download style={{ width: '14px', height: '14px', color: '#2196F3' }} />
                 Download .md
               </button>
 
               <button
                 onClick={() => exportExecutivePdf(role, activeReport)}
                 disabled={isPdfLoading || pdfGenerating || !activeReport}
+                className="font-body"
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -649,10 +994,10 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
                   borderRadius: '8px',
                   fontSize: '12px',
                   fontWeight: 700,
-                  background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+                  background: 'var(--accent)',
                   color: '#ffffff',
                   border: 'none',
-                  boxShadow: '0 4px 14px rgba(37,99,235,0.4)',
+                  boxShadow: 'none',
                   cursor: 'pointer'
                 }}
               >
@@ -665,11 +1010,11 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
           {/* Report Body */}
           {isReportBusy ? (
             <div style={{ padding: '60px 0', textAlign: 'center' }}>
-              <RefreshCw style={{ width: '32px', height: '32px', color: '#3b82f6', animation: 'spin 1s linear infinite', margin: '0 auto 12px auto' }} />
-              <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0, fontWeight: 500 }}>Generating GFM Executive Report for role [{role}]...</p>
+              <RefreshCw style={{ width: '32px', height: '32px', color: '#2196F3', animation: 'spin 1s linear infinite', margin: '0 auto 12px auto' }} />
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0, fontWeight: 600 }}>Generating GFM Executive Report for role [{role}]...</p>
             </div>
           ) : !activeReport ? (
-            <div style={{ padding: '40px 0', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
+            <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
               No report available yet. Click "Regenerate" to trigger AI analysis.
             </div>
           ) : (
@@ -677,85 +1022,6 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
               {renderFormattedMarkdown(activeReport)}
             </div>
           )}
-        </div>
-      )}
-
-      {/* INDIVIDUAL USER DEEP-DIVE MODAL */}
-      {selectedUserEmail && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(8,13,25,0.85)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div style={{ background: '#0e172a', border: '1px solid rgba(148,163,184,0.2)', borderRadius: '16px', maxWidth: '600px', width: '100%', padding: '24px', position: 'relative', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 50px rgba(0,0,0,0.8)' }}>
-            <button
-              onClick={() => setSelectedUserEmail(null)}
-              style={{ position: 'absolute', right: '16px', top: '16px', background: '#1e293b', border: 'none', color: '#94a3b8', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >
-              <X style={{ width: '18px', height: '18px' }} />
-            </button>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '1px solid rgba(148,163,184,0.15)', paddingBottom: '16px', marginBottom: '20px' }}>
-              <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#60a5fa', fontWeight: 700, fontFamily: 'monospace' }}>
-                AI
-              </div>
-              <div>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#ffffff', margin: 0, fontFamily: 'monospace' }}>{selectedUserEmail}</h3>
-                <p style={{ fontSize: '12px', color: '#94a3b8', margin: '2px 0 0 0' }}>Individual Employee Deep-Dive AI Risk Profiling</p>
-              </div>
-            </div>
-
-            {isDeepDiveLoading ? (
-              <div style={{ padding: '50px 0', textAlign: 'center' }}>
-                <RefreshCw style={{ width: '32px', height: '32px', color: '#3b82f6', animation: 'spin 1s linear infinite', margin: '0 auto 12px auto' }} />
-                <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>Analyzing individual behavioral telemetry...</p>
-              </div>
-            ) : userDeepDive ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '13px', color: '#e2e8f0' }}>
-                {/* Risk Level Badge & Score */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div style={{ padding: '14px', background: '#080d19', borderRadius: '8px', border: '1px solid rgba(148,163,184,0.15)' }}>
-                    <p style={{ color: '#94a3b8', margin: 0, fontWeight: 500 }}>Risk Level</p>
-                    <p style={{
-                      fontSize: '16px',
-                      fontWeight: 800,
-                      margin: '4px 0 0 0',
-                      color: userDeepDive.risk_level === 'DANGER' ? '#f87171' : userDeepDive.risk_level === 'VULNERABLE' ? '#fbbf24' : '#34d399'
-                    }}>{userDeepDive.risk_level}</p>
-                  </div>
-                  <div style={{ padding: '14px', background: '#080d19', borderRadius: '8px', border: '1px solid rgba(148,163,184,0.15)' }}>
-                    <p style={{ color: '#94a3b8', margin: 0, fontWeight: 500 }}>Risk Score</p>
-                    <p style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff', margin: '4px 0 0 0' }}>{userDeepDive.risk_score} / 100</p>
-                  </div>
-                </div>
-
-                {/* Personal Education Message */}
-                {userDeepDive.education_message && (
-                  <div style={{ padding: '16px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)', borderRadius: '10px', color: '#93c5fd', fontStyle: 'italic', lineHeight: 1.6 }}>
-                    "{userDeepDive.education_message}"
-                  </div>
-                )}
-
-                {/* Priority Action */}
-                {userDeepDive.priority_action && (
-                  <div style={{ padding: '16px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '10px', color: '#fca5a5' }}>
-                    <p style={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '10px', color: '#f87171', margin: 0 }}>Priority Action</p>
-                    <p style={{ fontWeight: 700, margin: '4px 0 0 0' }}>{userDeepDive.priority_action}</p>
-                  </div>
-                )}
-
-                {/* Recommendations */}
-                {userDeepDive.recommendations && userDeepDive.recommendations.length > 0 && (
-                  <div>
-                    <p style={{ fontWeight: 700, color: '#f8fafc', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '11px' }}>Personalized Recommendations</p>
-                    <ul style={{ paddingLeft: '20px', margin: 0, color: '#cbd5e1', lineHeight: 1.6 }}>
-                      {userDeepDive.recommendations.map((rec, rIdx) => (
-                        <li key={rIdx} style={{ margin: '4px 0' }}>{rec}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p style={{ fontSize: '13px', color: '#94a3b8', textAlign: 'center', padding: '30px 0' }}>Failed to load user deep dive analysis.</p>
-            )}
-          </div>
         </div>
       )}
     </div>

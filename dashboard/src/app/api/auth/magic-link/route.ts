@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dataStore } from '@/lib/store';
+import { fetchFlaskBackend } from '@/lib/backendClient';
 
 /**
  * POST /api/auth/magic-link — Creates a magic link token.
@@ -43,18 +44,39 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Token required' }, { status: 400 });
   }
 
-  const authData = dataStore.validateAuthToken(token);
-  if (!authData) {
-    return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
+  // 1. Primary: Validate via Flask Backend (where Telegram bot creates tokens)
+  try {
+    const res = await fetchFlaskBackend(`/api/auth/validate-token?token=${encodeURIComponent(token)}`, { method: 'GET' });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.valid && data.user) {
+        return NextResponse.json({
+          success: true,
+          user: {
+            ...data.user,
+            token,
+          },
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('Flask backend token validation warning, checking local store:', err);
   }
 
-  return NextResponse.json({
-    success: true,
-    user: {
-      email: authData.email,
-      userName: authData.userName,
-      division: authData.division,
-      telegramId: authData.telegramId,
-    },
-  });
+  // 2. Fallback: Validate via Next.js in-memory store
+  const authData = dataStore.validateAuthToken(token);
+  if (authData) {
+    return NextResponse.json({
+      success: true,
+      user: {
+        email: authData.email,
+        userName: authData.userName,
+        division: authData.division,
+        telegramId: authData.telegramId,
+        token,
+      },
+    });
+  }
+
+  return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
 }

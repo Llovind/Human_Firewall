@@ -40,8 +40,7 @@ ai_bp = Blueprint('ai', __name__)
 @ai_bp.route('/api/ai/classify-all', methods=['GET'])
 def classify_all_users():
     """
-    Klasifikasi risk level semua user sekaligus.
-    Cocok untuk SOC overview dashboard.
+    Klasifikasi risk level semua user sekaligus via LLM.
     Cache TTL: 1 jam.
     """
     force_refresh = request.args.get('refresh', 'false').lower() == 'true'
@@ -86,7 +85,7 @@ def classify_all_users():
 @ai_bp.route('/api/ai/user/<path:email>', methods=['GET'])
 def analyze_user(email: str):
     """
-    Analisis mendalam satu user: klasifikasi + edukasi personal + rekomendasi.
+    Analisis mendalam satu user via LLM: klasifikasi + edukasi personal + rekomendasi.
     Cache TTL: 1 jam per user.
     """
     days = int(request.args.get('days', 30))

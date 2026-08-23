@@ -15,7 +15,7 @@ export function Logo({
   logoAnimation
 }: LogoProps) {
   // Determine animation variant:
-  // - Admin login (size >= 80) -> 'hero' (pop-in animation)
+  // - Admin login / auth (size >= 80) -> 'hero' (pop-in animation)
   // - Other uses -> 'navbar' (subtle float animation)
   const animVariant = logoAnimation || (size >= 80 ? 'hero' : 'navbar');
 
@@ -33,16 +33,15 @@ export function Logo({
 
       {variant === 'full' && (
         <span
-          className="logo-text"
+          className="logo-text font-heading"
           style={{
-            fontFamily: 'var(--font-sans)',
             fontSize: `${size * 0.55}px`,
-            fontWeight: 700,
-            letterSpacing: '-0.5px',
+            fontWeight: 600,
+            letterSpacing: '-0.3px',
             color: 'var(--text-primary)'
           }}
         >
-          Human <span style={{ color: 'var(--accent)' }}>Firewall</span>
+          Afferent <span style={{ color: 'var(--accent)', fontWeight: 700 }}>Platform</span>
         </span>
       )}
     </div>

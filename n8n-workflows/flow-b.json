@@ -1,41 +1,41 @@
 {
-  "name": "Flow B \u2014 Threat Reporting (Fully Configured) THREAT INTELLIGENCE",
+  "name": "Flow B — Threat Reporting (Fully Configured) THREAT INTELLIGENCE",
   "nodes": [
     {
       "parameters": {
         "updates": [
           "message"
         ],
-        "additionalFields": {
-          "appendAttribution": false,
-          "parseMode": "HTML"
-        },
-        "options": {
-          "parseMode": "HTML"
-        }
+        "additionalFields": {}
       },
-      "id": "6d0e531a-12de-4b9d-844e-0f9cacc23e51",
+      "id": "42a2ae95-3959-4947-8f9d-30f60ac34769",
       "name": "Telegram Trigger",
       "type": "n8n-nodes-base.telegramTrigger",
       "typeVersion": 1.1,
       "position": [
-        -944,
-        656
+        -2352,
+        432
       ],
-      "webhookId": "d7e352ba-9e3b-45f1-92cd-dee3d8bc1565"
+      "webhookId": "d7e352ba-9e3b-45f1-92cd-dee3d8bc1565",
+      "credentials": {
+        "telegramApi": {
+          "id": "Y6l9dDZGJ7RL3Z9U",
+          "name": "Telegram account 3"
+        }
+      }
     },
     {
       "parameters": {
         "mode": "runOnceForEachItem",
         "jsCode": "const body = $input.item.json;\nconst msg = body.message || body.edited_message || body.channel_post || (body.text ? body : null);\n\nif (!msg) {\n  return {\n    json: {\n      type: \"invalid\",\n      chat_id: body.chat ? body.chat.id : (body.from ? body.from.id : null),\n      reporter_name: \"User\"\n    }\n  };\n}\n\nconst chat_id = msg.chat ? msg.chat.id : (msg.from ? msg.from.id : null);\nconst reporter_name = msg.from ? (msg.from.first_name || 'User') : 'User';\n\nif (msg.text) {\n  const text = msg.text.trim();\n\n  // Command, email, or 6-digit OTP\n  if (text.startsWith('/') || text.includes('@') || /^\\d{6}$/.test(text)) {\n    return {\n      json: {\n        type: \"command\",\n        command: text,\n        chat_id: chat_id,\n        reporter_name: reporter_name\n      }\n    };\n  }\n\n  const urlRegex = /^https?:\\/\\/\\S+$/i;\n  if (urlRegex.test(text)) {\n    return {\n      json: {\n        type: \"url\",\n        url: text,\n        chat_id: chat_id,\n        reporter_name: reporter_name\n      }\n    };\n  }\n}\n\nif (msg.document) {\n  return {\n    json: {\n      type: \"file\",\n      file_id: msg.document.file_id,\n      file_name: msg.document.file_name || \"attachment\",\n      mime_type: msg.document.mime_type || \"application/octet-stream\",\n      chat_id: chat_id,\n      reporter_name: reporter_name\n    }\n  };\n}\n\nreturn {\n  json: {\n    type: \"invalid\",\n    chat_id: chat_id,\n    reporter_name: reporter_name\n  }\n};"
       },
-      "id": "602ae754-f089-4edb-8185-905b47da2375",
+      "id": "86fedf9b-5bb3-423f-88e2-5b8da07cda1a",
       "name": "Parse Input",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -720,
-        656
+        -2128,
+        432
       ]
     },
     {
@@ -142,13 +142,13 @@
         },
         "options": {}
       },
-      "id": "8fb50314-cecf-4666-bd89-833a8b174473",
+      "id": "cd833976-e509-4b09-b6dc-d858541ad686",
       "name": "Route Type",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.4,
       "position": [
-        -512,
-        656
+        -1920,
+        432
       ]
     },
     {
@@ -175,23 +175,19 @@
         },
         "options": {}
       },
-      "id": "d2492da4-1d3e-4c39-94e6-fcec8019fbbb",
+      "id": "ed349ffc-a2c7-4308-8d8d-2a7587c3856d",
       "name": "IF URL Dangerous",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        704,
-        496
+        -704,
+        272
       ]
     },
     {
       "parameters": {
         "method": "POST",
         "url": "http://flask_api:5000/api/incidents",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"source_type\": \"real_world_report\",\n  \"divisi\": \"User Report\",\n  \"severity\": \"{{ $json.policy.severity }}\",\n  \"reported_url\": \"{{ $json.reported_url }}\",\n  \"vt_verdict\": \"{{ $json.policy.verdict }}\",\n  \"urlscan_verdict\": \"\",\n  \"screenshot_url\": \"\",\n  \"reporter_chat_id\": \"{{ $('Threat Intelligence API').item.json.chat_id }}\"\n}",
-        "options": {},
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -200,127 +196,122 @@
               "value": "=Bearer {{$env.SERVICE_API_KEY}}"
             }
           ]
-        }
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"source_type\": \"real_world_report\",\n  \"divisi\": \"{{ $('Get Reporter Email (URL)').item.json.divisi || $json.divisi || 'User Report' }}\",\n  \"severity\": \"{{ $('Threat Intelligence API').item.json.policy?.severity || 'high' }}\",\n  \"reported_url\": \"{{ $('Parse Input').item.json.url }}\",\n  \"vt_verdict\": \"{{ $('Threat Intelligence API').item.json.policy?.verdict || 'malicious' }}\",\n  \"urlscan_verdict\": \"{{ $('Threat Intelligence API').item.json.analysis?.evidence?.urlscan?.verdict || '' }}\",\n  \"screenshot_url\": \"\",\n  \"reporter_chat_id\": \"{{ $('Parse Input').item.json.chat_id }}\"\n}",
+        "options": {}
       },
-      "id": "ab010924-e24c-410e-acfb-8bbe12e20585",
+      "id": "0778c402-5857-401f-a346-2e3ff0497ed1",
       "name": "Create URL Incident",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        1296,
-        416
+        -112,
+        192
       ]
     },
     {
       "parameters": {
         "chatId": "={{$env.SOC_CHAT_ID}}",
-        "text": "\ud83d\udea8 <b>[SOC ALERT] INCIDENT REPORT \u2014 PHISHING URL</b>\n\n\ud83c\udfab Tiket ID: <code>{{ String($json.ticket_id || \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}</code>\n\ud83c\udf10 Targeted URL: <code>{{ String($(\"Threat Intelligence API\").item.json.reported_url || \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}</code>\n\ud83d\udea8 Severity: <b>{{ String($json.severity || \"HIGH\").toUpperCase() }}</b>\n\ud83d\udee1\ufe0f Verdict: <b>{{ String($(\"Threat Intelligence API\").item.json.policy.verdict || \"malicious\").toUpperCase() }}</b>\n\ud83d\udc64 Pelapor: <code>{{ String($(\"Threat Intelligence API\").item.json.reporter_name || \"User\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}</code>",
+        "text": "=🚨 <b>[SOC ALERT] INCIDENT REPORT — PHISHING URL</b>\n\n🎫 Tiket ID: <code>{{ $('Create URL Incident').item.json.ticket_id || $json.ticket_id }}</code>\n🌐 Targeted URL: <code>{{ $('Parse Input').item.json.url }}</code>\n🚨 Severity: <b>{{ ($('Threat Intelligence API').item.json.policy?.severity || 'HIGH').toUpperCase() }}</b>\n🛡️ Verdict: <b>{{ ($('Threat Intelligence API').item.json.policy?.verdict || 'MALICIOUS').toUpperCase() }}</b>\n👤 Pelapor: <b>{{ $('Get Reporter Email (URL)').item.json.registered ? ($('Get Reporter Email (URL)').item.json.reporter_name + ' (' + $('Get Reporter Email (URL)').item.json.divisi + ' — ' + $('Get Reporter Email (URL)').item.json.email + ')') : ($('Parse Input').item.json.reporter_name + ' [Unregistered Telegram]') }}</b>",
         "additionalFields": {
           "appendAttribution": false,
-          "parseMode": "HTML"
-        },
-        "options": {
-          "parseMode": "HTML"
+          "parse_mode": "HTML"
         }
       },
-      "id": "a3f7e21d-5fdc-46eb-8ab1-135dd66777a8",
+      "id": "0f0a1b93-0ea9-4024-8095-e4e9bcc0264c",
       "name": "SOC Alert URL",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1520,
-        416
+        112,
+        192
       ],
       "webhookId": "0cddde72-51ae-4968-a4fc-7638ff6b393a",
       "credentials": {
         "telegramApi": {
-          "id": "vIR48gISRlrruu7y",
-          "name": "Telegram account"
+          "id": "Y6l9dDZGJ7RL3Z9U",
+          "name": "Telegram account 3"
         }
       }
     },
     {
       "parameters": {
         "chatId": "={{ $('Threat Intelligence API').item.json.chat_id }}",
-        "text": "={{ $('Threat Intelligence API').item.json.analysis.providers.includes('Infranexia Phishing Simulator') ? '\ud83c\udf89 Wah keren! Anda berhasil mendeteksi dan melaporkan link simulasi phishing dari Tim Security IR.\\n\\nPoin reputasi Anda telah ditambahkan! Tetap waspada! \ud83d\udee1\ufe0f' : '\u26a0\ufe0f [USER NOTIFICATION] URL yang Anda laporkan terdeteksi BERBAHAYA.\\n\\n\ud83d\udd17 ' + $('Threat Intelligence API').item.json.reported_url + '\\n\u26a0\ufe0f Severity: ' + $('Threat Intelligence API').item.json.policy.severity + '\\n\ud83d\udee1\ufe0f Status: ' + $('Threat Intelligence API').item.json.policy.verdict + '\\n\\nTiket insiden sudah dibuat dan tim SOC telah diberitahu.\\nTerima kasih atas laporan Anda! \ud83d\ude4f' }}",
+        "text": "={{ $('Threat Intelligence API').item.json.analysis?.providers?.includes('Infranexia Phishing Simulator') ? \"🎉 <b>Wah keren!</b> Anda berhasil mendeteksi dan melaporkan link simulasi phishing dari Tim Security IR.\\n\\nPoin reputasi Anda telah ditambahkan (+15 Poin)! Tetap waspada! 🛡️\" : (\"⚠️ <b>[USER NOTIFICATION] URL Berbahaya Terdeteksi!</b>\\n\\n🔗 <b>URL:</b> <code>\" + $('Parse Input').item.json.url + \"</code>\\n🚨 <b>Severity:</b> <b>\" + ($('Threat Intelligence API').item.json.policy?.severity || 'HIGH').toUpperCase() + \"</b>\\n🛡️ <b>Status:</b> <b>\" + ($('Threat Intelligence API').item.json.policy?.verdict || 'MALICIOUS').toUpperCase() + \"</b>\\n\\nTiket insiden sudah dibuat dan tim SOC telah diberitahu.\\nPoin kepatuhan Anda telah ditambahkan (+15 Poin). Terima kasih atas laporan Anda! 🙏\") }}",
         "additionalFields": {
           "appendAttribution": false,
-          "parseMode": "HTML"
-        },
-        "options": {
-          "parseMode": "HTML"
+          "parse_mode": "HTML"
         }
       },
-      "id": "ee9e0e92-08db-4743-af4d-571a5b108514",
+      "id": "c33bed47-6fe5-4000-850d-55d9ebf3270d",
       "name": "Reply URL Dangerous",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1744,
-        416
+        336,
+        192
       ],
       "webhookId": "88b3b9b4-5606-423b-9f2a-5ae769e958a8",
       "credentials": {
         "telegramApi": {
-          "id": "vIR48gISRlrruu7y",
-          "name": "Telegram account"
+          "id": "Y6l9dDZGJ7RL3Z9U",
+          "name": "Telegram account 3"
         }
       }
     },
     {
       "parameters": {
         "chatId": "={{ $json.chat_id }}",
-        "text": "=\u2705 URL yang Anda laporkan tampak AMAN.\n\n\ud83d\udd17 {{ $json.indicator }}\n\ud83d\udee1\ufe0f VT: {{ $json.u}}\n\ud83c\udf10 urlscan: {{ $json.urlscan_verdict }}\n\n\nTolak indikasi ancaman. Silakan buka dengan aman. \ud83d\udc4d",
+        "text": "=✅ <b>URL yang Anda laporkan tampak AMAN.</b>\n\n🔗 <code>{{ $('Parse Input').item.json.url }}</code>\n🛡️ <b>VirusTotal:</b> <b>{{ $('Threat Intelligence API').item.json.analysis?.evidence?.virustotal?.vt_verdict || 'Clean' }}</b>\n🌐 <b>urlscan:</b> <b>{{ $('Threat Intelligence API').item.json.analysis?.evidence?.urlscan?.urlscan_verdict || 'Clean' }}</b>\n\nTidak ditemukan indikasi ancaman. Silakan buka dengan aman. 👍",
         "additionalFields": {
           "appendAttribution": false,
-          "parseMode": "HTML"
-        },
-        "options": {
-          "parseMode": "HTML"
+          "parse_mode": "HTML"
         }
       },
-      "id": "9903dc0f-df33-499d-a11f-74647c55717d",
+      "id": "26864d3d-205d-4285-b12a-d7d6d8f3ae47",
       "name": "Reply URL Safe",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1296,
-        608
+        -112,
+        384
       ],
       "webhookId": "86e64133-1f07-4938-91cf-0cae06bbcca4",
       "credentials": {
         "telegramApi": {
-          "id": "vIR48gISRlrruu7y",
-          "name": "Telegram account"
+          "id": "Y6l9dDZGJ7RL3Z9U",
+          "name": "Telegram account 3"
         }
       }
     },
     {
       "parameters": {
-        "url": "=https://api.telegram.org/bot8771953552:AAEV6BLdhjLp0IBXunrQ5k_4FHh9WwXuSCU/getFile?file_id={{ $json.file_id }}",
+        "url": "=https://api.telegram.org/bot8771953552:AAEVMI5AcgvFX0BaZwXc88oyNrI9A5EqS0E/getFile?file_id={{ $('Parse Input').item.json.file_id }}",
         "options": {}
       },
-      "id": "e1493baf-8031-4efb-9020-abaf9639aa3a",
+      "id": "06080838-eb05-4946-b1da-df5a62a51b9c",
       "name": "Get TG File Path",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        -272,
-        848
+        -1680,
+        624
       ]
     },
     {
       "parameters": {
-        "url": "=https://api.telegram.org/file/bot8771953552:AAEV6BLdhjLp0IBXunrQ5k_4FHh9WwXuSCU/{{ $json.result.file_path }}",
+        "url": "=https://api.telegram.org/file/bot8771953552:AAEVMI5AcgvFX0BaZwXc88oyNrI9A5EqS0E/{{ $json.result.file_path }}",
         "options": {}
       },
-      "id": "fa44e67b-1551-4608-8554-5d11a6495645",
+      "id": "e3c42a8c-b715-4bc9-ace7-0ff92aa9c196",
       "name": "Download File",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        -48,
-        848
+        -1456,
+        624
       ]
     },
     {
@@ -349,13 +340,13 @@
         },
         "options": {}
       },
-      "id": "6d647097-21e7-4d00-a8da-45b6c0bc337d",
+      "id": "dd6f556c-580b-4d51-9e3f-175e8c5088b8",
       "name": "VT Submit File",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        176,
-        848
+        -1232,
+        624
       ]
     },
     {
@@ -363,13 +354,13 @@
         "amount": 30,
         "unit": "seconds"
       },
-      "id": "34524df9-cf4d-4930-bd9e-62a757ada050",
+      "id": "269005df-8b52-4018-ad46-430fa423cb4d",
       "name": "Wait 30s",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1,
       "position": [
-        400,
-        848
+        -1008,
+        624
       ],
       "webhookId": "8ec8b1f0-23c2-43ab-8bc2-5c240ff3e76d"
     },
@@ -387,27 +378,27 @@
         },
         "options": {}
       },
-      "id": "0db1b002-bd30-4e95-817c-4e410081f7f1",
+      "id": "90169778-279a-406c-9984-3b8ae9c34d86",
       "name": "VT Get File Result",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        608,
-        848
+        -800,
+        624
       ]
     },
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const vtResult = $('VT Get File Result').item.json;\nconst origInput = $('Parse Input').item.json;\n\nconst stats = vtResult.data?.attributes?.stats || {};\nconst vtMalicious = stats.malicious || 0;\nconst vtSuspicious = stats.suspicious || 0;\nconst vtTotal = Object.values(stats).reduce((a, b) => a + b, 0) || 60;\n\nconst totalThreats = vtMalicious + vtSuspicious;\nconst fileHash = vtResult.meta?.file_info?.sha256 || $('VT Submit File').item.json.data?.id || 'N/A';\nconst fileName = origInput.file_name || 'attachment.txt';\n\nlet severity = 'clean';\nlet isDangerous = false;\n\n// Generic Threat Thresholds (Industry Standard)\nif (totalThreats >= 5) {\n  isDangerous = true;\n  severity = 'high';\n} else if (totalThreats >= 2) {\n  isDangerous = true;\n  severity = 'medium';\n} else if (totalThreats >= 1) {\n  isDangerous = true;\n  severity = 'low';\n}\n\nconst verdictText = isDangerous\n  ? (totalThreats + '/' + vtTotal + ' engines flagged threat')\n  : ('Clean (0/' + vtTotal + ' engines flagged threat)');\n\nreturn {\n  json: {\n    is_dangerous: isDangerous,\n    severity: severity,\n    vt_verdict: verdictText,\n    file_hash: fileHash,\n    file_name: fileName,\n    chat_id: origInput.chat_id,\n    reporter_name: origInput.reporter_name\n  }\n};"
+        "jsCode": "const lookupRes = $('VT Lookup Hash').item.json;\nlet vtResult = {};\n\nif (lookupRes && lookupRes.data && lookupRes.data.attributes) {\n  vtResult = lookupRes;\n} else if ($('VT Get File Result')) {\n  vtResult = $('VT Get File Result').item.json || {};\n}\n\nconst origInput = $('Parse Input').item.json;\nconst computeData = $('Compute Hash') ? $('Compute Hash').item.json : {};\n\nconst stats = vtResult.data?.attributes?.last_analysis_stats || vtResult.data?.attributes?.stats || {};\nconst vtMalicious = stats.malicious || 0;\nconst vtSuspicious = stats.suspicious || 0;\nconst vtTotal = Object.values(stats).reduce((a, b) => a + b, 0) || 60;\n\nconst totalThreats = vtMalicious + vtSuspicious;\nconst fileHash = vtResult.data?.id || vtResult.meta?.file_info?.sha256 || computeData.sha256 || 'N/A';\nconst fileName = origInput.file_name || 'attachment.txt';\n\nlet severity = 'clean';\nlet isDangerous = false;\n\n// Generic Threat Thresholds (Industry Standard)\nif (totalThreats >= 5) {\n  isDangerous = true;\n  severity = 'high';\n} else if (totalThreats >= 2) {\n  isDangerous = true;\n  severity = 'medium';\n} else if (totalThreats >= 1) {\n  isDangerous = true;\n  severity = 'low';\n}\n\nconst verdictText = isDangerous\n  ? (totalThreats + '/' + vtTotal + ' engines flagged threat')\n  : ('Clean (0/' + vtTotal + ' engines flagged threat)');\n\nreturn {\n  json: {\n    is_dangerous: isDangerous,\n    severity: severity,\n    vt_verdict: verdictText,\n    file_hash: fileHash,\n    file_name: fileName,\n    chat_id: origInput.chat_id,\n    reporter_name: origInput.reporter_name\n  }\n};"
       },
-      "id": "4edb439d-6ec7-4fc3-a2d4-eb7aed472c32",
+      "id": "a3cea6d7-7c70-497c-92a0-b97bc91246a4",
       "name": "Evaluate File",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        832,
-        848
+        -576,
+        624
       ]
     },
     {
@@ -433,23 +424,19 @@
         },
         "options": {}
       },
-      "id": "36f2bfb0-f331-43eb-ac2f-21635e38c3b8",
+      "id": "4f3431ff-9475-410c-be19-367e812bbc05",
       "name": "IF File Dangerous",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1056,
-        848
+        -352,
+        624
       ]
     },
     {
       "parameters": {
         "method": "POST",
         "url": "http://flask_api:5000/api/incidents",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"source_type\": \"real_world_report\",\n  \"divisi\": \"User Report\",\n  \"severity\": \"{{ $json.severity }}\",\n  \"vt_verdict\": \"{{ $json.vt_verdict }}\",\n  \"file_hash\": \"{{ $json.file_hash }}\",\n  \"original_filename\": \"{{ $json.file_name }}\",\n  \"reporter_chat_id\": \"{{ $('Telegram Trigger').item.json.message.chat.id }}\"\n}",
-        "options": {},
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -458,154 +445,143 @@
               "value": "=Bearer {{$env.SERVICE_API_KEY}}"
             }
           ]
-        }
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"source_type\": \"real_world_report\",\n  \"divisi\": \"{{ $('Get Reporter Email (File)').item.json.divisi || $json.divisi || 'User Report' }}\",\n  \"severity\": \"{{ $('Evaluate File').item.json.severity || 'high' }}\",\n  \"vt_verdict\": \"{{ $('Evaluate File').item.json.vt_verdict || 'Malicious' }}\",\n  \"file_hash\": \"{{ $('Evaluate File').item.json.file_hash || 'N/A' }}\",\n  \"original_filename\": \"{{ $('Parse Input').item.json.file_name || 'attachment' }}\",\n  \"reporter_chat_id\": \"{{ $('Parse Input').item.json.chat_id }}\"\n}",
+        "options": {}
       },
-      "id": "e5df4b72-5d8f-4e4d-aa00-43603de95ccc",
+      "id": "8f474b18-02fa-445a-828c-2eb4e078f3fa",
       "name": "Create File Incident",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        1296,
-        768
+        -112,
+        544
       ]
     },
     {
       "parameters": {
         "chatId": "={{$env.SOC_CHAT_ID}}",
-        "text": "\ud83d\udea8 <b>[SOC ALERT] INCIDENT REPORT \u2014 FILE MALWARE</b>\n\n\ud83c\udfab Tiket ID: <code>{{ String($json.ticket_id || \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}</code>\n\ud83d\udcc1 Nama File: <code>{{ String($(\"Evaluate File\").item.json.file_name || \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}</code>\n\ud83d\udea8 Severity: <b>{{ String($json.severity || \"high\").toUpperCase() }}</b>\n\ud83d\udd11 SHA256: <code>{{ String($(\"Evaluate File\").item.json.file_hash || \"N/A\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}</code>\n\ud83d\udee1\ufe0f VT Result: <b>{{ String($(\"Evaluate File\").item.json.vt_verdict || \"Malicious\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}</b>\n\ud83d\udc64 Pelapor: <code>{{ String($(\"Evaluate File\").item.json.reporter_name || \"User\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}</code>",
+        "text": "=🚨 <b>[SOC ALERT] INCIDENT REPORT — FILE MALWARE</b>\n\n🎫 Tiket ID: <code>{{ $('Create File Incident').item.json.ticket_id || $json.ticket_id }}</code>\n📁 Nama File: <code>{{ $('Parse Input').item.json.file_name }}</code>\n🚨 Severity: <b>{{ ($('Evaluate File').item.json.severity || 'HIGH').toUpperCase() }}</b>\n🔑 SHA256: <code>{{ $('Evaluate File').item.json.file_hash || 'N/A' }}</code>\n🛡️ VT Result: <b>{{ $('Evaluate File').item.json.vt_verdict || 'Malicious' }}</b>\n👤 Pelapor: <b>{{ $('Get Reporter Email (File)').item.json.registered ? ($('Get Reporter Email (File)').item.json.reporter_name + ' (' + $('Get Reporter Email (File)').item.json.divisi + ' — ' + $('Get Reporter Email (File)').item.json.email + ')') : ($('Parse Input').item.json.reporter_name + ' [Unregistered Telegram]') }}</b>",
         "additionalFields": {
           "appendAttribution": false,
-          "parseMode": "HTML"
-        },
-        "options": {
-          "parseMode": "HTML"
+          "parse_mode": "HTML"
         }
       },
-      "id": "adfd4273-42b6-4124-a72b-60b1603af4cc",
+      "id": "4cbaf36a-b7b0-4893-a797-916334fd7dc3",
       "name": "SOC Alert File",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1520,
-        768
+        112,
+        544
       ],
       "webhookId": "a00ef853-0483-4983-9da9-d58b509f7f91",
       "credentials": {
         "telegramApi": {
-          "id": "vIR48gISRlrruu7y",
-          "name": "Telegram account"
+          "id": "Y6l9dDZGJ7RL3Z9U",
+          "name": "Telegram account 3"
         }
       }
     },
     {
       "parameters": {
         "chatId": "={{ $('Evaluate File').item.json.chat_id }}",
-        "text": "\u26a0\ufe0f <b>[PERINGATAN ANCAMAN] File Berbahaya!</b>\n\n\ud83d\udcc1 File: <code>{{ String($(\"Evaluate File\").item.json.file_name || \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}</code>\n\ud83d\udea8 Severity: <b>{{ String($(\"Evaluate File\").item.json.severity || \"HIGH\").toUpperCase() }}</b>\n\ud83d\udee1\ufe0f Verdict: <b>{{ String($(\"Evaluate File\").item.json.vt_verdict || \"Malicious\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}</b>\n\nTiket insiden telah dibuat dan tim SOC telah diberitahu. Terima kasih atas laporan Anda!",
+        "text": "=⚠️ <b>[PERINGATAN ANCAMAN] File Berbahaya!</b>\n\n📁 <b>File:</b> <code>{{ $('Parse Input').item.json.file_name }}</code>\n🚨 <b>Severity:</b> <b>{{ ($('Evaluate File').item.json.severity || 'HIGH').toUpperCase() }}</b>\n🛡️ <b>Verdict:</b> <b>{{ $('Evaluate File').item.json.vt_verdict || 'Malicious' }}</b>\n\nTiket insiden telah dibuat dan tim SOC telah diberitahu.\nPoin kepatuhan Anda telah ditambahkan (+15 Poin). Terima kasih atas laporan Anda! 🛡️",
         "additionalFields": {
           "appendAttribution": false,
-          "parseMode": "HTML"
-        },
-        "options": {
-          "parseMode": "HTML"
+          "parse_mode": "HTML"
         }
       },
-      "id": "fdf4cbcf-546a-411d-afe1-b29baab125b0",
+      "id": "195b3bb7-5bad-498c-9d12-289aa202be2a",
       "name": "Reply File Dangerous",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1744,
-        768
+        336,
+        544
       ],
       "webhookId": "ed27c5fd-f27e-4c19-8e43-647be0379124",
       "credentials": {
         "telegramApi": {
-          "id": "vIR48gISRlrruu7y",
-          "name": "Telegram account"
+          "id": "Y6l9dDZGJ7RL3Z9U",
+          "name": "Telegram account 3"
         }
       }
     },
     {
       "parameters": {
         "chatId": "={{ $json.chat_id }}",
-        "text": "\u2705 <b>Laporan File: AMAN</b>\n\n\ud83d\udcc1 File: <code>{{ String($json.file_name || \"Document\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}</code>\n\ud83d\udee1\ufe0f VirusTotal: <b>{{ String($json.vt_verdict || \"Clean\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}</b>\n\nTidak ditemukan indikasi malware atau ancaman pada file ini. Aman untuk dibuka.",
+        "text": "=✅ <b>Laporan File: AMAN</b>\n\n📁 <b>File:</b> <code>{{ $('Parse Input').item.json.file_name }}</code>\n🛡️ <b>VirusTotal:</b> <b>{{ $('Evaluate File').item.json.vt_verdict || 'Clean' }}</b>\n\nTidak ditemukan indikasi malware atau ancaman pada file ini. Aman untuk dibuka. 👍",
         "additionalFields": {
           "appendAttribution": false,
-          "parseMode": "HTML"
-        },
-        "options": {
-          "parseMode": "HTML"
+          "parse_mode": "HTML"
         }
       },
-      "id": "d72235da-8c9c-467d-b528-80c6b35f47ce",
+      "id": "fe2aea6e-d4cb-45fb-af09-852c7e75fca1",
       "name": "Reply File Safe",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1296,
-        928
+        -112,
+        704
       ],
       "webhookId": "6e2af017-3154-4957-92a3-41d01918dea1",
       "credentials": {
         "telegramApi": {
-          "id": "vIR48gISRlrruu7y",
-          "name": "Telegram account"
+          "id": "Y6l9dDZGJ7RL3Z9U",
+          "name": "Telegram account 3"
         }
       }
     },
     {
       "parameters": {
         "chatId": "={{ $json.chat_id }}",
-        "text": "=Halo {{ $json.reporter_name }}! \ud83d\udc4b\n\nUntuk melaporkan ancaman, silakan kirimkan:\n\u2022 \ud83d\udd17 URL mencurigakan (teks berisi http/https)\n\u2022 \ud83d\udcce File attachment yang ingin dicek\n\nSaya akan menganalisisnya menggunakan VirusTotal dan urlscan.io secara otomatis.",
+        "text": "=Halo {{ $json.reporter_name }}! 👋\n\nUntuk melaporkan ancaman, silakan kirimkan:\n• 🔗 URL mencurigakan (teks berisi http/https)\n• 📎 File attachment yang ingin dicek\n\nSaya akan menganalisisnya menggunakan VirusTotal dan urlscan.io secara otomatis.",
         "additionalFields": {
           "appendAttribution": false,
-          "parseMode": "HTML"
-        },
-        "options": {
-          "parseMode": "HTML"
+          "parse_mode": "HTML"
         }
       },
-      "id": "5bc2a9a1-8453-4bd5-833d-8524412ed129",
+      "id": "5457f526-2708-4dda-bed9-235962ea3bd2",
       "name": "Reply Invalid",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        -272,
-        1056
+        -1680,
+        832
       ],
       "webhookId": "d4c5f077-0b86-4281-9b24-eb6883982f54",
       "credentials": {
         "telegramApi": {
-          "id": "vIR48gISRlrruu7y",
-          "name": "Telegram account"
+          "id": "Y6l9dDZGJ7RL3Z9U",
+          "name": "Telegram account 3"
         }
       }
     },
     {
       "parameters": {
         "chatId": "={{ $('Parse Input').item.json.chat_id }}",
-        "text": "\ud83d\udd0d Laporan file Anda telah diterima. Sedang mengunduh dan menganalisis menggunakan VirusTotal... Mohon tunggu sekitar 30 detik untuk hasil analisis.",
+        "text": "🔍 Laporan file Anda telah diterima. Sedang mengunduh dan menganalisis menggunakan VirusTotal... Mohon tunggu sekitar 30 detik untuk hasil analisis.",
         "additionalFields": {
           "appendAttribution": false,
-          "parseMode": "HTML"
-        },
-        "options": {
-          "parseMode": "HTML"
+          "parse_mode": "HTML"
         }
       },
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        64,
-        1136
+        -1344,
+        912
       ],
-      "id": "319e3ed9-66bb-4e16-9006-2a87d39f776e",
+      "id": "b754c4a4-e669-4b5a-9385-6355b8ed02fd",
       "name": "Send a text message1",
       "webhookId": "e8449a97-5b6c-499a-a0fd-2c704bfb5442",
       "credentials": {
         "telegramApi": {
-          "id": "vIR48gISRlrruu7y",
-          "name": "Telegram account"
+          "id": "Y6l9dDZGJ7RL3Z9U",
+          "name": "Telegram account 3"
         }
       }
     },
@@ -624,16 +600,16 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"indicator\": \"{{$json.url}}\",\n  \"chat_id\": {{$json.chat_id}}\n}",
+        "jsonBody": "={\n  \"indicator\": \"{{ $('Parse Input').item.json.url }}\",\n  \"chat_id\": {{ $('Parse Input').item.json.chat_id }}\n}",
         "options": {}
       },
-      "id": "2117351f-7bee-4f45-9b24-0c09fd38de3f",
+      "id": "c450f893-bb6e-4605-ad72-953130d05ede",
       "name": "Threat Intelligence API",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        64,
-        576
+        -1344,
+        352
       ]
     },
     {
@@ -654,13 +630,13 @@
         "jsonBody": "={\n  \"chat_id\": \"{{$json.chat_id}}\",\n  \"command\": \"{{$json.command}}\",\n  \"first_name\": \"{{$json.reporter_name}}\"\n}",
         "options": {}
       },
-      "id": "handle-telegram-command-node-id",
+      "id": "a6412373-5d73-423b-af9a-07bd8cc1252a",
       "name": "Handle Telegram Command",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        -272,
-        856
+        -1552,
+        448
       ]
     },
     {
@@ -668,34 +644,29 @@
         "chatId": "={{ $('Parse Input').item.json.chat_id }}",
         "text": "={{ $json.reply }}",
         "additionalFields": {
-          "parseMode": "HTML",
-          "appendAttribution": false
-        },
-        "options": {
-          "parseMode": "HTML"
+          "appendAttribution": false,
+          "parse_mode": "HTML"
         }
       },
-      "id": "reply-command-response-node-id",
+      "id": "85f8916a-0034-4ffc-af4a-040f798fdb7f",
       "name": "Reply Command Response",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        0,
-        856
+        -1184,
+        480
       ],
       "webhookId": "reply-command-response-webhook-id",
       "credentials": {
         "telegramApi": {
-          "id": "I44oUHC8lBGyDI79",
-          "name": "Telegram account 2"
+          "id": "Y6l9dDZGJ7RL3Z9U",
+          "name": "Telegram account 3"
         }
       }
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "=http://flask_api:5000/api/telegram/user?chat_id={{ $('Threat Intelligence API').item.json.chat_id }}",
-        "options": {},
+        "url": "=http://flask_api:5000/api/telegram/user?chat_id={{ $('Parse Input').item.json.chat_id }}&target={{ encodeURIComponent($('Parse Input').item.json.url) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -704,15 +675,16 @@
               "value": "=Bearer {{$env.SERVICE_API_KEY}}"
             }
           ]
-        }
+        },
+        "options": {}
       },
-      "id": "3b1f751b-e629-4d2b-aa2c-4d0d66d6ded0",
+      "id": "cea28771-23aa-4b97-9b43-db9921cae9e5",
       "name": "Get Reporter Email (URL)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        1296,
-        608
+        0,
+        0
       ]
     },
     {
@@ -738,23 +710,19 @@
         },
         "options": {}
       },
-      "id": "81114ffc-de5a-4c29-9d68-5bde328d6661",
+      "id": "5150b68b-d2c4-4d1a-91db-150038360dc9",
       "name": "IF Reporter Registered (URL)",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1520,
-        608
+        112,
+        384
       ]
     },
     {
       "parameters": {
         "method": "POST",
         "url": "http://flask_api:5000/api/reports",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"employee_id\": \"{{ $json.email }}\",\n  \"telegram_user_id\": \"{{ $('Threat Intelligence API').item.json.chat_id }}\",\n  \"type\": \"url\",\n  \"target\": \"{{ $('Threat Intelligence API').item.json.reported_url }}\",\n  \"verdict\": \"{{ $('Threat Intelligence API').item.json.policy.verdict }}\",\n  \"source_engine\": \"{{ (() => { const p = $('Threat Intelligence API').item.json.analysis.providers || []; if (p.includes('virustotal') && p.includes('urlscan')) return 'both'; if (p.includes('urlscan')) return 'urlscan'; return 'vt'; })() }}\",\n  \"severity_tier\": \"{{ $('Threat Intelligence API').item.json.policy.severity }}\",\n  \"submitted_at\": \"{{ $now.toISO() }}\"\n}",
-        "options": {},
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -763,22 +731,24 @@
               "value": "=Bearer {{$env.SERVICE_API_KEY}}"
             }
           ]
-        }
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"employee_id\": \"{{ $('Get Reporter Email (URL)').item.json.email || $json.email }}\",\n  \"telegram_user_id\": \"{{ $('Parse Input').item.json.chat_id }}\",\n  \"type\": \"url\",\n  \"target\": \"{{ $('Parse Input').item.json.url }}\",\n  \"verdict\": \"{{ $('Threat Intelligence API').item.json.policy?.verdict || 'malicious' }}\",\n  \"source_engine\": \"{{ (() => { const p = $('Threat Intelligence API').item.json.analysis?.providers || []; if (p.includes('virustotal') && p.includes('urlscan')) return 'both'; if (p.includes('urlscan')) return 'urlscan'; return 'vt'; })() }}\",\n  \"severity_tier\": \"{{ $('Threat Intelligence API').item.json.policy?.severity || 'high' }}\",\n  \"submitted_at\": \"{{ $now.toISO() }}\"\n}",
+        "options": {}
       },
-      "id": "7a77240f-e36a-4c48-a3b8-c140f4766c79",
+      "id": "84fdb25b-e5bd-4b93-99d1-a0f26175f9af",
       "name": "Create URL Report",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        1744,
-        608
+        336,
+        384
       ]
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "=http://flask_api:5000/api/telegram/user?chat_id={{ $('Evaluate File').item.json.chat_id }}",
-        "options": {},
+        "url": "=http://flask_api:5000/api/telegram/user?chat_id={{ $('Parse Input').item.json.chat_id }}&target={{ encodeURIComponent($('Evaluate File').item.json.file_hash || $('Parse Input').item.json.file_name) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -787,15 +757,16 @@
               "value": "=Bearer {{$env.SERVICE_API_KEY}}"
             }
           ]
-        }
+        },
+        "options": {}
       },
-      "id": "d52301da-a794-4fd0-938b-77bc5e5aef2f",
+      "id": "a52675c9-92f5-4771-b5be-719d6dac0b32",
       "name": "Get Reporter Email (File)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        1296,
-        960
+        -128,
+        896
       ]
     },
     {
@@ -821,23 +792,19 @@
         },
         "options": {}
       },
-      "id": "65e97571-7395-4154-af29-3c4ea73031b2",
+      "id": "6a3bfdd4-ccc7-4afd-9653-887e01807ac5",
       "name": "IF Reporter Registered (File)",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1520,
-        960
+        112,
+        736
       ]
     },
     {
       "parameters": {
         "method": "POST",
         "url": "http://flask_api:5000/api/reports",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"employee_id\": \"{{ $json.email }}\",\n  \"telegram_user_id\": \"{{ $('Evaluate File').item.json.chat_id }}\",\n  \"type\": \"file\",\n  \"target\": \"{{ $('Evaluate File').item.json.file_hash || $('Evaluate File').item.json.file_name }}\",\n  \"verdict\": \"{{ ['high','medium'].includes($('Evaluate File').item.json.severity) ? 'malicious' : 'suspicious' }}\",\n  \"source_engine\": \"vt\",\n  \"severity_tier\": \"{{ $('Evaluate File').item.json.severity }}\",\n  \"submitted_at\": \"{{ $now.toISO() }}\",\n  \"raw_scores\": {{ JSON.stringify({vt_verdict: $('Evaluate File').item.json.vt_verdict, file_hash: $('Evaluate File').item.json.file_hash, file_name: $('Evaluate File').item.json.file_name}) }}\n}",
-        "options": {},
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -846,19 +813,195 @@
               "value": "=Bearer {{$env.SERVICE_API_KEY}}"
             }
           ]
-        }
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"employee_id\": \"{{ $('Get Reporter Email (File)').item.json.email || $json.email }}\",\n  \"telegram_user_id\": \"{{ $('Parse Input').item.json.chat_id }}\",\n  \"type\": \"file\",\n  \"target\": \"{{ $('Evaluate File').item.json.file_hash || $('Parse Input').item.json.file_name }}\",\n  \"verdict\": \"{{ ['high','medium'].includes($('Evaluate File').item.json.severity) ? 'malicious' : 'suspicious' }}\",\n  \"source_engine\": \"vt\",\n  \"severity_tier\": \"{{ $('Evaluate File').item.json.severity || 'high' }}\",\n  \"submitted_at\": \"{{ $now.toISO() }}\"\n}",
+        "options": {}
       },
-      "id": "5454534d-37ef-4432-ab43-269d98609dfe",
+      "id": "383bceb4-aeb4-4eb6-9428-df5638229fcc",
       "name": "Create File Report",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        1744,
-        960
+        336,
+        736
       ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nlet sha256 = 'N/A';\ntry {\n  const binaryData = await this.helpers.getBinaryDataBuffer(0, 'data');\n  sha256 = crypto.createHash('sha256').update(binaryData).digest('hex');\n} catch (e) {\n  sha256 = 'N/A';\n}\nconst origInput = $('Parse Input').item.json;\nreturn {\n  json: {\n    file_id: origInput.file_id,\n    file_name: origInput.file_name,\n    mime_type: origInput.mime_type,\n    chat_id: origInput.chat_id,\n    reporter_name: origInput.reporter_name,\n    sha256: sha256\n  }\n};"
+      },
+      "id": "689b4ea6-d54c-4d46-948e-c43dba97cc94",
+      "name": "Compute Hash",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1008,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://www.virustotal.com/api/v3/files/{{ $json.sha256 }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-apikey",
+              "value": "fbfdaaa618dc7446a3e8417c08cd53d6d818e51d7d733dc2208de64e2902cb08"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0c1ef7b2-c938-4215-ac99-af171e6b4d08",
+      "name": "VT Lookup Hash",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -752,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Parse Input').item.json.chat_id }}",
+        "text": "🔍 Laporan URL Anda telah diterima. Sedang menganalisis link menggunakan VirusTotal dan urlscan.io... Mohon tunggu sebentar untuk hasil analisis.",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "b3947a1c-5063-442d-bc33-91f2c96f7429",
+      "name": "Send URL Waiting Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -1600,
+        352
+      ],
+      "webhookId": "8abb6df6-5041-48d0-98e4-07117523d5da",
+      "credentials": {
+        "telegramApi": {
+          "id": "Y6l9dDZGJ7RL3Z9U",
+          "name": "Telegram account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.is_duplicate }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-url-duplicate-node-id",
+      "name": "IF URL Duplicate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1200,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Parse Input').item.json.chat_id }}",
+        "text": "=ℹ️ <b>[LAPORAN DUPLIKAT]</b>\n\n🔗 <b>URL:</b> <code>{{ $('Parse Input').item.json.url }}</code>\n\nAnda <b>sudah pernah melaporkan</b> link ancaman ini sebelumnya.\nTiket insiden sebelumnya telah diproses oleh tim SOC dan poin kepatuhan telah diberikan ke akun Anda.\n\n<i>(Poin tidak ditambahkan kembali untuk menghindari duplikasi laporan).</i>\n\nTerima kasih telah tetap waspada! 🛡️",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "reply-url-duplicate-node-id",
+      "name": "Reply URL Duplicate",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1450,
+        150
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "Y6l9dDZGJ7RL3Z9U",
+          "name": "Telegram account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.is_duplicate }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-file-duplicate-node-id",
+      "name": "IF File Duplicate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1200,
+        750
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Parse Input').item.json.chat_id }}",
+        "text": "=ℹ️ <b>[LAPORAN DUPLIKAT]</b>\n\n📁 <b>File:</b> <code>{{ $('Parse Input').item.json.file_name }}</code>\n\nAnda <b>sudah pernah melaporkan</b> file ancaman ini sebelumnya.\nTiket insiden sebelumnya telah diproses oleh tim SOC dan poin kepatuhan telah diberikan ke akun Anda.\n\n<i>(Poin tidak ditambahkan kembali untuk menghindari duplikasi laporan).</i>\n\nTerima kasih telah tetap waspada! 🛡️",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "reply-file-duplicate-node-id",
+      "name": "Reply File Duplicate",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1450,
+        550
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "Y6l9dDZGJ7RL3Z9U",
+          "name": "Telegram account 3"
+        }
+      }
     }
   ],
-  "pinData": {},
   "connections": {
     "Telegram Trigger": {
       "main": [
@@ -886,7 +1029,7 @@
       "main": [
         [
           {
-            "node": "Threat Intelligence API",
+            "node": "Send URL Waiting Message",
             "type": "main",
             "index": 0
           }
@@ -918,7 +1061,7 @@
       "main": [
         [
           {
-            "node": "Create URL Incident",
+            "node": "Get Reporter Email (URL)",
             "type": "main",
             "index": 0
           }
@@ -937,11 +1080,6 @@
         [
           {
             "node": "SOC Alert URL",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Get Reporter Email (URL)",
             "type": "main",
             "index": 0
           }
@@ -974,7 +1112,7 @@
       "main": [
         [
           {
-            "node": "VT Submit File",
+            "node": "Compute Hash",
             "type": "main",
             "index": 0
           }
@@ -1029,7 +1167,7 @@
       "main": [
         [
           {
-            "node": "Create File Incident",
+            "node": "Get Reporter Email (File)",
             "type": "main",
             "index": 0
           }
@@ -1048,11 +1186,6 @@
         [
           {
             "node": "SOC Alert File",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Get Reporter Email (File)",
             "type": "main",
             "index": 0
           }
@@ -1096,7 +1229,7 @@
       "main": [
         [
           {
-            "node": "IF Reporter Registered (URL)",
+            "node": "IF URL Duplicate",
             "type": "main",
             "index": 0
           }
@@ -1111,15 +1244,14 @@
             "type": "main",
             "index": 0
           }
-        ],
-        []
+        ]
       ]
     },
     "Get Reporter Email (File)": {
       "main": [
         [
           {
-            "node": "IF Reporter Registered (File)",
+            "node": "IF File Duplicate",
             "type": "main",
             "index": 0
           }
@@ -1134,8 +1266,7 @@
             "type": "main",
             "index": 0
           }
-        ],
-        []
+        ]
       ]
     },
     "Send a text message1": {
@@ -1148,20 +1279,92 @@
           }
         ]
       ]
+    },
+    "Compute Hash": {
+      "main": [
+        [
+          {
+            "node": "VT Lookup Hash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VT Lookup Hash": {
+      "main": [
+        [
+          {
+            "node": "Evaluate File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send URL Waiting Message": {
+      "main": [
+        [
+          {
+            "node": "Threat Intelligence API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF URL Duplicate": {
+      "main": [
+        [
+          {
+            "node": "Reply URL Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create URL Incident",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IF Reporter Registered (URL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF File Duplicate": {
+      "main": [
+        [
+          {
+            "node": "Reply File Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create File Incident",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IF Reporter Registered (File)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "eec18962-dbcc-4589-9be5-3c1f28c57fb6",
-  "meta": {
-    "templateCredsSetupCompleted": true,
-    "instanceId": "694f7fbb03bd3ec1046cb341a0ec971b84e3831912e6e2cfddac251ba7efb323"
-  },
-  "nodeGroups": [],
-  "id": "Y1DdJ2GINFVPe4ZR",
-  "tags": []
+  "staticData": null
 }

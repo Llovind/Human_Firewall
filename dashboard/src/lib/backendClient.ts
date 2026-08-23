@@ -10,10 +10,10 @@ export async function fetchFlaskBackend(path: string, options: RequestInit = {})
 
   // Prioritize Docker container DNS hostnames first, then localhost fallback
   const targetUrls = Array.from(new Set([
-    process.env.API_URL,
-    process.env.NEXT_PUBLIC_API_URL,
     'http://flask_api:5000',
+    process.env.API_URL,
     'http://hfl-flask:5000',
+    process.env.NEXT_PUBLIC_API_URL,
     'http://127.0.0.1:5000',
     'http://localhost:5000'
   ])).filter(Boolean) as string[];

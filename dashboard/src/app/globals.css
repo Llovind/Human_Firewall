@@ -14,53 +14,77 @@
 
 /* ── Design Tokens ─────────────────────────────────────────── */
 :root {
-  /* Background layers (deep slate navy) */
-  --bg-deep:      #080d19;
-  --bg-base:      #0e1525;
-  --bg-surface:   #151e30;
-  --bg-elevated:  #1b2540;
-  --bg-hover:     #22304d;
+  /* Brand Palette (Sapphire & Royal Azure Scale) */
+  --brand-ice:      #E3F2FD;
+  --brand-sky:      #90CAF9;
+  --brand-azure:    #2196F3;
+  --brand-royal:    #0D47A1;
 
-  /* Borders (subtle blue-grey) */
-  --border:       rgba(148, 163, 184, 0.12);
-  --border-hover: rgba(148, 163, 184, 0.25);
-  --border-active:rgba(59, 130, 246, 0.50);
+  /* Default MAIN Theme: Cloud-Azure Light Mode */
+  --bg-deep:        #edf5fd;
+  --bg-base:        #f5f9fe;
+  --bg-surface:     #ffffff;
+  --bg-elevated:    #e3f1fc;
+  --bg-hover:       #d6ebfa;
 
-  /* Primary Accent (from logo palette) */
-  --accent:       #3b82f6;
-  --accent-dim:   #2563eb;
-  --accent-bright:#60a5fa;
-  --accent-glow:  rgba(59, 130, 246, 0.12);
+  /* Borders (Delicate Sky & Sapphire) */
+  --border:         rgba(144, 202, 249, 0.40);
+  --border-hover:   rgba(33, 150, 243, 0.55);
+  --border-active:  #2196F3;
 
-  /* Logo brand palette (fixed — matches triskelion mark) */
-  --logo-navy:      #17284d;
-  --logo-blue:      #2f6fed;
-  --logo-lightblue: #8ab4f8;
+  /* Primary Accent */
+  --accent:         #2196F3;
+  --accent-dim:     #0D47A1;
+  --accent-bright:  #90CAF9;
 
-  /* Semantic colors */
-  --success:      #10b981;
-  --success-dim:  #059669;
-  --success-glow: rgba(16, 185, 129, 0.20);
-  --warning:      #e8a33d;
-  --warning-dim:  #d97706;
-  --warning-glow: rgba(232, 163, 61, 0.20);
-  --danger:       #ef4444;
-  --danger-dim:   #dc2626;
-  --danger-glow:  rgba(239, 68, 68, 0.20);
-  --info:         #06b6d4;
-  --info-dim:     #0891b2;
-  --info-glow:    rgba(6, 182, 212, 0.20);
+  /* Logo brand palette */
+  --logo-navy:      #0D47A1;
+  --logo-blue:      #2196F3;
+  --logo-lightblue: #90CAF9;
 
-  /* Text */
-  /* Text - High Contrast Slate Scale for maximum legibility */
-  --text-primary:   #f8fafc;  /* Bright slate/white for primary text */
-  --text-secondary: #cbd5e1;  /* Clear slate grey for secondary text (contrast 7.6:1) */
-  --text-muted:     #94a3b8;  /* Readable muted grey for metadata (contrast 4.9:1) */
-  --text-inverse:   #0f172a;
+  /* ── Standardized Semantic Status Tokens (Enterprise Desaturated) ── */
+  /* Danger / High Risk */
+  --bg-danger:        rgba(208, 49, 30, 0.08);
+  --text-danger:      #D0311E;
+  --border-danger:    rgba(208, 49, 30, 0.35);
+  --danger:           #D0311E;
+  --danger-dim:       #b22817;
+
+  /* Warning / Moderate / Vulnerable */
+  --bg-warning:       rgba(247, 216, 127, 0.15);
+  --text-warning:     #8c6809;
+  --border-warning:   #F7D87F;
+  --warning:          #F7D87F;
+  --warning-dim:      #d4b04f;
+
+  /* Success / Safe / Optimal / Compliant */
+  --bg-success:       #f0fdf4;
+  --text-success:     #166534;
+  --border-success:   #86efac;
+  --success:          #16a34a;
+  --success-dim:      #15803d;
+
+  /* Neutral / Not Configured / Unset / Pending */
+  --bg-neutral:       #f8fafc;
+  --text-neutral:     #475569;
+  --border-neutral:   #cbd5e1;
+  --neutral:          #64748b;
+
+  --info:             #90CAF9;
+  --info-dim:         #2196F3;
+
+  /* Text - High Contrast Deep Royal Navy for Crisp Sunlight Visibility */
+  --text-primary:   #091b38;
+  --text-secondary: #233b63;
+  --text-muted:     #526f99;
+  --text-inverse:   #ffffff;
 
   /* Typography */
-  --font-sans:  'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono:  'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace;
+  --font-heading:   var(--font-heading, 'Poppins', sans-serif);
+  --font-body:      var(--font-body, 'Inter', sans-serif);
+  --font-mono-data: var(--font-mono-data, 'JetBrains Mono', monospace);
+  --font-sans:      var(--font-body);
+  --font-mono:      var(--font-mono-data);
 
   /* Spacing scale */
   --space-1: 4px;
@@ -73,9 +97,7 @@
   --space-10: 40px;
   --space-12: 48px;
 
-  /* Fluid Type Scale — min = ukuran lama (laptop/1280px), max = ~+15-20% (monitor lebar 2560px+)
-     Nggak pernah lebih kecil dari sebelumnya, cuma nambah headroom di layar lebar. */
-  /* Typography Scale — Professionally balanced for high legibility and breathing room */
+  /* Typography Scale */
   --text-2xs: 10px;
   --text-xs:  11px;
   --text-sm:  13px;
@@ -89,14 +111,14 @@
   --text-5xl: 38px;
   --text-6xl: 48px;
 
-  /* Sidebar width — dulu fixed 220px, sekarang boleh melebar dikit di layar lebar */
+  /* Sidebar width */
   --sidebar-width: clamp(220px, 13vw, 272px);
 
-  /* Tactical Border radius (sharp 4px instead of bubbly 20px) */
-  --radius-sm: 2px;
-  --radius-md: 4px;
-  --radius-lg: 6px;
-  --radius-xl: 8px;
+  /* Tactical Border radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
   --radius-full: 9999px;
 
   /* Transitions */
@@ -104,13 +126,67 @@
   --transition-base: 250ms ease;
   --transition-slow: 400ms ease;
 
-  /* Shadows */
+  /* Shadows (Soft floating card depth) */
+  --shadow-sm:  0 2px 8px -2px rgba(13, 71, 161, 0.06), 0 1px 4px -1px rgba(13, 71, 161, 0.04);
+  --shadow-md:  0 8px 24px -4px rgba(13, 71, 161, 0.08), 0 4px 12px -2px rgba(13, 71, 161, 0.05);
+  --shadow-lg:  0 16px 40px -6px rgba(13, 71, 161, 0.12), 0 6px 16px -3px rgba(13, 71, 161, 0.07);
+}
+
+/* Dark Theme Overrides */
+[data-theme="dark"] {
+  --bg-deep:        #050c1a;
+  --bg-base:        #0a162e;
+  --bg-surface:     #0f2042;
+  --bg-elevated:    #132954;
+  --bg-hover:       #18366e;
+
+  --border:         rgba(144, 202, 249, 0.14);
+  --border-hover:   rgba(144, 202, 249, 0.32);
+  --border-active:  rgba(33, 150, 243, 0.65);
+
+  --accent:         #2196F3;
+  --accent-dim:     #0D47A1;
+  --accent-bright:  #90CAF9;
+
+  /* ── Standardized Semantic Status Tokens (Dark Mode) ── */
+  /* Danger / High Risk */
+  --bg-danger:        rgba(208, 49, 30, 0.18);
+  --text-danger:      #ff8575;
+  --border-danger:    rgba(208, 49, 30, 0.50);
+  --danger:           #D0311E;
+  --danger-dim:       #b22817;
+
+  /* Warning / Moderate / Vulnerable */
+  --bg-warning:       rgba(247, 216, 127, 0.18);
+  --text-warning:     #F7D87F;
+  --border-warning:   rgba(247, 216, 127, 0.50);
+  --warning:          #F7D87F;
+  --warning-dim:      #d4b04f;
+
+  /* Success / Safe / Optimal / Compliant */
+  --bg-success:       rgba(16, 185, 129, 0.14);
+  --text-success:     #86efac;
+  --border-success:   rgba(16, 185, 129, 0.40);
+  --success:          #22c55e;
+  --success-dim:      #16a34a;
+
+  /* Neutral / Not Configured / Unset / Pending */
+  --bg-neutral:       rgba(148, 163, 184, 0.12);
+  --text-neutral:     #94a3b8;
+  --border-neutral:   rgba(148, 163, 184, 0.28);
+  --neutral:          #64748b;
+
+  --info:             #90CAF9;
+  --info-dim:         #2196F3;
+
+  --text-primary:   #f0f7ff;
+  --text-secondary: #b8d1eb;
+  --text-muted:     #789bc4;
+  --text-inverse:   #050c1a;
+
   --shadow-sm:  0 2px 8px rgba(0, 0, 0, 0.4);
   --shadow-md:  0 4px 16px rgba(0, 0, 0, 0.5);
   --shadow-lg:  0 8px 40px rgba(0, 0, 0, 0.6);
-  --shadow-glow-accent: 0 0 12px var(--accent-glow);
-  --shadow-glow-success: 0 0 12px var(--success-glow);
-  --shadow-glow-danger: 0 0 12px var(--danger-glow);
 }
 
 /* ── Base ──────────────────────────────────────────────────── */
@@ -132,20 +208,6 @@ body {
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-sans);
   letter-spacing: -0.5px;
-}
-
-/* ── Clean Background (no cyber grid) ─────────────────────── */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  background: radial-gradient(ellipse at 50% 0%, rgba(59, 130, 246, 0.04) 0%, transparent 60%);
-  pointer-events: none;
-}
-
-@keyframes radarSweep {
-  to { transform: rotate(360deg); }
 }
 
 /* ── Scrollbar ─────────────────────────────────────────────── */
@@ -181,13 +243,8 @@ body::before {
 }
 
 @keyframes pulseDot {
-  0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--success); }
-  50%      { opacity: 0.5; box-shadow: 0 0 16px var(--success); }
-}
-
-@keyframes pulseGlow {
-  0%, 100% { box-shadow: 0 0 4px var(--accent-glow); }
-  50%      { box-shadow: 0 0 20px var(--accent-glow); }
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
 }
 
 @keyframes shimmer {
@@ -198,16 +255,6 @@ body::before {
 @keyframes countUp {
   from { opacity: 0; transform: translateY(8px) scale(0.95); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-@keyframes scanLine {
-  0%   { transform: translateY(-100%); }
-  100% { transform: translateY(100vh); }
-}
-
-@keyframes borderPulse {
-  0%, 100% { border-color: var(--border); }
-  50%      { border-color: var(--border-hover); }
 }
 
 /* ── Utility: Animation Delays ─────────────────────────────── */
@@ -250,59 +297,53 @@ body::before {
   text-transform: uppercase;
 }
 
-.badge-critical {
-  background: rgba(248, 113, 113, 0.15);
-  color: var(--danger);
-  border: 1px solid rgba(248, 113, 113, 0.25);
+.badge-critical,
+.badge-danger,
+.badge-block,
+.badge-high_risk {
+  background: var(--bg-danger);
+  color: var(--text-danger);
+  border: 1px solid var(--border-danger);
 }
 
-.badge-high {
-  background: rgba(251, 146, 60, 0.15);
-  color: #fb923c;
-  border: 1px solid rgba(251, 146, 60, 0.25);
+.badge-high,
+.badge-medium,
+.badge-warning,
+.badge-vulnerable,
+.badge-moderate {
+  background: var(--bg-warning);
+  color: var(--text-warning);
+  border: 1px solid var(--border-warning);
 }
 
-.badge-medium {
-  background: rgba(251, 191, 36, 0.15);
-  color: var(--warning);
-  border: 1px solid rgba(251, 191, 36, 0.25);
+.badge-low,
+.badge-success,
+.badge-allow,
+.badge-safe,
+.badge-optimal {
+  background: var(--bg-success);
+  color: var(--text-success);
+  border: 1px solid var(--border-success);
 }
 
-.badge-low {
-  background: rgba(52, 211, 153, 0.15);
-  color: var(--success);
-  border: 1px solid rgba(52, 211, 153, 0.25);
+.badge-neutral,
+.badge-unset,
+.badge-not_configured {
+  background: var(--bg-neutral);
+  color: var(--text-neutral);
+  border: 1px solid var(--border-neutral);
 }
 
-.badge-block {
-  background: rgba(248, 113, 113, 0.15);
-  color: var(--danger);
-  border: 1px solid rgba(248, 113, 113, 0.25);
-}
-
-.badge-warning {
-  background: rgba(251, 191, 36, 0.15);
-  color: var(--warning);
-  border: 1px solid rgba(251, 191, 36, 0.25);
-}
-
-.badge-allow {
-  background: rgba(52, 211, 153, 0.15);
-  color: var(--success);
-  border: 1px solid rgba(52, 211, 153, 0.25);
-}
-
+.badge-info,
 .badge-notify_soc {
-  background: rgba(96, 165, 250, 0.15);
-  color: var(--info);
-  border: 1px solid rgba(96, 165, 250, 0.25);
+  background: rgba(33, 150, 243, 0.12);
+  color: var(--accent);
+  border: 1px solid var(--border);
 }
 
 /* ── Value Update Flash ───────────────────────────────────── */
 .value-flash {
-  background-color: rgba(52, 211, 153, 0.15) !important;
-  border-color: rgba(52, 211, 153, 0.4) !important;
-  box-shadow: 0 0 20px rgba(52, 211, 153, 0.25) !important;
+  border-color: var(--accent) !important;
 }
 
 /* ── Skeleton Loader ──────────────────────────────────────── */
@@ -517,3 +558,260 @@ a {
     height: 60px !important;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   Afferent — Global Design System
+   ══════════════════════════════════════════════════════════════ */
+
+[data-theme="light"] body {
+  background: #edf5fd;
+  color: var(--text-primary);
+}
+
+[data-theme="light"] body::before {
+  display: none;
+}
+
+/* Floating Clean White Cards in Light Mode */
+[data-theme="light"] .glass-card,
+[data-theme="light"] .stat-card,
+[data-theme="light"] .employee-hero-card,
+[data-theme="light"] .incident-table-wrap,
+[data-theme="light"] .leaderboard-panel,
+[data-theme="light"] .webmail-panel,
+[data-theme="light"] .chart-card,
+[data-theme="light"] .policy-item,
+[data-theme="light"] .panel,
+[data-theme="light"] .incident-row {
+  background: #ffffff !important;
+  border: 1.5px solid rgba(13, 71, 161, 0.15) !important;
+  box-shadow: 0 4px 20px -2px rgba(13, 71, 161, 0.08), 0 2px 6px -1px rgba(13, 71, 161, 0.04) !important;
+}
+
+[data-theme="light"] .glass-card:hover,
+[data-theme="light"] .stat-card:hover,
+[data-theme="light"] .incident-row:hover {
+  border-color: rgba(33, 150, 243, 0.5) !important;
+  box-shadow: 0 8px 28px -4px rgba(13, 71, 161, 0.12) !important;
+}
+
+/* Floating Rich Navy Cards in Dark Mode */
+[data-theme="dark"] .glass-card,
+[data-theme="dark"] .stat-card,
+[data-theme="dark"] .employee-hero-card,
+[data-theme="dark"] .incident-table-wrap,
+[data-theme="dark"] .leaderboard-panel,
+[data-theme="dark"] .webmail-panel,
+[data-theme="dark"] .chart-card,
+[data-theme="dark"] .policy-item,
+[data-theme="dark"] .panel,
+[data-theme="dark"] .incident-row {
+  background: #0f2042 !important;
+  border: 1px solid rgba(144, 202, 249, 0.16) !important;
+  box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.50) !important;
+}
+
+[data-theme="dark"] .glass-card:hover,
+[data-theme="dark"] .stat-card:hover,
+[data-theme="dark"] .incident-row:hover {
+  border-color: rgba(33, 150, 243, 0.5) !important;
+  box-shadow: 0 8px 28px -4px rgba(0, 0, 0, 0.60) !important;
+}
+
+/* Topbar & Navigation in Light Mode */
+[data-theme="light"] .topbar,
+[data-theme="light"] .topbar-slim {
+  background: #ffffff !important;
+  border: 1px solid rgba(13, 71, 161, 0.12) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 4px 18px -2px rgba(13, 71, 161, 0.05) !important;
+  padding: 14px 20px !important;
+  margin-bottom: 24px !important;
+}
+
+[data-theme="light"] .nav-btn {
+  color: #526f99;
+}
+
+[data-theme="light"] .nav-btn:hover {
+  color: #0d2249;
+  background: rgba(144, 202, 249, 0.15);
+}
+
+[data-theme="light"] .nav-btn.active {
+  color: #1976D2;
+  background: #ffffff;
+  border-color: rgba(144, 202, 249, 0.35) rgba(144, 202, 249, 0.35) transparent rgba(144, 202, 249, 0.35);
+  border-top: 3px solid #2196F3;
+  box-shadow: 0 -2px 10px rgba(13, 71, 161, 0.04);
+}
+
+/* Sidebar & Menu in Light Mode */
+[data-theme="light"] .sidebar-nav {
+  background: rgba(255, 255, 255, 0.88) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-right: 1px solid rgba(144, 202, 249, 0.3) !important;
+}
+
+[data-theme="light"] .sidebar-item {
+  color: #4b6a94;
+  border-radius: 8px;
+}
+
+[data-theme="light"] .sidebar-item:hover {
+  background: rgba(144, 202, 249, 0.20);
+  color: #0d2249;
+}
+
+[data-theme="light"] .sidebar-item.active {
+  background: var(--accent) !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+  border: none !important;
+  font-weight: 600;
+}
+
+[data-theme="light"] .sidebar-item.active svg {
+  color: #ffffff !important;
+}
+
+/* Tables in Light Mode */
+[data-theme="light"] table th,
+[data-theme="light"] .threat-table th {
+  background: #f1f7fe !important;
+  color: #334e77 !important;
+  border-bottom: 1px solid rgba(144, 202, 249, 0.35) !important;
+}
+
+[data-theme="light"] table td,
+[data-theme="light"] .threat-table td {
+  border-bottom: 1px solid rgba(144, 202, 249, 0.20) !important;
+  color: var(--text-primary);
+}
+
+[data-theme="light"] table tr:hover td,
+[data-theme="light"] .threat-table tr:hover td {
+  background: rgba(227, 242, 253, 0.50) !important;
+}
+
+/* User Badges and Inputs in Light Mode */
+[data-theme="light"] .user-badge {
+  background: rgba(227, 242, 253, 0.8) !important;
+  border-color: rgba(144, 202, 249, 0.5) !important;
+}
+
+[data-theme="light"] .user-badge:hover {
+  background: rgba(227, 242, 253, 1) !important;
+  border-color: #2196F3 !important;
+}
+
+[data-theme="light"] input,
+[data-theme="light"] select,
+[data-theme="light"] textarea {
+  background: #ffffff !important;
+  border: 1px solid rgba(144, 202, 249, 0.40) !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme="light"] input:focus,
+[data-theme="light"] select:focus,
+[data-theme="light"] textarea:focus {
+  border-color: #2196F3 !important;
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.15) !important;
+}
+
+/* Incident Rows in Light Mode — Pure White Floating SaaS Cards */
+[data-theme="light"] .incident-row {
+  background: #ffffff !important;
+  border: 1px solid rgba(13, 71, 161, 0.12) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 2px 8px -2px rgba(13, 71, 161, 0.04) !important;
+  padding: 12px 18px !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-theme="light"] .incident-row:hover {
+  background: #f8fbff !important;
+  border-color: rgba(33, 150, 243, 0.4) !important;
+  box-shadow: 0 6px 18px -3px rgba(13, 71, 161, 0.08) !important;
+  transform: translateY(-1px);
+}
+
+[data-theme="light"] .incident-icon {
+  background: #f0f7fe !important;
+  border: 1px solid rgba(144, 202, 249, 0.4) !important;
+  color: #0D47A1 !important;
+  border-radius: 8px !important;
+}
+
+[data-theme="light"] .incident-title {
+  color: #091b38 !important;
+  font-weight: 700 !important;
+  font-size: 14px !important;
+}
+
+[data-theme="light"] .incident-meta {
+  color: #526f99 !important;
+  font-size: 12px !important;
+}
+
+/* Badges in Light Mode (rely on CSS variable tokens) */
+[data-theme="light"] .badge-critical,
+[data-theme="light"] .badge-danger,
+[data-theme="light"] .badge-block,
+[data-theme="light"] .badge-high_risk {
+  background: var(--bg-danger) !important;
+  color: var(--text-danger) !important;
+  border: 1px solid var(--border-danger) !important;
+}
+
+[data-theme="light"] .badge-high,
+[data-theme="light"] .badge-medium,
+[data-theme="light"] .badge-warning,
+[data-theme="light"] .badge-vulnerable,
+[data-theme="light"] .badge-moderate {
+  background: var(--bg-warning) !important;
+  color: var(--text-warning) !important;
+  border: 1px solid var(--border-warning) !important;
+}
+
+[data-theme="light"] .badge-low,
+[data-theme="light"] .badge-success,
+[data-theme="light"] .badge-allow,
+[data-theme="light"] .badge-safe,
+[data-theme="light"] .badge-optimal {
+  background: var(--bg-success) !important;
+  color: var(--text-success) !important;
+  border: 1px solid var(--border-success) !important;
+}
+
+[data-theme="light"] .badge-neutral,
+[data-theme="light"] .badge-unset,
+[data-theme="light"] .badge-not_configured {
+  background: var(--bg-neutral) !important;
+  color: var(--text-neutral) !important;
+  border: 1px solid var(--border-neutral) !important;
+}
+
+[data-theme="light"] .badge-notify_soc {
+  background: rgba(144, 202, 249, 0.22) !important;
+  color: #0D47A1 !important;
+  border: 1px solid #90CAF9 !important;
+}
+
+/* ── Typography Utility Classes ───────────────────────────────── */
+.font-heading {
+  font-family: var(--font-heading), 'Poppins', sans-serif !important;
+}
+
+.font-body {
+  font-family: var(--font-body), 'Inter', sans-serif !important;
+}
+
+.font-mono-data {
+  font-family: var(--font-mono-data), 'JetBrains Mono', monospace !important;
+  font-variant-numeric: tabular-nums !important;
+}
+
+

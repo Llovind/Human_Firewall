@@ -23,9 +23,15 @@ def go():
     if not url.startswith("http://") and not url.startswith("https://"):
         url = "http://" + url
 
+    from urllib.parse import urlparse, quote
+
+    # Special handling for internal simulation URLs
+    if "redirect-handler" in url or "localhost:5000" in url:
+        return redirect(url)
+
     # DNS Pre-flight Check
     import socket
-    from urllib.parse import urlparse
+    is_resolvable = True
     try:
         parsed = urlparse(url)
         hostname = parsed.hostname
@@ -33,18 +39,17 @@ def go():
             return render_template("visit.html", error="Format URL tidak valid.")
         socket.gethostbyname(hostname)
     except socket.gaierror:
-        return render_template("visit.html", error=f"Situs tidak dapat dijangkau: Domain '{hostname}' tidak terdaftar atau tidak memiliki catatan DNS di internet.")
+        is_resolvable = False
     except Exception:
         pass
 
     result = analyze_indicator(url)
-    action = result["policy"]["action"]
+    action = result.get("policy", {}).get("action", "block")
 
-    if action == "allow":
+    if action == "allow" and is_resolvable:
         return redirect(url)
 
-    # Blocked or review — redirect to blocked page with URL context
-    from urllib.parse import quote
+    # Blocked, review, or simulated threat — redirect to blocked/educational page
     return redirect(f"/blocked?url={quote(url, safe='')}")
 
 
