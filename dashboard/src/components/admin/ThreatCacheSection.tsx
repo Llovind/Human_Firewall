@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Sliders, Activity, Search, StopCircle, FileWarning, CheckCircle2, ShieldAlert, RefreshCw, Trash2, Plus, X } from 'lucide-react';
+import { Sliders, Activity, Search, StopCircle, FileWarning, CheckCircle2, ShieldAlert, RefreshCw, Trash2, Plus, X, HelpCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { ThreatCacheEntry, timeAgo } from '@/components/admin/types';
 import '@/app/dashboard.css';
@@ -16,10 +16,10 @@ interface ThreatCacheSectionProps {
 }
 
 const actionIcon: Record<string, React.ReactNode> = {
-  block: <StopCircle size={16} style={{ color: 'var(--danger)', marginRight: '4px' }} />,
-  warning: <FileWarning size={16} style={{ color: 'var(--warning)', marginRight: '4px' }} />,
-  allow: <CheckCircle2 size={16} style={{ color: 'var(--success)', marginRight: '4px' }} />,
-  notify_soc: <Activity size={16} style={{ color: 'var(--info)', marginRight: '4px' }} />,
+  block: <StopCircle size={14} style={{ color: 'var(--danger)', marginRight: '4px' }} />,
+  warning: <FileWarning size={14} style={{ color: 'var(--warning)', marginRight: '4px' }} />,
+  allow: <CheckCircle2 size={14} style={{ color: 'var(--success)', marginRight: '4px' }} />,
+  notify_soc: <Activity size={14} style={{ color: 'var(--info)', marginRight: '4px' }} />,
 };
 
 export default function ThreatCacheSection({
@@ -141,12 +141,12 @@ export default function ThreatCacheSection({
             disabled={readOnly}
             style={{ padding: '6px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', outline: 'none', fontSize: '12px', cursor: readOnly ? 'default' : 'pointer', opacity: readOnly ? 0.7 : 1 }}
           >
-            <option value="ALL">ALL TYPES</option>
-            <option value="PHISHING_CLICK">🎣 PHISHING CLICK</option>
-            <option value="PHISHING_REPORT">🛡️ PHISHING REPORT</option>
-            <option value="MALWARE_DETECTED">🦠 MALWARE DETECTED</option>
-            <option value="SUSPICIOUS_URL">🔗 SUSPICIOUS URL</option>
-            <option value="DLP_VIOLATION">📎 DLP VIOLATION</option>
+            <option value="ALL">All Types</option>
+            <option value="PHISHING_CLICK">Phishing Click</option>
+            <option value="PHISHING_REPORT">Phishing Report</option>
+            <option value="MALWARE_DETECTED">Malware Detected</option>
+            <option value="SUSPICIOUS_URL">Suspicious URL</option>
+            <option value="DLP_VIOLATION">DLP Violation</option>
           </select>
           <select 
             className="filter-select font-body" 
@@ -314,7 +314,11 @@ export default function ThreatCacheSection({
                         </div>
                       </td>
                       <td style={{ fontSize: '12px' }}>{entry.source}</td>
-                      <td><span className={`badge badge-${entry.action} font-body`}>{actionIcon[entry.action]} {entry.action?.toUpperCase()}</span></td>
+                      <td>
+                        <span className={`badge badge-${entry.action || 'muted'} font-body`} style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          {actionIcon[entry.action?.toLowerCase()] || <HelpCircle size={14} style={{ color: 'var(--text-muted)', marginRight: '4px' }} />} {(entry.action || 'UNKNOWN').toUpperCase()}
+                        </span>
+                      </td>
                       <td className="font-mono-data" style={{ fontSize: '12px' }}>{timeAgo(entry.detectedAt)}</td>
                       {!readOnly && (
                         <td style={{ textAlign: 'right' }}>

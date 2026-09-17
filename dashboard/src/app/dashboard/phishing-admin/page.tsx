@@ -9,7 +9,7 @@ import LeaderboardSection from '@/components/admin/LeaderboardSection';
 import AIIntelligenceSection from '@/components/admin/AIIntelligenceSection';
 import { usePolling } from '@/hooks/usePolling';
 import type { GoPhishCampaign, GoPhishResource, MockEmail, LeaderboardResponse } from '@/components/admin/types';
-import { X, Plus, Play, Mail, Globe, Users, Building, ShieldCheck, Download, Trash2, Edit3 } from 'lucide-react';
+import { X, Plus, Play, Mail, Globe, Users, Building, ShieldCheck, Download, Trash2, Edit3, Send, Target } from 'lucide-react';
 
 export default function PhishingAdminDashboard() {
   const [activeTab, setActiveTab] = useState('gophish');
@@ -197,7 +197,7 @@ export default function PhishingAdminDashboard() {
 
       const data = await res.json();
       if (res.ok) {
-        alert(data.message || '🚀 Simulasi Phishing berhasil diluncurkan! Email telah dikirim ke Mock Webmail Inbox.');
+        alert(data.message || 'Simulasi Phishing berhasil diluncurkan! Email telah dikirim ke Mock Webmail Inbox.');
         setIsLaunchModalOpen(false);
         setLaunchName('');
         await loadCampaigns();
@@ -651,8 +651,8 @@ export default function PhishingAdminDashboard() {
               </div>
 
               {selectedEmails.length > 0 && (
-                <div style={{ padding: '8px 12px', borderRadius: '6px', background: 'rgba(33, 150, 243, 0.08)', border: '1px solid var(--accent)', fontSize: '12px', color: 'var(--accent)' }}>
-                  🎯 Targeting {selectedEmails.length} specifically selected employee(s).
+                <div style={{ padding: '8px 12px', borderRadius: '6px', background: 'rgba(33, 150, 243, 0.08)', border: '1px solid var(--accent)', fontSize: '12px', color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Target size={14} /> Targeting {selectedEmails.length} specifically selected employee(s).
                 </div>
               )}
 
@@ -668,9 +668,9 @@ export default function PhishingAdminDashboard() {
                   type="submit"
                   disabled={isLaunching}
                   className="btn btn-primary"
-                  style={{ padding: '8px 18px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '13px' }}
+                  style={{ padding: '8px 18px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                 >
-                  {isLaunching ? 'Launching...' : '🚀 Launch Now'}
+                  {isLaunching ? 'Launching...' : <><Send size={14} /> Launch Now</>}
                 </button>
               </div>
             </form>

@@ -131,9 +131,9 @@ export default function PolicySection({ readOnly, decisions }: PolicySectionProp
                 onChange={(e) => setSimTier(e.target.value)}
                 style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: '13px' }}
               >
-                <option value="Vulnerable">🚨 Vulnerable (High Risk / Low Training)</option>
-                <option value="Guardian">🛡️ Guardian (Standard Security Awareness)</option>
-                <option value="Sentinel">👑 Sentinel / Champion (Elite Security Hygiene)</option>
+                <option value="Vulnerable">Vulnerable (High Risk / Low Training)</option>
+                <option value="Guardian">Guardian (Standard Security Awareness)</option>
+                <option value="Sentinel">Sentinel / Champion (Elite Security Hygiene)</option>
               </select>
             </div>
 

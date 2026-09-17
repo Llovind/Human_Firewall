@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { AlertTriangle, FileWarning, Fish, Shield, Bot, Search, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, FileWarning, Fish, Shield, Bot, Search, CheckCircle2, HelpCircle } from 'lucide-react';
 import { Incident, timeAgo } from '@/components/admin/types';
 
 interface IncidentTriageSectionProps {
@@ -12,18 +12,18 @@ interface IncidentTriageSectionProps {
 }
 
 const severityIcon: Record<string, React.ReactNode> = {
-  critical: <AlertTriangle size={16} style={{ color: 'var(--danger)', marginRight: '4px' }} />,
-  high: <AlertTriangle size={16} style={{ color: 'var(--warning)', marginRight: '4px' }} />,
-  medium: <AlertTriangle size={16} style={{ color: 'var(--info)', marginRight: '4px' }} />,
-  low: <CheckCircle2 size={16} style={{ color: 'var(--success)', marginRight: '4px' }} />,
+  critical: <AlertTriangle size={14} style={{ color: 'var(--danger)', marginRight: '4px' }} />,
+  high: <AlertTriangle size={14} style={{ color: 'var(--warning)', marginRight: '4px' }} />,
+  medium: <AlertTriangle size={14} style={{ color: 'var(--info)', marginRight: '4px' }} />,
+  low: <CheckCircle2 size={14} style={{ color: 'var(--success)', marginRight: '4px' }} />,
 };
 
 const typeIcon: Record<string, React.ReactNode> = {
-  phishing_click: <Fish size={16} style={{ marginRight: '4px' }} />,
-  phishing_report: <Shield size={16} style={{ marginRight: '4px' }} />,
-  malware_detected: <Bot size={16} style={{ marginRight: '4px' }} />,
-  suspicious_url: <Search size={16} style={{ marginRight: '4px' }} />,
-  dlp_violation: <FileWarning size={16} style={{ marginRight: '4px' }} />,
+  phishing_click: <Fish size={14} style={{ marginRight: '4px' }} />,
+  phishing_report: <Shield size={14} style={{ marginRight: '4px' }} />,
+  malware_detected: <Bot size={14} style={{ marginRight: '4px' }} />,
+  suspicious_url: <Search size={14} style={{ marginRight: '4px' }} />,
+  dlp_violation: <FileWarning size={14} style={{ marginRight: '4px' }} />,
 };
 
 export default function IncidentTriageSection({
@@ -67,8 +67,8 @@ export default function IncidentTriageSection({
                   <span className="font-mono-data">{timeAgo(inc.timestamp)}</span>
                 </div>
               </div>
-              <span className={`badge badge-${inc.severity} font-body`} style={{ fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '6px' }}>
-                {severityIcon[inc.severity]} {inc.severity}
+              <span className={`badge badge-${inc.severity || 'muted'} font-body`} style={{ fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center' }}>
+                {severityIcon[inc.severity?.toLowerCase()] || <HelpCircle size={14} style={{ color: 'var(--text-muted)', marginRight: '4px' }} />} {(inc.severity || 'UNKNOWN').toUpperCase()}
               </span>
             </div>
           ))

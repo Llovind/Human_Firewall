@@ -3,6 +3,11 @@
 import { useAuth } from '@/context/AuthContext';
 import { usePolling } from '@/hooks/usePolling';
 import { useEffect, useState } from 'react';
+import { 
+  LayoutDashboard, ShieldAlert, Users, Scale, Fish, Mail, AlertCircle, 
+  AlertTriangle, CheckCircle2, Shield, Bug, Link2, Paperclip, Radio, 
+  Ban, Check, Zap, TrendingUp, RefreshCw, Send, Trophy, Flame, Sparkles, FileText, Search, HelpCircle
+} from 'lucide-react';
 import { timeAgo, formatWIB } from '@/components/admin/types';
 import '../dashboard.css';
 
@@ -57,18 +62,75 @@ interface GoPhishResource {
   pages: { id: number; name: string }[];
 }
 
-
-
-/* ── Severity / Action Icons ──────────────────────────────── */
-const severityIcon: Record<string, string> = {
-  critical: '🔴', high: '🟠', medium: '🟡', low: '🟢',
+/* ── Helper Renderers for Vector Badges & Icons ───────────── */
+const renderSeverityBadge = (severity: string) => {
+  const s = severity?.toLowerCase();
+  if (s === 'critical' || s === 'high') {
+    return <span className="badge badge-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><AlertCircle size={12} /> {(severity || 'CRITICAL').toUpperCase()}</span>;
+  }
+  if (s === 'medium') {
+    return <span className="badge badge-warning" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><AlertTriangle size={12} /> MEDIUM</span>;
+  }
+  if (s === 'low') {
+    return <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><CheckCircle2 size={12} /> LOW</span>;
+  }
+  return (
+    <span 
+      className="badge" 
+      style={{ 
+        background: 'var(--bg-elevated)', 
+        color: 'var(--text-secondary)', 
+        border: '1px solid var(--border)', 
+        display: 'inline-flex', 
+        alignItems: 'center', 
+        gap: '4px' 
+      }}
+    >
+      <HelpCircle size={12} style={{ color: 'var(--text-muted)' }} /> {(severity || 'UNKNOWN').toUpperCase()}
+    </span>
+  );
 };
-const actionIcon: Record<string, string> = {
-  block: '🛑', warning: '⚠️', allow: '✅', notify_soc: '📡',
+
+const renderActionBadge = (action: string) => {
+  const a = action?.toLowerCase();
+  if (a === 'block') {
+    return <span className="badge badge-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Ban size={12} /> BLOCK</span>;
+  }
+  if (a === 'warning') {
+    return <span className="badge badge-warning" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><AlertTriangle size={12} /> WARN</span>;
+  }
+  if (a === 'allow') {
+    return <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Check size={12} /> ALLOW</span>;
+  }
+  if (a === 'notify_soc') {
+    return <span className="badge badge-info" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Radio size={12} /> NOTIFY SOC</span>;
+  }
+  return (
+    <span 
+      className="badge" 
+      style={{ 
+        background: 'var(--bg-elevated)', 
+        color: 'var(--text-secondary)', 
+        border: '1px solid var(--border)', 
+        display: 'inline-flex', 
+        alignItems: 'center', 
+        gap: '4px' 
+      }}
+    >
+      <HelpCircle size={12} style={{ color: 'var(--text-muted)' }} /> {(action || 'UNKNOWN').toUpperCase()}
+    </span>
+  );
 };
-const typeIcon: Record<string, string> = {
-  phishing_click: '🎣', phishing_report: '🛡️', malware_detected: '🦠',
-  suspicious_url: '🔗', dlp_violation: '📎',
+
+const renderTypeIcon = (type: string) => {
+  switch (type) {
+    case 'phishing_click': return <Fish size={16} style={{ color: 'var(--danger)' }} />;
+    case 'phishing_report': return <Shield size={16} style={{ color: 'var(--text-success)' }} />;
+    case 'malware_detected': return <Bug size={16} style={{ color: 'var(--danger)' }} />;
+    case 'suspicious_url': return <Link2 size={16} style={{ color: 'var(--warning)' }} />;
+    case 'dlp_violation': return <Paperclip size={16} style={{ color: 'var(--accent)' }} />;
+    default: return <FileText size={16} style={{ color: 'var(--text-secondary)' }} />;
+  }
 };
 
 export default function SOCAdminDashboard() {
@@ -266,18 +328,22 @@ export default function SOCAdminDashboard() {
             <span className="topbar-title">Afferent <strong>SOC Admin</strong></span>
           </div>
           <nav className="topbar-nav">
-            {(['overview', 'threats', 'behavior', 'policy', 'gophish', 'webmail'] as const).map(tab => (
+            {([
+              { id: 'overview', label: 'Overview', icon: <LayoutDashboard size={15} /> },
+              { id: 'threats', label: 'Threats', icon: <Search size={15} /> },
+              { id: 'behavior', label: 'Behavior', icon: <Users size={15} /> },
+              { id: 'policy', label: 'Policy', icon: <Scale size={15} /> },
+              { id: 'gophish', label: 'GoPhish', icon: <Fish size={15} /> },
+              { id: 'webmail', label: 'Webmail', icon: <Mail size={15} /> }
+            ] as const).map(tab => (
               <button
-                key={tab}
-                className={`nav-btn ${activeTab === tab ? 'active' : ''}`}
-                onClick={() => setActiveTab(tab)}
+                key={tab.id}
+                className={`nav-btn ${activeTab === tab.id ? 'active' : ''}`}
+                onClick={() => setActiveTab(tab.id)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
               >
-                {tab === 'overview' ? '📊 Overview' 
-                  : tab === 'threats' ? '🔍 Threats' 
-                  : tab === 'behavior' ? '👤 Behavior' 
-                  : tab === 'policy' ? '⚖️ Policy'
-                  : tab === 'gophish' ? '🎣 GoPhish'
-                  : '📬 Webmail'}
+                {tab.icon}
+                <span>{tab.label}</span>
               </button>
             ))}
           </nav>
@@ -303,22 +369,22 @@ export default function SOCAdminDashboard() {
             {/* Stats Row */}
             <div className="stats-grid fade-up">
               <div className={`stat-card glass-card ${incidentUpdated ? 'value-flash' : ''}`}>
-                <div className="stat-icon stat-icon-danger">🚨</div>
+                <div className="stat-icon stat-icon-danger"><AlertCircle size={20} /></div>
                 <div className="stat-value">{stats?.totalIncidents ?? '-'}</div>
                 <div className="stat-label">Total Insiden</div>
               </div>
               <div className={`stat-card glass-card ${incidentUpdated ? 'value-flash' : ''}`}>
-                <div className="stat-icon stat-icon-warning">⚡</div>
+                <div className="stat-icon stat-icon-warning"><Zap size={20} /></div>
                 <div className="stat-value">{stats?.openIncidents ?? '-'}</div>
                 <div className="stat-label">Insiden Terbuka</div>
               </div>
               <div className={`stat-card glass-card ${cacheUpdated ? 'value-flash' : ''}`}>
-                <div className="stat-icon stat-icon-accent">🛡️</div>
+                <div className="stat-icon stat-icon-accent"><Shield size={20} /></div>
                 <div className="stat-value">{stats?.blockedUrls ?? '-'}</div>
                 <div className="stat-label">URL Diblokir</div>
               </div>
               <div className={`stat-card glass-card ${behaviorUpdated ? 'value-flash' : ''}`}>
-                <div className="stat-icon stat-icon-success">📈</div>
+                <div className="stat-icon stat-icon-success"><TrendingUp size={20} /></div>
                 <div className="stat-value">{stats?.avgBehaviorScore ?? '-'}</div>
                 <div className="stat-label">Avg. Behavior Score</div>
               </div>
@@ -328,16 +394,16 @@ export default function SOCAdminDashboard() {
             {summaries.length > 0 && (
               <div className={`panel glass-card fade-up-1 ${summaryUpdated ? 'value-flash' : ''}`}>
                 <div className="panel-header">
-                  <h2 className="panel-title">🛡️ Threat Intelligence & Risk Synthesis</h2>
+                  <h2 className="panel-title font-heading" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <ShieldAlert size={18} style={{ color: 'var(--accent)' }} /> Threat Intelligence & Risk Synthesis
+                  </h2>
                   <span className="panel-badge" style={{ background: 'rgba(33, 150, 243, 0.08)', color: 'var(--accent)', borderColor: 'rgba(33, 150, 243, 0.3)' }}>Live Telemetry</span>
                 </div>
                 <div className="summary-list">
                   {summaries.slice(0, 3).map(s => (
                     <div key={s.id} className="summary-item">
                       <div className="summary-meta">
-                        <span className={`badge badge-${s.threatLevel}`}>
-                          {severityIcon[s.threatLevel]} {s.threatLevel.toUpperCase()}
-                        </span>
+                        {renderSeverityBadge(s.threatLevel)}
                         <span className="summary-time">{timeAgo(s.timestamp)}</span>
                       </div>
                       <h3 className="summary-title">{s.title}</h3>
@@ -359,13 +425,15 @@ export default function SOCAdminDashboard() {
             {/* Recent Incidents */}
             <div className={`panel glass-card fade-up-2 ${incidentUpdated ? 'value-flash' : ''}`}>
               <div className="panel-header">
-                <h2 className="panel-title">🚨 Insiden Terbaru</h2>
+                <h2 className="panel-title font-heading" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <AlertCircle size={18} style={{ color: 'var(--danger)' }} /> Insiden Terbaru
+                </h2>
                 <span className="panel-count">{incidents.length} total</span>
               </div>
               <div className="incident-list">
                 {incidents.slice(0, 5).map(inc => (
                   <div key={inc.id} className="incident-row">
-                    <div className="incident-icon">{typeIcon[inc.type] || '📋'}</div>
+                    <div className="incident-icon">{renderTypeIcon(inc.type)}</div>
                     <div className="incident-info">
                       <div className="incident-title">{inc.description}</div>
                       <div className="incident-meta">
@@ -376,9 +444,7 @@ export default function SOCAdminDashboard() {
                         <span>{timeAgo(inc.timestamp)}</span>
                       </div>
                     </div>
-                    <span className={`badge badge-${inc.severity}`}>
-                      {severityIcon[inc.severity]} {inc.severity}
-                    </span>
+                    {renderSeverityBadge(inc.severity)}
                   </div>
                 ))}
               </div>
@@ -390,7 +456,9 @@ export default function SOCAdminDashboard() {
         {activeTab === 'threats' && (
           <div className={`panel glass-card fade-up ${cacheUpdated ? 'value-flash' : ''}`}>
             <div className="panel-header">
-              <h2 className="panel-title">🔍 Threat Intelligence Cache</h2>
+              <h2 className="panel-title font-heading" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Search size={18} style={{ color: 'var(--accent)' }} /> Threat Intelligence Cache
+              </h2>
               <span className="panel-count">{cache.length} entri</span>
             </div>
             <div className="threat-table-wrap">
@@ -425,7 +493,7 @@ export default function SOCAdminDashboard() {
                         </div>
                       </td>
                       <td>{entry.source}</td>
-                      <td><span className={`badge badge-${entry.action}`}>{actionIcon[entry.action]} {entry.action.toUpperCase()}</span></td>
+                      <td>{renderActionBadge(entry.action)}</td>
                       <td className="text-muted">{timeAgo(entry.detectedAt)}</td>
                     </tr>
                   ))}
@@ -439,7 +507,9 @@ export default function SOCAdminDashboard() {
         {activeTab === 'behavior' && (
           <div className={`panel glass-card fade-up ${behaviorUpdated ? 'value-flash' : ''}`}>
             <div className="panel-header">
-              <h2 className="panel-title">👤 Employee Behavior Scores</h2>
+              <h2 className="panel-title font-heading" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Users size={18} style={{ color: 'var(--accent)' }} /> Employee Behavior Scores
+              </h2>
               <span className="panel-count">{scores.length} karyawan</span>
             </div>
             <div className="leaderboard">
@@ -448,7 +518,22 @@ export default function SOCAdminDashboard() {
                 .map((s, idx) => (
                   <div key={s.userId} className="leaderboard-row">
                     <div className="leaderboard-rank">
-                      {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        minWidth: '28px',
+                        height: '24px',
+                        padding: '0 6px',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        background: idx === 0 ? 'var(--bg-warning)' : idx === 1 ? 'var(--bg-elevated)' : idx === 2 ? 'rgba(33, 150, 243, 0.1)' : 'var(--bg-elevated)',
+                        color: idx === 0 ? 'var(--text-warning)' : idx === 1 ? 'var(--text-secondary)' : idx === 2 ? 'var(--accent)' : 'var(--text-muted)',
+                        border: `1px solid ${idx === 0 ? 'var(--border-warning)' : idx === 1 ? 'var(--border)' : idx === 2 ? 'var(--border-accent)' : 'var(--border)'}`
+                      }}>
+                        #{idx + 1}
+                      </span>
                     </div>
                     <div className="leaderboard-avatar">{s.userName.charAt(0)}</div>
                     <div className="leaderboard-info">
@@ -456,8 +541,12 @@ export default function SOCAdminDashboard() {
                       <div className="leaderboard-division">{s.division}</div>
                     </div>
                     <div className="leaderboard-stats">
-                      <span className="lb-stat">🔥 {s.streak}</span>
-                      <span className="lb-stat">⭐ {s.totalPoints}pts</span>
+                      <span className="lb-stat" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <Flame size={14} style={{ color: 'var(--warning)' }} /> {s.streak}
+                      </span>
+                      <span className="lb-stat" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <Sparkles size={14} style={{ color: 'var(--accent)' }} /> {s.totalPoints}pts
+                      </span>
                     </div>
                     <div className="leaderboard-score-wrap">
                       <div className="leaderboard-score-bar">
@@ -482,7 +571,9 @@ export default function SOCAdminDashboard() {
         {activeTab === 'policy' && (
           <div className={`panel glass-card fade-up ${policyUpdated ? 'value-flash' : ''}`}>
             <div className="panel-header">
-              <h2 className="panel-title">⚖️ Policy Decisions & Adaptive Enforcement</h2>
+              <h2 className="panel-title font-heading" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Scale size={18} style={{ color: 'var(--accent)' }} /> Policy Decisions & Adaptive Enforcement
+              </h2>
               <span className="panel-count">{decisions.length} keputusan</span>
             </div>
             <div className="policy-list">
@@ -490,9 +581,7 @@ export default function SOCAdminDashboard() {
                 <div key={d.id} className="policy-card">
                   <div className="policy-header-row">
                     <span className="mono policy-id">{d.id}</span>
-                    <span className={`badge badge-${d.finalAction}`}>
-                      {actionIcon[d.finalAction]} {d.finalAction.replace('_', ' ').toUpperCase()}
-                    </span>
+                    {renderActionBadge(d.finalAction)}
                   </div>
                   <div className="policy-scores">
                     <div className="policy-score-item">
@@ -512,7 +601,7 @@ export default function SOCAdminDashboard() {
                     </div>
                     <div className="policy-score-combine">→</div>
                     <div className="policy-final-action">
-                      {actionIcon[d.finalAction]}
+                      {renderActionBadge(d.finalAction)}
                     </div>
                   </div>
                   <p className="policy-reason">{d.reason}</p>
@@ -529,17 +618,19 @@ export default function SOCAdminDashboard() {
           <div className="panel glass-card fade-up">
             <div className="panel-header">
               <div>
-                <h2 className="panel-title">🎣 GoPhish Command Center</h2>
+                <h2 className="panel-title font-heading" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Fish size={18} style={{ color: 'var(--accent)' }} /> GoPhish Command Center
+                </h2>
                 <p className="panel-desc" style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '4px' }}>
                   Kontrol visual untuk sinkronisasi target dan meluncurkan simulasi phishing via GoPhish API.
                 </p>
               </div>
               <div style={{ display: 'flex', gap: '12px' }}>
-                <button className="btn-action" onClick={handleSyncUsers} style={{ background: 'rgba(129, 140, 248, 0.1)', border: '1px solid var(--accent)', color: 'var(--accent)', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}>
-                  🔄 Sync Target Group
+                <button className="btn-action" onClick={handleSyncUsers} style={{ background: 'rgba(129, 140, 248, 0.1)', border: '1px solid var(--accent)', color: 'var(--accent)', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <RefreshCw size={14} /> Sync Target Group
                 </button>
-                <button className="btn-action" onClick={handleOpenLaunchModal} style={{ background: 'var(--accent)', border: 'none', color: 'white', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}>
-                  🚀 Launch Simulation
+                <button className="btn-action" onClick={handleOpenLaunchModal} style={{ background: 'var(--accent)', border: 'none', color: 'white', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <Send size={14} /> Launch Simulation
                 </button>
               </div>
             </div>
@@ -591,8 +682,8 @@ export default function SOCAdminDashboard() {
         {activeTab === 'webmail' && (
           <div className="webmail-panel fade-up">
             <div className="webmail-sidebar">
-              <div className="webmail-sidebar-header">
-                📬 Mock Webmail Inbox ({emails.length})
+              <div className="webmail-sidebar-header font-heading" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Mail size={16} /> Mock Webmail Inbox ({emails.length})
               </div>
               <div className="email-list">
                 {emails.length === 0 ? (
@@ -653,7 +744,9 @@ export default function SOCAdminDashboard() {
       {isLaunchModalOpen && (
         <div className="dialog-overlay">
           <div className="dialog-box fade-up">
-            <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px' }}>🚀 Launch Phishing Simulation</h3>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Send size={18} style={{ color: 'var(--accent)' }} /> Launch Phishing Simulation
+            </h3>
             <form onSubmit={handleLaunchCampaign} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>
                 <label style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
@@ -730,9 +823,9 @@ export default function SOCAdminDashboard() {
                 <button
                   type="submit"
                   disabled={isLaunching}
-                  style={{ padding: '8px 16px', background: 'var(--accent)', border: 'none', color: 'white', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+                  style={{ padding: '8px 16px', background: 'var(--accent)', border: 'none', color: 'white', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                 >
-                  {isLaunching ? 'Launching...' : '🚀 Launch Now'}
+                  <Send size={14} /> {isLaunching ? 'Launching...' : 'Launch Now'}
                 </button>
               </div>
             </form>

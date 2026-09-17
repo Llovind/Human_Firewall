@@ -3,8 +3,6 @@
    Clean Enterprise Security Theme  (Navy-Blue · Wazuh-inspired)
    ══════════════════════════════════════════════════════════════ */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
-
 /* ── CSS Reset ─────────────────────────────────────────────── */
 *, *::before, *::after {
   margin: 0;
@@ -80,7 +78,7 @@
   --text-inverse:   #ffffff;
 
   /* Typography */
-  --font-heading:   var(--font-heading, 'Poppins', sans-serif);
+  --font-heading:   var(--font-body, 'Inter', sans-serif);
   --font-body:      var(--font-body, 'Inter', sans-serif);
   --font-mono-data: var(--font-mono-data, 'JetBrains Mono', monospace);
   --font-sans:      var(--font-body);
@@ -802,15 +800,15 @@ a {
 
 /* ── Typography Utility Classes ───────────────────────────────── */
 .font-heading {
-  font-family: var(--font-heading), 'Poppins', sans-serif !important;
+  font-family: var(--font-heading) !important;
 }
 
 .font-body {
-  font-family: var(--font-body), 'Inter', sans-serif !important;
+  font-family: var(--font-body) !important;
 }
 
 .font-mono-data {
-  font-family: var(--font-mono-data), 'JetBrains Mono', monospace !important;
+  font-family: var(--font-mono-data) !important;
   font-variant-numeric: tabular-nums !important;
 }
 

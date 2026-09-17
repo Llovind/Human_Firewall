@@ -442,7 +442,7 @@ export default function EmployeeDashboardPage() {
               marginRight: '8px'
             }}
           >
-            🚨 Demo Gateway Block
+            <ShieldAlert size={16} style={{ color: 'var(--danger)' }} /> Demo Gateway Block
           </a>
           <div className="live-indicator">
             <span className="live-dot" />
