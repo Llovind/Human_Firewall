@@ -1,14 +1,64 @@
 services:
+  # PostgreSQL is the durable source of truth for proxy telemetry, verdicts,
+  # SOC alerts, and append-only decision audit records. It is not published.
+  proxy_postgres:
+    image: postgres:17-alpine
+    container_name: hfl-proxy-postgres
+    env_file:
+      - .env.proxy.local
+    volumes:
+      - proxy_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+    networks:
+      - hfl_network
+
+  # Redis is the low-latency hot path. PostgreSQL remains authoritative.
+  proxy_redis:
+    image: redis:7-alpine
+    container_name: hfl-proxy-redis
+    env_file:
+      - .env.proxy.local
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
+    volumes:
+      - proxy_redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+    networks:
+      - hfl_network
+
+  # Local SMTP inbox for lab/demo. SMTP stays inside the Docker network;
+  # only the web inbox is exposed to the host.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: hfl-mailpit
+    ports:
+      - "${MAILPIT_BIND_IP:-127.0.0.1}:8025:8025"
+    environment:
+      - MP_MAX_MESSAGES=500
+      - MP_DATABASE=/data/mailpit.db
+    volumes:
+      - mailpit_data:/data
+    restart: unless-stopped
+    networks:
+      - hfl_network
+
   # 1. ORCHESTRATOR LAYER
   n8n:
     image: docker.n8n.io/n8nio/n8n
     container_name: hfl-n8n
     ports:
-      - "5678:5678"
-    env_file:
-      - .env
+      - "${WEB_BIND_IP:-127.0.0.1}:5678:5678"
     environment:
-      - N8N_HOST=localhost
+      - N8N_HOST=${N8N_HOST:-127.0.0.1}
       - N8N_PORT=5678
       - N8N_PROTOCOL=http
       - NODE_ENV=production
@@ -16,20 +66,17 @@ services:
       - N8N_WEBHOOK_URL=${WEBHOOK_URL}
       - GENERIC_TIMEZONE=Asia/Jakarta
       - NODE_OPTIONS=--dns-result-order=ipv4first
-      # Wajib false, karena n8n versi baru default BLOKIR akses process.env
-      # dari dalam expression node ({{ $env.X }}) demi keamanan. Flow B
-      # butuh ini supaya VT_API_KEY & URLSCAN_API_KEY bisa dibaca dari
-      # environment variable, bukan hardcoded di JSON workflow.
+      # Legacy n8n expressions still read environment variables for existing
+      # non-critical campaign automation. Proxy and authentication do not.
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
       - N8N_ALLOW_ENV_VARIABLES=*
       - NODE_FUNCTION_ALLOW_BUILTIN=crypto
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - VT_API_KEY=${VT_API_KEY}
-      - URLSCAN_API_KEY=${URLSCAN_API_KEY}
       - SOC_CHAT_ID=${SOC_CHAT_ID}
       - SECRET_KEY=${SECRET_KEY}
       - SERVICE_API_KEY=${SERVICE_API_KEY}
       - N8N_PROXY_HOPS=1
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
     volumes:
       - n8n_data:/home/node/.n8n
     restart: unless-stopped
@@ -52,6 +99,14 @@ services:
                         # mungkin sudah pakai port 80 di laptop
     volumes:
       - ./gophish/config.json:/opt/gophish/config.json
+      - type: bind
+        source: ${GOPHISH_CERT_DIR:-./secrets/gophish-pki}/gophish-admin.crt
+        target: /opt/gophish/gophish_admin.crt
+        read_only: true
+      - type: bind
+        source: ${GOPHISH_CERT_DIR:-./secrets/gophish-pki}/gophish-admin.key
+        target: /opt/gophish/gophish_admin.key
+        read_only: true
       - gophish_data:/opt/gophish/database
       # config.json di-override supaya db_path mengarah ke subfolder
       # "database/" yang kita mount sebagai volume bernama gophish_data.
@@ -69,13 +124,22 @@ services:
     build: ./backend
     container_name: hfl-flask
     ports:
-      - "5000:5000"
+      - "${WEB_BIND_IP:-127.0.0.1}:5000:5000"
     volumes:
       - ./backend:/app           # Live-reload pas development
       - flask_db:/app/instance   # Persistence SQLite Flask
+      - type: bind
+        source: ${GOPHISH_CERT_DIR:-./secrets/gophish-pki}/afferent-lab-ca.crt
+        target: /etc/afferent-ca/gophish-ca.crt
+        read_only: true
+      - type: bind
+        source: ./proxy/ssl/afferent-proxy-ca.crt
+        target: /etc/afferent-proxy/afferent-proxy-ca.crt
+        read_only: true
     env_file:
-      - .env
+      - .env.proxy.local
     environment:
+      - APP_ENV=${APP_ENV:-production}
       - FLASK_APP=app.py
       - FLASK_ENV=production
       - FLASK_DEBUG=0
@@ -84,7 +148,47 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - SERVICE_API_KEY=${SERVICE_API_KEY}
       - DEV_BYPASS_AUTH=${DEV_BYPASS_AUTH}
-      - BOT_USERNAME=${BOT_USERNAME}
+      - BOOTSTRAP_ADMIN_EMAIL=${BOOTSTRAP_ADMIN_EMAIL:-admin@humanfirewall.local}
+      - TRUST_PROXY_HEADERS=${TRUST_PROXY_HEADERS:-true}
+      - OTP_PEPPER=${OTP_PEPPER:-}
+      - AUTH_AUDIT_PEPPER=${AUTH_AUDIT_PEPPER:-}
+      - OTP_EXPIRY_SECONDS=${OTP_EXPIRY_SECONDS:-300}
+      - OTP_MAX_ATTEMPTS=${OTP_MAX_ATTEMPTS:-5}
+      - OTP_RESEND_COOLDOWN_SECONDS=${OTP_RESEND_COOLDOWN_SECONDS:-60}
+      - OTP_RATE_LIMIT_WINDOW_SECONDS=${OTP_RATE_LIMIT_WINDOW_SECONDS:-900}
+      - OTP_MAX_REQUESTS_PER_WINDOW=${OTP_MAX_REQUESTS_PER_WINDOW:-5}
+      - AUTH_SESSION_TTL_SECONDS=${AUTH_SESSION_TTL_SECONDS:-28800}
+      - PASSWORD_MIN_LENGTH=${PASSWORD_MIN_LENGTH:-12}
+
+      - SMTP_HOST=${SMTP_HOST:-mailpit}
+      - SMTP_PORT=${SMTP_PORT:-1025}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM_ADDRESS=${SMTP_FROM_ADDRESS:-AFFERENT Security <security@afferent.local>}
+      - SMTP_SECURITY=${SMTP_SECURITY:-none}
+      - SMTP_TIMEOUT_SECONDS=${SMTP_TIMEOUT_SECONDS:-10}
+
+      - PROXY_FEATURE_ENABLED=true
+      - PROXY_DB_HOST=proxy_postgres
+      - PROXY_DB_PORT=5432
+      - PROXY_DB_NAME=${PROXY_DB_NAME:-afferent_proxy}
+      - PROXY_DB_USER=${PROXY_DB_USER:-afferent_proxy_app}
+      - REDIS_HOST=proxy_redis
+      - REDIS_PORT=6379
+      - ML_SCANNER_URL=${ML_SCANNER_URL:-}
+      - ML_TLS_CA_BUNDLE=${ML_TLS_CA_BUNDLE:-}
+      - ML_SCANNER_TIMEOUT_SECONDS=${ML_SCANNER_TIMEOUT_SECONDS:-1.5}
+      - ML_BLOCK_CONFIDENCE_THRESHOLD=${ML_BLOCK_CONFIDENCE_THRESHOLD:-0.85}
+      - ML_ALLOW_CONFIDENCE_THRESHOLD=${ML_ALLOW_CONFIDENCE_THRESHOLD:-0.80}
+      - PROXY_DEVICE_TTL_SECONDS=${PROXY_DEVICE_TTL_SECONDS:-28800}
+      - PROXY_CONNECTED_WINDOW_SECONDS=${PROXY_CONNECTED_WINDOW_SECONDS:-90}
+      - PROXY_ML_VERDICT_TTL_SECONDS=${PROXY_ML_VERDICT_TTL_SECONDS:-604800}
+      - PROXY_ML_CACHE_TTL_SECONDS=${PROXY_ML_CACHE_TTL_SECONDS:-3600}
+      - PROXY_SOC_CACHE_TTL_SECONDS=${PROXY_SOC_CACHE_TTL_SECONDS:-86400}
+      - PROXY_UNKNOWN_RETRY_SECONDS=${PROXY_UNKNOWN_RETRY_SECONDS:-60}
+      - PROXY_IDEMPOTENCY_TTL_SECONDS=${PROXY_IDEMPOTENCY_TTL_SECONDS:-600}
+      - PROXY_BOOTSTRAP_ALLOW_DOMAINS=${PROXY_BOOTSTRAP_ALLOW_DOMAINS:-}
+      - PUBLIC_PROXY_URL=${PUBLIC_PROXY_URL:-http://127.0.0.1:3128}
 
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - OPENROUTER_MODEL=${OPENROUTER_MODEL}
@@ -94,14 +198,25 @@ services:
 
       - GOPHISH_API_KEY=${GOPHISH_API_KEY}
       - GOPHISH_API_URL=${GOPHISH_API_URL}
+      - GOPHISH_CA_BUNDLE=${GOPHISH_CA_BUNDLE:-}
 
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
 
-      - VT_API_KEY=${VT_API_KEY}
-      - URLSCAN_API_KEY=${URLSCAN_API_KEY}
       - SOC_CHAT_ID=${SOC_CHAT_ID}
       - WEBHOOK_URL=${WEBHOOK_URL}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
     restart: unless-stopped
+    depends_on:
+      mailpit:
+        condition: service_started
+      proxy_postgres:
+        condition: service_healthy
+      proxy_redis:
+        condition: service_healthy
     networks:
       - hfl_network
 
@@ -109,31 +224,67 @@ services:
   # Arsitektur: Dashboard TIDAK berisi business logic. Hanya menerima
   # data dari Threat Intelligence Service (flask_api / n8n) via webhook
   # POST ke /api/incident, /api/cache, /api/summary, lalu menampilkannya.
-  # Login: Bot-First Magic Link (tanpa username/password tradisional).
+  # Login: email + password + OTP, dengan session cookie via Next.js BFF.
   dashboard:
     build: ./dashboard
     container_name: hfl-dashboard
     ports:
-      - "3000:3000"
-    env_file:
-      - .env
+      - "${WEB_BIND_IP:-127.0.0.1}:3000:3000"
     environment:
-      - NEXT_PUBLIC_BASE_URL=http://localhost:3000
-      - NEXT_PUBLIC_API_URL=http://localhost:5000
-      - NEXT_PUBLIC_BOT_USERNAME=${BOT_USERNAME}
+      - APP_ENV=${APP_ENV:-production}
+      - NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL:-http://127.0.0.1:3000}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://127.0.0.1:5000}
       - API_URL=http://flask_api:5000
       - SERVICE_API_KEY=${SERVICE_API_KEY}
+      - AUTH_COOKIE_SECURE=${AUTH_COOKIE_SECURE:-false}
       - DEV_BYPASS_AUTH=${DEV_BYPASS_AUTH}
+      - NEXT_PUBLIC_PROXY_URL=${PUBLIC_PROXY_URL:-http://127.0.0.1:3128}
+      - NEXT_PUBLIC_PROXY_PROBE_URL=${PUBLIC_PROXY_PROBE_URL:-http://proxy-check.afferent.invalid/__afferent_probe__}
     depends_on:
-      - flask_api
+      flask_api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - hfl_network
+
+  # Explicit forward proxy for employee devices. Bind to a Tailscale/LAN IP
+  # via PROXY_BIND_IP; loopback is the safe default for local development.
+  # TLS inspection (ssl-bump) is enabled: clients must trust the AFFERENT
+  # Proxy CA (proxy/ssl/afferent-proxy-ca.crt) in their browser/OS store.
+  centralized_proxy:
+    build: ./proxy
+    container_name: hfl-centralized-proxy
+    ports:
+      - "${PROXY_BIND_IP:-127.0.0.1}:${PROXY_PORT:-3128}:3128"
+    environment:
+      - PROXY_DECISION_API_URL=http://flask_api:5000/api/proxy/decision
+      - PROXY_DECISION_TIMEOUT_SECONDS=${PROXY_DECISION_TIMEOUT_SECONDS:-2.5}
+      # Demo/lab default: preserve Internet access if the Decision API is
+      # temporarily unavailable. Set to closed explicitly for fail-closed use.
+      - PROXY_FAIL_MODE=${PROXY_FAIL_MODE:-open}
+      - SERVICE_API_KEY=${SERVICE_API_KEY}
+    volumes:
+      # CA cert + key used by Squid to sign per-site certificates (ssl-bump).
+      - ./proxy/ssl:/etc/squid/ssl_cert:ro
+    depends_on:
+      flask_api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "squidclient -p 3128 mgr:info >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 4s
+      retries: 12
     restart: unless-stopped
     networks:
       - hfl_network
 
 volumes:
+  mailpit_data:
   n8n_data:
   gophish_data:
   flask_db:
+  proxy_postgres_data:
+  proxy_redis_data:
 
 networks:
   hfl_network:

@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Akses diblokir — AFFERENT</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:#080d1b;color:#edf4ff;font-family:Poppins,Segoe UI,sans-serif}.card{width:620px;max-width:92vw;padding:40px;border:1px solid #33476d;border-radius:24px;background:rgba(14,23,43,.92);box-shadow:0 30px 80px #0008}.mark{width:58px;height:58px;display:grid;place-items:center;border-radius:18px;background:#ef44441f;border:1px solid #ef444466;color:#fb7185;font-size:28px}h1{margin:24px 0 10px;font-size:30px}p{color:#afbdd5;line-height:1.7}.domain{margin:24px 0;padding:16px;border-radius:12px;background:#071020;border:1px solid #293c61;color:#7dd3fc;word-break:break-all;font-family:ui-monospace,monospace}.meta{font-size:13px;color:#7f91ad}.pill{display:inline-flex;margin-top:18px;padding:7px 11px;border-radius:999px;background:#ef44441a;color:#fda4af;border:1px solid #ef44444d;font-weight:700;font-size:12px}
+  </style>
+</head>
+<body><main class="card"><div class="mark">!</div><span class="pill">AFFERENT PROXY · BLOCKED</span><h1>Akses ke situs ini dihentikan</h1><p>Domain terdeteksi berbahaya atau diblokir oleh kebijakan manual SOC. Aktivitas ini telah dicatat untuk peninjauan tim keamanan.</p><div class="domain">%U</div><p class="meta">Request: %R<br>Proxy: %h</p></main></body>
+</html>

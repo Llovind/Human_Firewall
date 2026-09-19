@@ -72,16 +72,6 @@ export interface PolicyDecision {
   userId?: string;
 }
 
-export interface AuthToken {
-  token: string;
-  email: string;
-  userName: string;
-  division: string;
-  telegramId: string;
-  createdAt: number;
-  expiresAt: number;
-}
-
 // ── In-Memory Store ──────────────────────────────────────────
 
 class DataStore {
@@ -90,7 +80,6 @@ class DataStore {
   private aiSummaries: AISummary[] = [];
   private behaviorScores: BehaviorScore[] = [];
   private policyDecisions: PolicyDecision[] = [];
-  private authTokens: Map<string, AuthToken> = new Map();
 
   // ── Incidents ──
   addIncident(incident: Incident) {
@@ -152,22 +141,6 @@ class DataStore {
   }
   getPolicyDecisions(): PolicyDecision[] {
     return [...this.policyDecisions];
-  }
-
-  // ── Auth Tokens (Magic Links) ──
-  createAuthToken(token: AuthToken) {
-    this.authTokens.set(token.token, token);
-  }
-  validateAuthToken(tokenStr: string): AuthToken | null {
-    const token = this.authTokens.get(tokenStr);
-    if (!token) return null;
-    if (Date.now() > token.expiresAt) {
-      this.authTokens.delete(tokenStr);
-      return null;
-    }
-    // One-time use: delete after validation
-    this.authTokens.delete(tokenStr);
-    return token;
   }
 
   // ── Stats ──

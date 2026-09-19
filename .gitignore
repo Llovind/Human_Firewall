@@ -31,6 +31,9 @@ dist/
 *.sqlite
 *.sqlite-*
 scratch/
+secrets/
+*.key
+proxy/ssl/*.key
 
 # IDE files
 .vscode/

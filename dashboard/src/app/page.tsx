@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import Logo from '@/components/Logo';
 import ThemeToggle from '@/components/ThemeToggle';
 import ReportingBadgesWidget from '@/components/ReportingBadgesWidget';
+import ProxyConnectionCard from '@/components/ProxyConnectionCard';
 import { 
   LayoutDashboard, Fish, Shield, ShieldCheck, Timer, Lightbulb, Search, 
   Flame, BookOpen, Star, FileWarning, CheckCircle2, AlertTriangle, Trophy, 
@@ -73,7 +74,7 @@ export default function EmployeeDashboardPage() {
 
   // ── Polling & state data sources ───
   const behaviorUrl = user 
-    ? `/api/behavior?email=${encodeURIComponent(user.email)}&token=${encodeURIComponent(user.token || '')}`
+    ? `/api/behavior?email=${encodeURIComponent(user.email)}`
     : '';
   const { data: behaviorData, hasUpdated: behaviorUpdated, refresh: pollBehavior } = usePolling<{ scores: BehaviorScore[]; by_divisi?: any[] }>(behaviorUrl, 5000);
   const [activities, setActivities] = useState<UserActivity[]>([]);
@@ -114,8 +115,7 @@ export default function EmployeeDashboardPage() {
     setQuizLoading(true);
     setQuizError(null);
     try {
-      const storedToken = user.token || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('token') : null) || 'dev_token';
-      const res = await fetch(`/api/quiz/today?email=${encodeURIComponent(user.email)}&token=${encodeURIComponent(storedToken)}`);
+      const res = await fetch(`/api/quiz/today?email=${encodeURIComponent(user.email)}`);
       if (res.ok) {
         const data = await res.json();
         setQuizQuestion(data);
@@ -137,8 +137,6 @@ export default function EmployeeDashboardPage() {
     setQuizChoice(choiceIndex);
 
     try {
-      const storedToken = user.token || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('token') : null) || 'dev_token';
-      
       const res = await fetch('/api/quiz/complete', {
         method: 'POST',
         headers: {
@@ -146,7 +144,6 @@ export default function EmployeeDashboardPage() {
         },
         body: JSON.stringify({
           employee_id: user.email,
-          token: storedToken,
           question_id: quizQuestion.id,
           selected_option_index: choiceIndex,
         }),
@@ -176,8 +173,6 @@ export default function EmployeeDashboardPage() {
     setIsSubmittingRevive(true);
 
     try {
-      const storedToken = user.token || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('token') : null) || 'dev_token';
-      
       const res = await fetch('/api/quiz/revive', {
         method: 'POST',
         headers: {
@@ -185,7 +180,6 @@ export default function EmployeeDashboardPage() {
         },
         body: JSON.stringify({
           employee_id: user.email,
-          token: storedToken,
         }),
       });
 
@@ -233,9 +227,7 @@ export default function EmployeeDashboardPage() {
   const loadUserActivities = async () => {
     if (!user) return;
     try {
-      const storedToken = user.token || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('token') : null) || 'dev_token';
-      
-      const res = await fetch(`/api/user-activity?email=${encodeURIComponent(user.email)}&token=${encodeURIComponent(storedToken)}`);
+      const res = await fetch(`/api/user-activity?email=${encodeURIComponent(user.email)}`);
       if (res.ok) {
         const data = await res.json();
         setActivities(data.activities || []);
@@ -248,8 +240,7 @@ export default function EmployeeDashboardPage() {
   const checkEligibility = async () => {
     if (!user) return;
     try {
-      const storedToken = user.token || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('token') : null) || 'dev_token';
-      const res = await fetch(`/api/user-eligibility?email=${encodeURIComponent(user.email)}&token=${encodeURIComponent(storedToken)}`);
+      const res = await fetch(`/api/user-eligibility?email=${encodeURIComponent(user.email)}`);
       if (res.ok) {
         const data = await res.json();
         setEligibility(data);
@@ -424,7 +415,7 @@ export default function EmployeeDashboardPage() {
         </div>
         <div className="topbar-right">
           <a
-            href="/blocked?url=https://portal-keuangan-company.xyz/login&source=URLScan&score=94&type=Credential%20Harvesting"
+            href="/blocked?url=https://portal-keuangan-company.xyz/login&source=AFFERENT%20ML&score=94&type=Malicious%20Domain"
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -462,6 +453,7 @@ export default function EmployeeDashboardPage() {
         {/* ── MY DASHBOARD TAB ─────────────────────────────── */}
         {activeTab === 'dashboard' && (
           <>
+            <ProxyConnectionCard />
             <div className="employee-dashboard-layout">
               <div className="employee-left-col" style={{ display: 'flex', flexDirection: 'column' }}>
                 {/* Hero Card */}
@@ -558,7 +550,7 @@ export default function EmployeeDashboardPage() {
 
                 {/* Achievements Showcase (Combined Widget) */}
                 {myScore && (
-                  <ReportingBadgesWidget email={user.email} token={user.token} legacyBadges={myScore.badges || []} />
+                  <ReportingBadgesWidget email={user.email} legacyBadges={myScore.badges || []} />
                 )}
 
                 {/* Daily Tip Card */}

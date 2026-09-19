@@ -73,27 +73,27 @@
 
 ```env
 # Flask Core
-SECRET_KEY=e0945a8ad7cd378c50da4060303e76bcf5a9d1bdff32afc31b2b72d9e3fcb742
-ADMIN_PASSWORD=hfl-admin-2026
-SERVICE_API_KEY=5f2970d4e3376a7e842e5f7f0f6df224cb01a50e3d8a60b75656de4372977036
+SECRET_KEY=<set-via-secret-store>
+ADMIN_PASSWORD=<set-via-secret-store>
+SERVICE_API_KEY=<set-via-secret-store>
 DEV_BYPASS_AUTH=true
 
 # AI Providers (Pure LLM Router in backend/ai_router.py)
-OPENROUTER_API_KEY=
-GEMINI_API_KEY=
-GROQ_API_KEY=
+OPENROUTER_API_KEY=<set-via-secret-store>
+GEMINI_API_KEY=<set-via-secret-store>
+GROQ_API_KEY=<set-via-secret-store>
 
 # Telegram Bot & Scanners
-TELEGRAM_BOT_TOKEN=8771953552:AAEV6BLdhjLp0IBXunrQ5k_4FHh9WwXuSCU
-SOC_CHAT_ID=-1003979650342
-VT_API_KEY=fbfdaaa618dc7446a3e8417c08cd53d6d818e51d7d733dc2208de64e2902cb08
-URLSCAN_API_KEY=019f0841-2c4c-74ba-a7b7-d057f9a70cdd
+TELEGRAM_BOT_TOKEN=<set-via-secret-store>
+SOC_CHAT_ID=<set-via-environment>
+VT_API_KEY=<set-via-secret-store>
+URLSCAN_API_KEY=<set-via-secret-store>
 
 # Webhook Tunnel (Active Cloudflare Tunnel)
 WEBHOOK_URL=https://objective-lived-travel-operating.trycloudflare.com
 
 # GoPhish
-GOPHISH_API_KEY=b4b0ca9969e56d5b1bd2680790b0eae1a01796b7e5f7e18762ee8e0c10975676
+GOPHISH_API_KEY=<set-via-secret-store>
 GOPHISH_API_URL=https://gophish:3333
 ```
 
@@ -132,7 +132,7 @@ ngrok http --domain=disparity-stonework-shortness.ngrok-free.dev 5678
 docker compose ps
 
 # Check Telegram Webhook status
-python -c "import requests; print(requests.get('https://api.telegram.org/bot8771953552:AAEV6BLdhjLp0IBXunrQ5k_4FHh9WwXuSCU/getWebhookInfo').json())"
+python -c "import requests; print(requests.get('https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getWebhookInfo').json())"
 
 # Check Flask API status
 curl http://localhost:5000/api/summary

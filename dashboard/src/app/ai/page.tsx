@@ -2,21 +2,22 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
+import { ROLE_ROUTES } from '@/lib/authSession';
 
 export default function StandaloneAiPageRedirect() {
   const router = useRouter();
+  const { user, isLoading } = useAuth();
 
   useEffect(() => {
-    // Determine active role from localStorage or default to 'soc'
-    let role = 'soc';
-    if (typeof window !== 'undefined') {
-      const storedRole = localStorage.getItem('hfl_admin_role');
-      if (storedRole && ['soc', 'ciso', 'grc', 'phishing_admin'].includes(storedRole)) {
-        role = storedRole;
-      }
+    if (isLoading) return;
+    if (!user) {
+      router.replace('/auth');
+      return;
     }
-    router.replace(`/dashboard/${role}?tab=ai`);
-  }, [router]);
+    const base = ROLE_ROUTES[user.role] || '/';
+    router.replace(`${base}?tab=ai`);
+  }, [isLoading, router, user]);
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center space-y-4">

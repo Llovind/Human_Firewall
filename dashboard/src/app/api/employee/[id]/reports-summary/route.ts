@@ -12,13 +12,8 @@ export async function GET(
       return NextResponse.json({ error: 'Parameter employee id wajib diisi' }, { status: 400 });
     }
 
-    const token = request.nextUrl.searchParams.get('token');
-    if (!token) {
-      return NextResponse.json({ error: 'Parameter token wajib diisi' }, { status: 401 });
-    }
-
     const res = await fetchFlaskBackend(
-      `/api/employee/${encodeURIComponent(id)}/reports-summary?token=${encodeURIComponent(token)}`,
+      `/api/employee/${encodeURIComponent(id)}/reports-summary`,
       { method: 'GET' }
     );
 

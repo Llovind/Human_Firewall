@@ -1,68 +1,95 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from 'react';
 
 export type { AdminRole } from '@/components/admin/types';
-import type { AdminRole } from '@/components/admin/types';
 
-interface User {
+export interface AuthUser {
+  id: number;
   email: string;
   userName: string;
   division: string;
-  telegramId: string;
-  role?: AdminRole | string;
-  token?: string;
+  role: 'employee' | 'phishing_admin' | 'soc' | 'grc' | 'ciso';
 }
 
 interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (user: User) => void;
-  logout: () => void;
+  refreshSession: () => Promise<AuthUser | null>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   isAuthenticated: false,
   isLoading: true,
-  login: () => {},
-  logout: () => {},
+  refreshSession: async () => null,
+  logout: async () => {},
 });
 
+async function fetchCurrentSession(): Promise<AuthUser | null> {
+  try {
+    const response = await fetch('/api/auth/session', { cache: 'no-store' });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.user as AuthUser;
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    // Restore session from localStorage on mount
+  const refreshSession = useCallback(async () => {
+    setIsLoading(true);
+    const nextUser = await fetchCurrentSession();
     try {
-      const stored = localStorage.getItem('hf_user');
-      if (stored) {
-        setUser(JSON.parse(stored));
-      }
-    } catch {
-      // Ignore parse errors
+      setUser(nextUser);
+      return nextUser;
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   }, []);
 
-  const login = (userData: User) => {
-    setUser(userData);
-    localStorage.setItem('hf_user', JSON.stringify(userData));
-  };
+  useEffect(() => {
+    let active = true;
+    const synchronizeSession = () => void fetchCurrentSession().then((nextUser) => {
+      if (!active) return;
+      setUser(nextUser);
+      setIsLoading(false);
+    });
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('hf_user');
-  };
+    synchronizeSession();
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') synchronizeSession();
+    };
+    window.addEventListener('focus', synchronizeSession);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      active = false;
+      window.removeEventListener('focus', synchronizeSession);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, []);
+
+  const logout = useCallback(async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } finally {
+      setUser(null);
+      window.location.assign('/auth');
+    }
+  }, []);
 
   return (
     <AuthContext.Provider value={{
       user,
-      isAuthenticated: !!user,
+      isAuthenticated: Boolean(user),
       isLoading,
-      login,
+      refreshSession,
       logout,
     }}>
       {children}

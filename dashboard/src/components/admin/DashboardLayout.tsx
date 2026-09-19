@@ -15,6 +15,7 @@ import '@/app/dashboard.css';
 
 /** Sidebar tab definitions per role */
 type TabDef = { id: string; label: string; icon: ReactNode };
+const ADMIN_ROLES: AdminRole[] = ['phishing_admin', 'soc', 'grc', 'ciso'];
 
 const ROLE_TABS: Record<AdminRole, TabDef[]> = {
   phishing_admin: [
@@ -73,6 +74,20 @@ export default function DashboardLayout({ role, activeTab, onTabChange, children
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    if (authLoading) return;
+    if (!isAuthenticated || !user || !ADMIN_ROLES.includes(user.role as AdminRole)) {
+      router.replace('/auth');
+      return;
+    }
+    if (user.role !== role) {
+      const correctRoute = user.role === 'employee'
+        ? '/'
+        : ROLE_ROUTES[user.role as AdminRole];
+      if (correctRoute) router.replace(correctRoute);
+    }
+  }, [authLoading, isAuthenticated, role, router, user]);
+
   // Auth guard
   if (authLoading) {
     return (
@@ -83,18 +98,12 @@ export default function DashboardLayout({ role, activeTab, onTabChange, children
     );
   }
 
-  const validRoles: string[] = ['admin', 'phishing_admin', 'soc', 'grc', 'ciso'];
-  if (!isAuthenticated || !user || !user.role || !validRoles.includes(user.role)) {
-    if (typeof window !== 'undefined') window.location.href = '/admin/login';
+  if (!isAuthenticated || !user || !ADMIN_ROLES.includes(user.role as AdminRole)) {
     return null;
   }
 
   // Role mismatch guard: redirect to correct dashboard
-  if (user.role !== role && user.role !== 'admin') {
-    const correctRoute = ROLE_ROUTES[user.role as AdminRole];
-    if (correctRoute && typeof window !== 'undefined') {
-      window.location.href = correctRoute;
-    }
+  if (user.role !== role) {
     return null;
   }
 

@@ -78,9 +78,9 @@
   --text-inverse:   #ffffff;
 
   /* Typography */
-  --font-heading:   var(--font-body, 'Inter', sans-serif);
-  --font-body:      var(--font-body, 'Inter', sans-serif);
-  --font-mono-data: var(--font-mono-data, 'JetBrains Mono', monospace);
+  --font-heading:   var(--font-poppins-source, 'Poppins', sans-serif);
+  --font-body:      var(--font-poppins-source, 'Poppins', sans-serif);
+  --font-mono-data: var(--font-jetbrains-source, 'JetBrains Mono', monospace);
   --font-sans:      var(--font-body);
   --font-mono:      var(--font-mono-data);
 

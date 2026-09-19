@@ -1,22 +1,13 @@
 import requests
 import os
-import urllib3
-
-# Disable InsecureRequestWarning for self-signed GoPhish certs
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 GOPHISH_API_KEY = os.environ.get('GOPHISH_API_KEY', '')
 GOPHISH_API_URL = os.environ.get('GOPHISH_API_URL', 'https://gophish:3333')
+GOPHISH_CA_BUNDLE = os.environ.get('GOPHISH_CA_BUNDLE', '').strip()
 
 def _request(method, endpoint, payload=None):
     url = f"{GOPHISH_API_URL.rstrip('/')}{endpoint}"
     
-    # Try api_key in query string first as universally supported by GoPhish
-    if '?' in url:
-        url = f"{url}&api_key={GOPHISH_API_KEY}"
-    else:
-        url = f"{url}?api_key={GOPHISH_API_KEY}"
-
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f'Bearer {GOPHISH_API_KEY}'
@@ -27,7 +18,9 @@ def _request(method, endpoint, payload=None):
         url=url, 
         json=payload, 
         headers=headers, 
-        verify=False
+        # Strict verification is the default. For a private/self-signed CA,
+        # mount the CA certificate and configure GOPHISH_CA_BUNDLE.
+        verify=GOPHISH_CA_BUNDLE or True
     )
     
     response.raise_for_status()

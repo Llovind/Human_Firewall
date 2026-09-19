@@ -10,6 +10,7 @@ import PolicySection from '@/components/admin/PolicySection';
 import { usePolling } from '@/hooks/usePolling';
 import type { Incident, Stats, ThreatCacheEntry, AISummary, BehaviorScore, PolicyDecision, ComplianceSummary, AdminLoginEvent } from '@/components/admin/types';
 import AIIntelligenceSection from '@/components/admin/AIIntelligenceSection';
+import ProxyOperationsSection from '@/components/admin/ProxyOperationsSection';
 
 export default function SOCDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -82,6 +83,7 @@ export default function SOCDashboard() {
 
       {activeTab === 'threats' && (
         <>
+          <ProxyOperationsSection />
           <ThreatCacheSection
             readOnly={false}
             cacheData={cache}

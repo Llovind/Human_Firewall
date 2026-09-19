@@ -163,18 +163,17 @@ interface UnifiedBadge {
   achieved: boolean;
 }
 
-export default function ReportingBadgesWidget({ email, token, legacyBadges }: { email: string; token?: string; legacyBadges: string[] }) {
+export default function ReportingBadgesWidget({ email, legacyBadges }: { email: string; legacyBadges: string[] }) {
   const [data, setData] = useState<ReportsSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!email || !token) return;
-    const authToken = token;
+    if (!email) return;
     let cancelled = false;
 
     async function load() {
       try {
-        const res = await fetch(`/api/employee/${encodeURIComponent(email)}/reports-summary?token=${encodeURIComponent(authToken)}`);
+        const res = await fetch(`/api/employee/${encodeURIComponent(email)}/reports-summary`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         if (!cancelled) setData(json);
@@ -187,7 +186,7 @@ export default function ReportingBadgesWidget({ email, token, legacyBadges }: { 
     load();
     const interval = setInterval(load, 10000);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [email, token]);
+  }, [email]);
 
   const badges: UnifiedBadge[] = useMemo(() => {
     const behavior: UnifiedBadge[] = LEGACY_BADGES.map(b => ({

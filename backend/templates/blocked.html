@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Access Blocked — Secure Gateway</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -13,7 +13,7 @@
             background-image:
                 radial-gradient(ellipse at 50% 10%, rgba(220, 38, 38, 0.08) 0%, transparent 60%),
                 radial-gradient(ellipse at 50% 90%, rgba(30, 20, 40, 0.5) 0%, transparent 50%);
-            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
             color: #d4d4d8;
             min-height: 100vh;
             display: flex;
@@ -50,7 +50,7 @@
 
         /* ── Heading ── */
         h1 {
-            font-family: 'Outfit', sans-serif;
+            font-family: 'Poppins', sans-serif;
             font-size: 1.55rem;
             font-weight: 700;
             letter-spacing: 0.04em;
@@ -127,7 +127,7 @@
         }
 
         .detail-item .detail-value {
-            font-family: 'Outfit', sans-serif;
+            font-family: 'Poppins', sans-serif;
             font-size: 0.95rem;
             font-weight: 600;
             color: #fafafa;
@@ -178,7 +178,7 @@
             border: none;
             border-radius: 12px;
             color: #fff;
-            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-family: 'Poppins', sans-serif;
             font-size: 0.9rem;
             font-weight: 600;
             cursor: pointer;
@@ -200,7 +200,7 @@
             border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 12px;
             color: #a1a1aa;
-            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-family: 'Poppins', sans-serif;
             font-size: 0.85rem;
             font-weight: 500;
             cursor: pointer;
@@ -257,7 +257,7 @@
 
     <h1>Access Blocked by Secure Gateway</h1>
     <p class="desc">
-        Adaptive Secure Gateway mendeteksi ancaman tingkat tinggi (<strong>HIGH Risk</strong>) pada URL yang Anda coba akses. Akses dibatalkan demi keamanan data perusahaan.
+        AFFERENT Security Gateway menghentikan koneksi karena domain masuk kebijakan blok. Aktivitas dicatat untuk peninjauan tim SOC.
     </p>
 
     <!-- Details Card -->
@@ -267,6 +267,10 @@
 
         <div class="field-label">Blocked Source (URL):</div>
         <div class="url-block">{{ threat.url or '—' }}</div>
+        {% if threat.reason %}
+        <div class="field-label">Reason:</div>
+        <div class="url-block">{{ threat.reason }}</div>
+        {% endif %}
 
         <div class="detail-grid">
             <div class="detail-item">
@@ -300,9 +304,9 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
         Kembali ke Halaman Aman
     </a>
-    <a href="#" class="btn-ghost" onclick="alert('Laporan false positive telah dicatat. Tim keamanan akan meninjau dalam 24 jam.'); return false;">
+    <a href="mailto:soc@afferent.local?subject=AFFERENT%20Proxy%20Review" class="btn-ghost">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        Laporkan Salah Deteksi (False Positive)
+        Minta Peninjauan Tim SOC
     </a>
 </div>
 

@@ -798,6 +798,7 @@
   <!-- Telemetry & Event Script -->
   <script>
     const USER_EMAIL = "__USER_EMAIL__";
+    const SIMULATION_TOKEN = "__SIMULATION_TOKEN__";
     let trainingMarked = false;
 
     // Accordion Toggle
@@ -856,7 +857,7 @@
     }
 
     // Fetch user profile telemetry
-    fetch('/api/user-profile?email=' + encodeURIComponent(USER_EMAIL))
+    fetch('/api/user-profile?email=' + encodeURIComponent(USER_EMAIL) + '&simulation_token=' + encodeURIComponent(SIMULATION_TOKEN))
       .then(r => r.json())
       .then(data => populateProfile(data))
       .catch(() => {
@@ -888,7 +889,7 @@
       fetch('/api/event', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: USER_EMAIL, event_type: 'viewed_training' })
+        body: JSON.stringify({ email: USER_EMAIL, event_type: 'viewed_training', simulation_token: SIMULATION_TOKEN })
       }).catch(function() {});
     }
 
@@ -898,7 +899,7 @@
         fetch('/api/event', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: USER_EMAIL, event_type: 'skipped_training' }),
+          body: JSON.stringify({ email: USER_EMAIL, event_type: 'skipped_training', simulation_token: SIMULATION_TOKEN }),
           keepalive: true
         });
       }

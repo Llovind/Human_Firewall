@@ -1,6 +1,8 @@
 from flask import Blueprint, request, jsonify
 import database
 import gophish_client
+from security import current_identity, require_roles
+from services import auth_service
 
 admin_api_bp = Blueprint('admin_api', __name__)
 
@@ -30,6 +32,7 @@ def sanitize_gophish_html(html):
     return html
 
 @admin_api_bp.route('/api/dashboard-summary', methods=['GET'])
+@require_roles('phishing_admin', 'soc', 'grc', 'ciso')
 def dashboard_summary():
     summary = database.get_dashboard_summary()
     return jsonify(summary), 200
@@ -37,64 +40,52 @@ def dashboard_summary():
 
 @admin_api_bp.route('/api/leaderboard', methods=['GET'])
 @admin_api_bp.route('/api/admin/leaderboard', methods=['GET'])
+@require_roles('employee', 'phishing_admin', 'soc', 'grc', 'ciso')
 def leaderboard():
     """Handoff Step A.4 — Leaderboard UI Tab data source. Mengembalikan
     ranking individu (berdasarkan poin) dan rata-rata poin per divisi."""
-    return jsonify(database.get_leaderboard()), 200
+    result = database.get_leaderboard()
+    identity = current_identity()
+    if identity and identity.role == 'employee':
+        result['individual'] = [
+            row for row in result.get('individual', [])
+            if str(row.get('email', '')).lower() == identity.email.lower()
+        ]
+    return jsonify(result), 200
 
 
 @admin_api_bp.route('/api/login-history', methods=['GET'])
 @admin_api_bp.route('/api/admin/login-history', methods=['GET'])
+@require_roles('phishing_admin', 'ciso')
 def login_history():
     """Audit log riwayat login admin/user."""
     try:
-        logs = database.list_login_history() if hasattr(database, 'list_login_history') else []
+        logs = auth_service.list_login_audit(request.args.get('limit', 100, type=int))
         return jsonify({"logs": logs}), 200
     except Exception:
         return jsonify({"logs": []}), 200
 
 
-def _verify_grc_ciso_access():
-    """Helper to check if requesting user has GRC or CISO role."""
-    import os
-    if os.environ.get('DEV_BYPASS_AUTH', 'false').lower() == 'true':
-        return None
-
-    role = (request.args.get('role') or request.headers.get('X-User-Role') or '').lower()
-    if role not in ['grc', 'ciso', 'admin', 'soc', 'phishing_admin']:
-        return jsonify({
-            "error": "Access Denied",
-            "detail": f"GRC Compliance Readiness data is restricted to GRC and CISO roles only."
-        }), 403
-    return None
-
-
 @admin_api_bp.route('/api/compliance-summary', methods=['GET'])
 @admin_api_bp.route('/api/admin/compliance-summary', methods=['GET'])
+@require_roles('grc', 'ciso')
 def compliance_summary():
     """Mengembalikan skor Kesiapan Kepatuhan (Readiness Level) terklasifikasi
     berdasarkan klausul resmi ISO 27001:2022 dan UU PDP No. 27/2022."""
-    access_error = _verify_grc_ciso_access()
-    if access_error:
-        return access_error
     return jsonify(database.get_compliance_summary()), 200
 
 
 @admin_api_bp.route('/api/admin/readiness-thresholds', methods=['GET'])
+@require_roles('grc', 'ciso')
 def get_readiness_thresholds_route():
     """Mengembalikan daftar ambang batas kesiapan GRC."""
-    access_error = _verify_grc_ciso_access()
-    if access_error:
-        return access_error
     return jsonify(database.get_readiness_thresholds()), 200
 
 
 @admin_api_bp.route('/api/admin/readiness-thresholds', methods=['POST'])
+@require_roles('grc')
 def update_readiness_threshold_route():
     """Update ambang batas kesiapan GRC. Menolak perubahan jika is_legally_mandated = 1."""
-    access_error = _verify_grc_ciso_access()
-    if access_error:
-        return access_error
 
     data = request.get_json(silent=True) or {}
     clause_id = data.get('clause_id')
@@ -169,6 +160,7 @@ def _enrich_campaign_stats(c):
 
 
 @admin_api_bp.route('/api/admin/gophish/campaigns', methods=['GET'])
+@require_roles('phishing_admin', 'ciso')
 def gophish_campaigns():
     combined = []
     # 1. Fetch local campaigns
@@ -194,6 +186,7 @@ def gophish_campaigns():
 
 
 @admin_api_bp.route('/api/admin/gophish/resources', methods=['GET'])
+@require_roles('phishing_admin', 'ciso')
 def gophish_resources():
     templates = []
     pages = []
@@ -231,6 +224,7 @@ def gophish_resources():
 
 
 @admin_api_bp.route('/api/admin/gophish/sync', methods=['POST'])
+@require_roles('phishing_admin')
 def gophish_sync():
     try:
         data = request.get_json(silent=True) or {}
@@ -257,6 +251,7 @@ def gophish_sync():
 
 
 @admin_api_bp.route('/api/admin/gophish/launch', methods=['POST'])
+@require_roles('phishing_admin')
 def gophish_launch():
     data = request.get_json(silent=True) or {}
     name = data.get('name')
@@ -332,6 +327,7 @@ def gophish_launch():
 
 
 @admin_api_bp.route('/api/admin/gophish/campaigns/<int:campaign_id>', methods=['DELETE'])
+@require_roles('phishing_admin')
 def gophish_delete_campaign(campaign_id):
     try:
         database.delete_simulation_campaign(campaign_id)
@@ -345,6 +341,7 @@ def gophish_delete_campaign(campaign_id):
 
 
 @admin_api_bp.route('/api/admin/gophish/campaigns/<int:campaign_id>', methods=['GET'])
+@require_roles('phishing_admin', 'ciso')
 def gophish_get_campaign(campaign_id):
     try:
         result = gophish_client.get_campaign(campaign_id)
@@ -356,6 +353,7 @@ def gophish_get_campaign(campaign_id):
 
 
 @admin_api_bp.route('/api/admin/gophish/campaigns/<int:campaign_id>/complete', methods=['POST'])
+@require_roles('phishing_admin')
 def gophish_complete_campaign(campaign_id):
     try:
         database.complete_simulation_campaign(campaign_id)
@@ -370,6 +368,7 @@ def gophish_complete_campaign(campaign_id):
 
 
 @admin_api_bp.route('/api/admin/gophish/templates', methods=['POST'])
+@require_roles('phishing_admin')
 def gophish_create_template():
     data = request.get_json(silent=True)
     if not data:
@@ -393,6 +392,7 @@ def gophish_create_template():
 
 
 @admin_api_bp.route('/api/admin/gophish/templates/<int:template_id>', methods=['PUT'])
+@require_roles('phishing_admin')
 def gophish_update_template(template_id):
     data = request.get_json(silent=True)
     if not data:
@@ -417,6 +417,7 @@ def gophish_update_template(template_id):
 
 
 @admin_api_bp.route('/api/admin/gophish/templates/<int:template_id>', methods=['DELETE'])
+@require_roles('phishing_admin')
 def gophish_delete_template(template_id):
     try:
         gophish_client.delete_template(template_id)
@@ -426,6 +427,7 @@ def gophish_delete_template(template_id):
 
 
 @admin_api_bp.route('/api/admin/gophish/pages', methods=['POST'])
+@require_roles('phishing_admin')
 def gophish_create_page():
     data = request.get_json(silent=True)
     if not data:
@@ -450,6 +452,7 @@ def gophish_create_page():
 
 
 @admin_api_bp.route('/api/admin/gophish/pages/<int:page_id>', methods=['PUT'])
+@require_roles('phishing_admin')
 def gophish_update_page(page_id):
     data = request.get_json(silent=True)
     if not data:
@@ -475,6 +478,7 @@ def gophish_update_page(page_id):
 
 
 @admin_api_bp.route('/api/admin/gophish/pages/<int:page_id>', methods=['DELETE'])
+@require_roles('phishing_admin')
 def gophish_delete_page(page_id):
     try:
         gophish_client.delete_page(page_id)
@@ -484,6 +488,7 @@ def gophish_delete_page(page_id):
 
 
 @admin_api_bp.route('/api/admin/gophish/import-site', methods=['POST'])
+@require_roles('phishing_admin')
 def gophish_import_site():
     """Clone HTML dari URL situs asli buat starting point landing page.
     TIDAK langsung bikin page di GoPhish — cuma return HTML mentahnya
@@ -503,9 +508,10 @@ def gophish_import_site():
 
 
 @admin_api_bp.route('/api/admin/employees', methods=['GET'])
+@require_roles('phishing_admin', 'grc', 'ciso')
 def list_employees():
     try:
-        employees = database.list_employees()
+        employees = auth_service.list_accounts()
         return jsonify({"employees": employees}), 200
     except Exception as e:
         return jsonify({"error": "Failed to list employees", "detail": str(e)}), 500
@@ -514,6 +520,7 @@ def list_employees():
 @admin_api_bp.route('/api/admin/threats/feed', methods=['GET'])
 @admin_api_bp.route('/api/threats/feed', methods=['GET'])
 @admin_api_bp.route('/api/admin/threat-cache', methods=['GET'])
+@require_roles('soc', 'ciso')
 def get_threats_feed():
     try:
         indicator_type = request.args.get('type')
@@ -527,15 +534,26 @@ def get_threats_feed():
 
 @admin_api_bp.route('/api/admin/threats/action', methods=['POST'])
 @admin_api_bp.route('/api/threats/action', methods=['POST'])
+@require_roles('soc')
 def execute_threat_action():
     try:
         data = request.get_json(silent=True) or {}
         indicator = data.get('indicator') or data.get('url')
         action = data.get('action')
-        reason = data.get('reason', '')
+        reason = (data.get('reason') or 'Manual SOC decision from threat feed').strip()
         if not indicator or not action:
             return jsonify({"error": "indicator and action are required"}), 400
         
+        if action in {'block', 'allow'}:
+            import uuid
+            from services import proxy_service
+            proxy_service.manual_decision(
+                domain_value=indicator,
+                action=action,
+                reason=reason,
+                identity=current_identity(),
+                request_id=request.headers.get('X-Request-ID') or str(uuid.uuid4()),
+            )
         result = database.take_threat_action(indicator, action, reason)
         return jsonify(result), 200
     except Exception as e:
@@ -543,6 +561,7 @@ def execute_threat_action():
 
 
 @admin_api_bp.route('/api/admin/threat-cache', methods=['POST'])
+@require_roles('soc', allow_service=True)
 def save_threat_cache_api():
     try:
         data = request.get_json(silent=True) or {}
@@ -569,6 +588,7 @@ def save_threat_cache_api():
 @admin_api_bp.route('/api/admin/policy/decisions', methods=['GET'])
 @admin_api_bp.route('/api/policy/decisions', methods=['GET'])
 @admin_api_bp.route('/api/policy', methods=['GET'])
+@require_roles('soc', 'ciso')
 def get_policy_decisions():
     try:
         limit = request.args.get('limit', 50, type=int)
@@ -580,6 +600,7 @@ def get_policy_decisions():
 
 @admin_api_bp.route('/api/admin/policy/evaluate', methods=['POST'])
 @admin_api_bp.route('/api/policy/evaluate', methods=['POST'])
+@require_roles('soc')
 def evaluate_policy_api():
     try:
         import policy
@@ -597,6 +618,7 @@ def evaluate_policy_api():
 @admin_api_bp.route('/api/admin/ai/summaries', methods=['GET'])
 @admin_api_bp.route('/api/ai/summaries', methods=['GET'])
 @admin_api_bp.route('/api/summary', methods=['GET'])
+@require_roles('soc', 'grc', 'ciso')
 def get_ai_summaries():
     try:
         limit = request.args.get('limit', 5, type=int)
@@ -607,22 +629,28 @@ def get_ai_summaries():
 
 
 @admin_api_bp.route('/api/admin/employees', methods=['POST'])
+@require_roles('phishing_admin')
 def add_employee():
     data = request.get_json(silent=True)
-    if not data or 'email' not in data:
-        return jsonify({"error": "Email is required"}), 400
-    
-    divisi = data.get('divisi', 'Unknown')
-    is_active = data.get('is_active', 1)
-    
+    if not data or not data.get('email') or not data.get('password'):
+        return jsonify({"error": "Email dan password wajib diisi"}), 400
     try:
-        database.add_employee(data['email'], divisi, is_active)
-        return jsonify({"message": "Employee added successfully"}), 201
+        account = auth_service.create_account(
+            email=data['email'],
+            password=data['password'],
+            role=data.get('role', 'employee'),
+            division=data.get('divisi', 'General'),
+            is_active=data.get('is_active', 1),
+        )
+        return jsonify({"message": "Employee dan akun berhasil dibuat", "account": account}), 201
+    except auth_service.AuthError as e:
+        return jsonify({"error": e.message, "code": e.code}), e.status
     except Exception as e:
-        return jsonify({"error": "Failed to add employee", "detail": str(e)}), 500
+        return jsonify({"error": "Gagal membuat akun employee"}), 500
 
 
 @admin_api_bp.route('/api/admin/employees', methods=['PUT'])
+@require_roles('phishing_admin')
 def edit_employee():
     data = request.get_json(silent=True)
     if not data or 'old_email' not in data or 'email' not in data:
@@ -632,13 +660,23 @@ def edit_employee():
     is_active = data.get('is_active', 1)
     
     try:
-        database.update_employee(data['old_email'], data['email'], divisi, is_active)
-        return jsonify({"message": "Employee updated successfully"}), 200
+        auth_service.update_account(
+            old_email=data['old_email'],
+            email=data['email'],
+            division=divisi,
+            role=data.get('role', 'employee'),
+            is_active=is_active,
+            new_password=data.get('password') or None,
+        )
+        return jsonify({"message": "Employee dan akun berhasil diperbarui"}), 200
+    except auth_service.AuthError as e:
+        return jsonify({"error": e.message, "code": e.code}), e.status
     except Exception as e:
-        return jsonify({"error": "Failed to update employee", "detail": str(e)}), 500
+        return jsonify({"error": "Gagal memperbarui akun employee"}), 500
 
 
 @admin_api_bp.route('/api/admin/divisions', methods=['GET'])
+@require_roles('phishing_admin', 'grc', 'ciso')
 def list_divisions():
     try:
         divisions = database.list_divisions()
@@ -648,6 +686,7 @@ def list_divisions():
 
 
 @admin_api_bp.route('/api/admin/divisions', methods=['POST'])
+@require_roles('phishing_admin')
 def create_division():
     data = request.get_json(silent=True)
     if not data or 'name' not in data:

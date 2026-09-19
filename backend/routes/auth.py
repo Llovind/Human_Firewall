@@ -1,219 +1,149 @@
-from flask import Blueprint, request, jsonify, render_template, session, redirect, url_for
+"""Email/password + OTP authentication endpoints for AFFERENT."""
+
+from __future__ import annotations
+
 import os
-import database
+import uuid
+import logging
 
-auth_bp = Blueprint('auth', __name__)
+from flask import Blueprint, g, jsonify, redirect, request
 
-# Fetch ADMIN_PASSWORD in blueprint to avoid circular imports
-ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
+from services import auth_service
 
-@auth_bp.route('/admin/login', methods=['GET', 'POST'])
+
+auth_bp = Blueprint("auth", __name__)
+logger = logging.getLogger(__name__)
+
+
+def _request_id() -> str:
+    return request.headers.get("X-Request-ID", "").strip()[:128] or str(uuid.uuid4())
+
+
+def _client_ip() -> str:
+    if os.environ.get("TRUST_PROXY_HEADERS", "false").lower() in {"1", "true", "yes"}:
+        forwarded = request.headers.get("X-Forwarded-For", "")
+        if forwarded:
+            return forwarded.split(",", 1)[0].strip()
+    return request.remote_addr or "unknown"
+
+
+def _session_token() -> str:
+    return (
+        request.headers.get("X-Afferent-Session", "").strip()
+        or request.cookies.get("afferent_session", "").strip()
+    )
+
+
+def _error_response(exc: auth_service.AuthError):
+    payload = {"error": exc.message, "code": exc.code, "requestId": _request_id()}
+    if exc.retry_after is not None:
+        payload["retryAfter"] = exc.retry_after
+    response = jsonify(payload)
+    response.status_code = exc.status
+    if exc.retry_after is not None:
+        response.headers["Retry-After"] = str(exc.retry_after)
+    return response
+
+
+@auth_bp.route("/admin/login", methods=["GET"])
 def admin_login():
-    """Redirect legacy Flask /admin/login requests directly to Next.js React Login Page."""
-    dashboard_base = os.environ.get('NEXT_PUBLIC_BASE_URL', 'http://localhost:3000')
-    return redirect(f"{dashboard_base}/admin/login")
+    dashboard_base = os.environ.get("NEXT_PUBLIC_BASE_URL", "http://localhost:3000")
+    return redirect(f"{dashboard_base}/auth")
 
 
-@auth_bp.route('/admin/logout')
+@auth_bp.route("/admin/logout", methods=["GET"])
 def admin_logout():
-    session.clear()
-    return redirect(url_for('auth.admin_login'))
+    dashboard_base = os.environ.get("NEXT_PUBLIC_BASE_URL", "http://localhost:3000")
+    return redirect(f"{dashboard_base}/auth")
 
 
-@auth_bp.route('/api/auth/admin', methods=['POST'])
-def api_auth_admin():
-    """Verify admin password and return user object if valid."""
-    data = request.get_json(silent=True)
-    if not data or 'password' not in data:
-        return jsonify({"error": "Password wajib diisi"}), 400
+@auth_bp.route("/api/auth/login", methods=["POST"])
+def login():
+    body = request.get_json(silent=True) or {}
+    if not body.get("email") or not body.get("password"):
+        return jsonify({"error": "Email dan password wajib diisi", "code": "INVALID_PAYLOAD"}), 400
+    try:
+        result = auth_service.request_login(
+            email=str(body["email"]),
+            password=str(body["password"]),
+            ip_address=_client_ip(),
+            request_id=_request_id(),
+        )
+        return jsonify({"success": True, **result}), 200
+    except auth_service.AuthError as exc:
+        return _error_response(exc)
 
-    if data['password'] == ADMIN_PASSWORD:
+
+@auth_bp.route("/api/auth/resend-otp", methods=["POST"])
+def resend_otp():
+    body = request.get_json(silent=True) or {}
+    challenge_id = str(body.get("challengeId", "")).strip()
+    if not challenge_id:
+        return jsonify({"error": "challengeId wajib diisi", "code": "INVALID_PAYLOAD"}), 400
+    try:
+        result = auth_service.resend_otp(
+            challenge_id=challenge_id,
+            ip_address=_client_ip(),
+            request_id=_request_id(),
+        )
+        return jsonify({"success": True, **result}), 200
+    except auth_service.AuthError as exc:
+        return _error_response(exc)
+
+
+@auth_bp.route("/api/auth/verify-otp", methods=["POST"])
+def verify_otp():
+    body = request.get_json(silent=True) or {}
+    challenge_id = str(body.get("challengeId", "")).strip()
+    otp_code = str(body.get("otp", "")).strip()
+    if not challenge_id or len(otp_code) != 6 or not otp_code.isdigit():
+        return jsonify({"error": "Challenge dan kode OTP 6 digit wajib diisi", "code": "INVALID_PAYLOAD"}), 400
+    try:
+        token, user, expires_in = auth_service.verify_login_otp(
+            challenge_id=challenge_id,
+            otp_code=otp_code,
+            ip_address=_client_ip(),
+            user_agent=request.headers.get("User-Agent", ""),
+            request_id=_request_id(),
+        )
         return jsonify({
             "success": True,
-            "user": {
-                "email": "admin@humanfirewall.local",
-                "name": "Security Administrator",
-                "role": "admin"
-            }
+            "sessionToken": token,
+            "expiresIn": expires_in,
+            "user": user,
         }), 200
-    else:
-        return jsonify({"error": "Password admin salah"}), 401
+    except auth_service.AuthError as exc:
+        return _error_response(exc)
 
 
-@auth_bp.route('/api/telegram/command', methods=['POST'])
-def telegram_command():
-    data = request.get_json(silent=True)
-    if not data or 'chat_id' not in data or 'command' not in data:
-        return jsonify({"error": "chat_id and command are required"}), 400
-
-    chat_id = str(data['chat_id'])
-    cmd = data['command'].strip()
-    cmd_lower = cmd.lower()
-    first_name = data.get('first_name', 'User')
-
-    conn = database.get_connection()
-    try:
-        dashboard_base = os.environ.get('NEXT_PUBLIC_BASE_URL', 'http://localhost:3000')
-
-        # ── 1. Handle Email Input (e.g. name@domain.com or name@infranexia.co.id) ──
-        if '@' in cmd or cmd_lower.endswith('.local') or cmd_lower.endswith('.com') or cmd_lower.endswith('.id'):
-            input_email = cmd.strip()
-            import random
-            otp_code = str(random.randint(100000, 999999))
-
-            user_row = conn.execute('SELECT email FROM user_history WHERE email = ?', (input_email,)).fetchone()
-            if not user_row:
-                divisi = database.derive_divisi_from_email(input_email) if hasattr(database, 'derive_divisi_from_email') else 'General'
-                database.add_employee(input_email, divisi)
-
-            database.create_otp(input_email, chat_id, otp_code)
-
-            subject = "Human Firewall — Kode Verifikasi OTP Telegram"
-            body = (
-                "Halo Karyawan,<br><br>"
-                f"Kode OTP verifikasi Telegram Anda adalah: <b>{otp_code}</b><br><br>"
-                "Ketikkan kode 6 digit ini di chat bot Telegram untuk menyelesaikan verifikasi.<br>"
-                "Salam,<br><b>Tim IT Security</b>"
-            )
-            database.create_inbox_email(input_email, subject, body)
-
-            reply = (
-                f"📧 Email <b>{input_email}</b> diterima.\n\n"
-                "Kode OTP verifikasi telah dikirimkan ke <b>Inbox Webmail</b> Anda.\n\n"
-                "Silakan ketikkan <b>6 digit kode OTP</b> tersebut di sini untuk menghubungkan akun Telegram Anda!"
-            )
-            return jsonify({"reply": reply}), 200
-
-        # ── 2. Handle 6-Digit OTP Verification Input ──
-        if cmd.isdigit() and len(cmd) == 6:
-            target_email = database.verify_otp(chat_id, cmd)
-            if target_email:
-                reply = (
-                    "✅ <b>Verifikasi Berhasil!</b>\n\n"
-                    f"Akun Telegram Anda resmi terhubung dengan email <code>{target_email}</code>.\n\n"
-                    "📌 <b>Perintah yang Bisa Anda Gunakan:</b>\n"
-                    "• <code>/profile</code> — Lihat statistik performa & skor kepatuhan Anda.\n"
-                    "• <code>/dashboard</code> — Dapatkan link login otomatis ke Dashboard personal Anda.\n"
-                    "• <code>/help</code> — Lihat panduan bantuan kapan saja."
-                )
-            else:
-                reply = "❌ Kode OTP salah atau telah kedaluwarsa. Silakan ketik ulang email perusahaan Anda untuk meminta OTP baru."
-            return jsonify({"reply": reply}), 200
-
-        # ── 3. Check User Registration Status ──
-        row = conn.execute(
-            'SELECT email, divisi, points, daily_streak, badge FROM user_history WHERE telegram_chat_id = ?',
-            (chat_id,)
-        ).fetchone()
-
-        if cmd_lower in ('/start', '/help', 'start', 'help') or not row:
-            if not row:
-                reply = (
-                    f"Halo {first_name}! 👋 Selamat datang di <b>Afferent Security Bot</b>.\n\n"
-                    "Akun Telegram Anda belum terhubung dengan akun perusahaan.\n\n"
-                    "📧 <b>Panduan Pendaftaran Akun (3 Langkah):</b>\n"
-                    "1. Ketikkan <b>email perusahaan Anda</b> (contoh: <code>nama@infranexia.co.id</code>) di chat ini.\n"
-                    "2. Buka Webmail Anda untuk melihat <b>6 digit kode OTP</b>.\n"
-                    "3. Ketikkan 6 digit kode OTP tersebut di sini.\n\n"
-                    "💡 <b>Laporan Ancaman Langsung:</b>\n"
-                    "Anda juga bisa langsung meneruskan <b>URL mencurigakan</b> atau <b>File attachment</b> ke chat ini kapan saja untuk dianalisis otomatis!"
-                )
-            else:
-                reply = (
-                    f"Halo {first_name}! 👋 Selamat datang di <b>Afferent Security Bot</b>.\n\n"
-                    "📌 <b>Daftar Perintah Resmi:</b>\n"
-                    "• <code>/profile</code> — Lihat statistik performa & skor kepatuhan Anda.\n"
-                    "• <code>/dashboard</code> — Dapatkan link login otomatis ke Dashboard personal Anda.\n"
-                    "• <code>/help</code> — Menampilkan pesan panduan ini.\n\n"
-                    "💡 <b>Cara Melaporkan Ancaman:</b>\n"
-                    "• Kirimkan <b>URL mencurigakan</b> (berisi <code>http://...</code>)\n"
-                    "• Kirimkan <b>Lampiran File</b> (PDF, EXE, DOCX, TXT)"
-                )
-            return jsonify({"reply": reply}), 200
-
-        email = row["email"]
-        divisi = row["divisi"]
-        points = row["points"]
-        streak = row["daily_streak"] or 0
-        badge = row["badge"] or "None"
-
-        rank_row = conn.execute(
-            'SELECT count(*) + 1 as rank FROM user_history WHERE points > ?',
-            (points,)
-        ).fetchone()
-        rank = rank_row["rank"] if rank_row else 1
-        score_val = max(0, min(100, int(points / 2.0)))
-
-        if cmd_lower in ('/profile', '/score', 'profile', 'score'):
-            reply = (
-                "👤 <b>Profil Keamanan Anda</b> 👤\n\n"
-                f"📧 Email: <code>{email}</code>\n"
-                f"🏢 Divisi: {divisi}\n\n"
-                "🏆 <b>Statistik Performa:</b>\n"
-                f"• Skor Kepatuhan: <b>{score_val}/100</b>\n"
-                f"• Total Poin: <b>{points} pts</b>\n"
-                f"• Peringkat Perusahaan: <b>#{rank}</b>\n"
-                f"• Beruntun Bebas Insiden: <b>{streak} minggu</b>\n"
-                f"• Lencana Saat Ini: <b>🛡️ {badge}</b>\n\n"
-                "Pertahankan kinerja baik Anda untuk melindungi perusahaan! 💪"
-            )
-        elif cmd_lower in ('/dashboard', 'dashboard'):
-            import uuid
-            from datetime import datetime, timedelta, timezone
-
-            token = str(uuid.uuid4())
-            expires_dt = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
-
-            conn.execute(
-                'INSERT INTO dashboard_tokens (token, email, expires_at) VALUES (?, ?, ?)',
-                (token, email, expires_dt)
-            )
-            conn.commit()
-
-            magic_link = f"{dashboard_base}/auth?token={token}"
-
-            reply = (
-                "🔑 <b>Link Akses Dashboard Anda</b> 🔑\n\n"
-                "Silakan klik link di bawah ini untuk masuk ke Dashboard personal Anda secara otomatis:\n\n"
-                f"🌐 {magic_link}\n\n"
-                "⚠️ <b>Penting:</b> Jangan bagikan link ini kepada siapa pun."
-            )
-        else:
-            reply = (
-                f"Perintah <code>{cmd}</code> tidak dikenali.\n\n"
-                "Ketik <code>/help</code> untuk melihat daftar perintah yang tersedia."
-            )
-
-        return jsonify({"reply": reply}), 200
-    finally:
-        conn.close()
+@auth_bp.route("/api/auth/session", methods=["GET"])
+def session_info():
+    identity = getattr(g, "auth_identity", None)
+    if not identity:
+        return jsonify({"error": "Session tidak valid", "code": "UNAUTHORIZED"}), 401
+    return jsonify({"authenticated": True, "user": identity.as_dict()}), 200
 
 
-@auth_bp.route('/api/auth/validate-token', methods=['GET'])
-def validate_token_api():
-    token = request.args.get('token')
-    if not token:
-        return jsonify({"valid": False, "error": "Token required"}), 400
+@auth_bp.route("/api/auth/logout", methods=["POST"])
+def logout():
+    token = _session_token()
+    identity = getattr(g, "auth_identity", None) or auth_service.get_identity(token)
+    if identity:
+        try:
+            from services.proxy_service import deactivate_devices
+            deactivate_devices(identity.account_id)
+        except Exception as exc:
+            logger.warning("Proxy device deactivation failed during logout: %s", type(exc).__name__)
+    auth_service.revoke_session(token)
+    return jsonify({"success": True}), 200
 
-    email = database.validate_dashboard_token(token)
-    if not email:
-        return jsonify({"valid": False, "error": "Invalid or expired token"}), 401
 
-    conn = database.get_connection()
-    try:
-        user_row = conn.execute('SELECT email, divisi, telegram_chat_id FROM user_history WHERE email = ?', (email,)).fetchone()
-        divisi = user_row["divisi"] if user_row else 'General'
-        tg_id = user_row["telegram_chat_id"] if user_row else None
-        user_name = email.split('@')[0].replace('.', ' ').title()
-        return jsonify({
-            "valid": True,
-            "user": {
-                "email": email,
-                "userName": user_name,
-                "division": divisi,
-                "telegramId": tg_id
-            }
-        }), 200
-    finally:
-        conn.close()
-
+# Explicit tombstones prevent old integrations from silently issuing identity.
+@auth_bp.route("/api/auth/admin", methods=["POST"])
+@auth_bp.route("/api/telegram/command", methods=["POST"])
+@auth_bp.route("/api/auth/validate-token", methods=["GET"])
+def retired_auth_flow():
+    return jsonify({
+        "error": "Alur autentikasi lama telah dinonaktifkan. Gunakan email, password, dan OTP.",
+        "code": "AUTH_FLOW_RETIRED",
+    }), 410

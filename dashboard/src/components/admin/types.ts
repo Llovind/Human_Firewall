@@ -137,6 +137,19 @@ export interface LeaderboardResponse {
   by_divisi: DivisionLeaderboard[];
 }
 
+export interface EmployeeAccount {
+  email: string;
+  divisi: string;
+  role?: 'employee' | 'phishing_admin' | 'soc' | 'grc' | 'ciso';
+  has_account: number | boolean;
+  points: number;
+  is_active: number;
+}
+
+export interface Division {
+  name: string;
+}
+
 /* ── Role Types ────────────────────────────────────────── */
 
 export type AdminRole = 'phishing_admin' | 'soc' | 'grc' | 'ciso';

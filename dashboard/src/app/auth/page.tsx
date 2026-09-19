@@ -1,161 +1,251 @@
 'use client';
 
-import { Suspense } from 'react';
-import { useEffect, useState } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  ArrowRight, CheckCircle2, Eye, EyeOff, KeyRound,
+  LockKeyhole, Mail, Radar, ShieldCheck,
+} from 'lucide-react';
 import Logo from '@/components/Logo';
-import { CheckCircle2, AlertCircle } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { ROLE_ROUTES } from '@/lib/authSession';
 import './auth.css';
 
-function AuthContent() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const { login, isAuthenticated, user } = useAuth();
-  const [status, setStatus] = useState<'validating' | 'success' | 'error' | 'no-token'>('validating');
-  const [errorMsg, setErrorMsg] = useState('');
-  const [userName, setUserName] = useState('');
-  const [botUsername, setBotUsername] = useState('HFL_Notif_Bot');
+type LoginStep = 'credentials' | 'otp' | 'success';
 
-  useEffect(() => {
-    fetch('/api/config')
-      .then(res => res.json())
-      .then(data => {
-        if (data.botUsername) setBotUsername(data.botUsername);
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    const token = searchParams.get('token');
-
-    // Only auto-redirect if there is NO new token being passed in the URL
-    if (isAuthenticated && !token) {
-      if (user?.role === 'admin') {
-        router.push('/admin');
-      } else {
-        router.push('/');
-      }
-      return;
-    }
-
-    if (!token) {
-      setStatus('no-token');
-      return;
-    }
-
-    const validateToken = async () => {
-      try {
-        const res = await fetch(`/api/auth/magic-link?token=${token}`);
-        const data = await res.json();
-
-        if (res.ok && data.success) {
-          setUserName(data.user.userName);
-          setStatus('success');
-          setTimeout(() => {
-            login({ ...data.user, token: token || data.user.token });
-            router.push('/');
-          }, 1800);
-        } else {
-          setErrorMsg(data.error || 'Invalid or expired access token');
-          setStatus('error');
-        }
-      } catch {
-        setErrorMsg('Failed to connect to authentication service');
-        setStatus('error');
-      }
-    };
-
-    validateToken();
-  }, [searchParams, router, login, isAuthenticated, user]);
-
-  return (
-    <div className="auth-page">
-      <div className="auth-container fade-up">
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
-          <Logo variant="mark" size={80} />
-        </div>
-
-        <h2 className="auth-title">Afferent <strong>Platform</strong></h2>
-        <p className="auth-subtitle">Employee Access Portal</p>
-
-        {status === 'validating' && (
-          <div className="auth-status">
-            <div className="auth-spinner" />
-            <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>Validating Security Token...</h3>
-            <p className="auth-description" style={{ marginBottom: '16px' }}>Verifying your secure session credentials</p>
-            <div className="auth-progress">
-              <div className="auth-progress-bar" />
-            </div>
-          </div>
-        )}
-
-        {status === 'success' && (
-          <div className="auth-status">
-            <div className="auth-checkmark-icon">
-              <CheckCircle2 size={40} />
-            </div>
-            <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--success)', marginBottom: '6px' }}>Welcome back, {userName}!</h3>
-            <p className="auth-description" style={{ marginBottom: '12px' }}>Authentication verified. Redirecting to your dashboard...</p>
-            <div className="auth-redirect-dots">
-              <span className="dot" /><span className="dot" /><span className="dot" />
-            </div>
-          </div>
-        )}
-
-        {status === 'error' && (
-          <div className="auth-status auth-error-state">
-            <div className="auth-error-icon">
-              <AlertCircle size={40} />
-            </div>
-            <h3 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--danger)', marginBottom: '6px' }}>Authentication Failed</h3>
-            <p className="auth-description" style={{ marginBottom: '8px' }}>{errorMsg}</p>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Please request a new access link via the Telegram security bot.</p>
-          </div>
-        )}
-
-        {status === 'no-token' && (
-          <div className="auth-status">
-            <p className="auth-description">
-              Authenticate via the organization <b>Telegram Bot</b> to access your personal security telemetry, training modules, and phishing reports.
-            </p>
-            <a
-              href={`https://t.me/${botUsername}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="auth-telegram-btn"
-            >
-              <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" style={{ flexShrink: 0 }}>
-                <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
-              </svg>
-              <span>Open Telegram Bot</span>
-            </a>
-          </div>
-        )}
-      </div>
-
-      <div className="auth-footer">
-        Afferent · Centralized Security Platform
-      </div>
-    </div>
-  );
+function formatCountdown(seconds: number) {
+  const minutes = Math.floor(seconds / 60).toString().padStart(2, '0');
+  const remaining = (seconds % 60).toString().padStart(2, '0');
+  return `${minutes}:${remaining}`;
 }
 
 export default function AuthPage() {
+  const router = useRouter();
+  const { user, isAuthenticated, isLoading: sessionLoading, refreshSession } = useAuth();
+  const [step, setStep] = useState<LoginStep>('credentials');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [challengeId, setChallengeId] = useState('');
+  const [expiresIn, setExpiresIn] = useState(300);
+  const [resendIn, setResendIn] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!sessionLoading && isAuthenticated && user) {
+      router.replace(ROLE_ROUTES[user.role] || '/');
+    }
+  }, [isAuthenticated, router, sessionLoading, user]);
+
+  useEffect(() => {
+    if (step !== 'otp') return;
+    const timer = window.setInterval(() => {
+      setExpiresIn((value) => Math.max(0, value - 1));
+      setResendIn((value) => Math.max(0, value - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [step]);
+
+  const maskedEmail = useMemo(() => {
+    const [name, domain] = email.split('@');
+    if (!domain) return email;
+    return `${name.slice(0, 2)}${'•'.repeat(Math.max(2, name.length - 2))}@${domain}`;
+  }, [email]);
+
+  async function handleCredentials(event: FormEvent) {
+    event.preventDefault();
+    setError('');
+    setIsSubmitting(true);
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Proses masuk gagal');
+      setChallengeId(data.challengeId);
+      setExpiresIn(Number(data.expiresIn || 300));
+      setResendIn(Number(data.resendCooldown || 60));
+      setPassword('');
+      setStep('otp');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Proses masuk gagal');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleOtp(event: FormEvent) {
+    event.preventDefault();
+    if (otp.length !== 6) {
+      setError('Masukkan enam digit kode OTP.');
+      return;
+    }
+    setError('');
+    setIsSubmitting(true);
+    try {
+      const response = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ challengeId, otp }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Verifikasi OTP gagal');
+      setStep('success');
+      const authenticatedUser = await refreshSession();
+      window.setTimeout(() => {
+        router.replace(ROLE_ROUTES[authenticatedUser?.role || 'employee'] || '/');
+      }, 700);
+    } catch (caught) {
+      setOtp('');
+      setError(caught instanceof Error ? caught.message : 'Verifikasi OTP gagal');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleResend() {
+    if (resendIn > 0 || !challengeId) return;
+    setError('');
+    setIsSubmitting(true);
+    try {
+      const response = await fetch('/api/auth/resend-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ challengeId }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'OTP baru gagal dikirim');
+      setExpiresIn(Number(data.expiresIn || 300));
+      setResendIn(Number(data.resendCooldown || 60));
+      setOtp('');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'OTP baru gagal dikirim');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
-    <Suspense fallback={
-      <div className="auth-page">
-        <div className="auth-container fade-up">
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
-            <Logo variant="mark" size={80} />
+    <main className="login-shell">
+      <section className="login-story" aria-label="AFFERENT platform overview">
+        <div className="login-story-grid" />
+        <div className="login-brand">
+          <Logo variant="mark" size={48} />
+          <div>
+            <span>AFFERENT</span>
+            <small>Human-Centric Telemetry Security</small>
           </div>
-          <h2 className="auth-title">Afferent <strong>Platform</strong></h2>
-          <p className="auth-subtitle">Employee Access Portal</p>
-          <div className="auth-spinner" />
         </div>
-      </div>
-    }>
-      <AuthContent />
-    </Suspense>
+
+        <div className="login-story-copy">
+          <span className="login-eyebrow"><Radar size={15} /> Security awareness, made observable</span>
+          <h1>Bangun keputusan keamanan dari perilaku manusia yang nyata.</h1>
+          <p>
+            Satu ruang kerja untuk simulasi phishing, telemetry employee, dan respons SOC—dirancang untuk tim yang membutuhkan konteks, bukan sekadar alert.
+          </p>
+          <div className="login-signal-row">
+            <div><ShieldCheck size={18} /><span><strong>Protected</strong><small>OTP & session controls</small></span></div>
+            <div><Radar size={18} /><span><strong>Observable</strong><small>Human-risk telemetry</small></span></div>
+          </div>
+        </div>
+
+        <p className="login-story-footer">AFFERENT Lab Environment · Authorized users only</p>
+      </section>
+
+      <section className="login-panel">
+        <div className="login-card">
+          <div className="login-mobile-brand"><Logo variant="mark" size={42} /><span>AFFERENT</span></div>
+
+          <div className="login-progress" aria-label="Tahapan autentikasi">
+            <span className="active">1</span><i className={step !== 'credentials' ? 'active' : ''} />
+            <span className={step !== 'credentials' ? 'active' : ''}>2</span>
+          </div>
+
+          {step === 'credentials' && (
+            <>
+              <div className="login-heading">
+                <span className="login-kicker">Secure workspace</span>
+                <h2>Masuk ke AFFERENT</h2>
+                <p>Gunakan akun yang dibuat oleh Phishing Administrator.</p>
+              </div>
+              <form onSubmit={handleCredentials} className="login-form">
+                <label htmlFor="email">Email organisasi</label>
+                <div className="login-input-wrap">
+                  <Mail size={18} />
+                  <input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="nama@organisasi.id" autoComplete="username" required autoFocus />
+                </div>
+
+                <label htmlFor="password">Password</label>
+                <div className="login-input-wrap">
+                  <LockKeyhole size={18} />
+                  <input id="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Masukkan password" autoComplete="current-password" required />
+                  <button type="button" className="password-toggle" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}>
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+
+                {error && <div className="login-error" role="alert">{error}</div>}
+                <button className="login-primary" disabled={isSubmitting}>
+                  {isSubmitting ? <span className="login-spinner" /> : <><span>Lanjutkan dengan OTP</span><ArrowRight size={18} /></>}
+                </button>
+              </form>
+            </>
+          )}
+
+          {step === 'otp' && (
+            <>
+              <div className="login-heading">
+                <span className="otp-icon"><KeyRound size={22} /></span>
+                <h2>Periksa email Anda</h2>
+                <p>Kami mengirim kode verifikasi enam digit ke <strong>{maskedEmail}</strong>.</p>
+              </div>
+              <form onSubmit={handleOtp} className="login-form">
+                <label htmlFor="otp">Kode verifikasi</label>
+                <input
+                  id="otp"
+                  className="otp-input"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={otp}
+                  onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="000000"
+                  autoComplete="one-time-code"
+                  autoFocus
+                />
+                <div className="otp-meta">
+                  <span className={expiresIn < 60 ? 'urgent' : ''}>Berlaku {formatCountdown(expiresIn)}</span>
+                  <button type="button" disabled={resendIn > 0 || isSubmitting} onClick={handleResend}>
+                    {resendIn > 0 ? `Kirim ulang dalam ${resendIn}s` : 'Kirim ulang OTP'}
+                  </button>
+                </div>
+                {error && <div className="login-error" role="alert">{error}</div>}
+                <button className="login-primary" disabled={isSubmitting || expiresIn === 0}>
+                  {isSubmitting ? <span className="login-spinner" /> : <><span>Verifikasi dan masuk</span><ArrowRight size={18} /></>}
+                </button>
+                <button type="button" className="login-secondary" onClick={() => { setStep('credentials'); setOtp(''); setError(''); }}>
+                  Gunakan akun lain
+                </button>
+              </form>
+            </>
+          )}
+
+          {step === 'success' && (
+            <div className="login-success" role="status">
+              <CheckCircle2 size={52} />
+              <h2>Identitas terverifikasi</h2>
+              <p>Menyiapkan workspace sesuai hak akses Anda…</p>
+              <span className="login-spinner dark" />
+            </div>
+          )}
+
+          <div className="login-trust"><ShieldCheck size={14} /> Session disimpan dalam HTTP-only cookie</div>
+        </div>
+      </section>
+    </main>
   );
 }

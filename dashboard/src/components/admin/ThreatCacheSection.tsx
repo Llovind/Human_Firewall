@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Sliders, Activity, Search, StopCircle, FileWarning, CheckCircle2, ShieldAlert, RefreshCw, Trash2, Plus, X, HelpCircle } from 'lucide-react';
+import { Sliders, Activity, Search, StopCircle, FileWarning, CheckCircle2, ShieldAlert, Trash2, Plus, X, HelpCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { ThreatCacheEntry, timeAgo } from '@/components/admin/types';
 import '@/app/dashboard.css';
@@ -42,7 +42,7 @@ export default function ThreatCacheSection({
     setTimeout(() => setFeedbackMsg(null), 4000);
   };
 
-  const handleExecuteAction = async (indicator: string, action: 'block' | 'allow' | 'purge' | 'rescan', reason?: string) => {
+  const handleExecuteAction = async (indicator: string, action: 'block' | 'allow' | 'purge', reason?: string) => {
     setActionLoading(`${action}-${indicator}`);
     try {
       const res = await fetch('/api/admin/threats/action', {
@@ -200,7 +200,6 @@ export default function ThreatCacheSection({
                 >
                   <option value="block">BLOCK IMMEDIATELY</option>
                   <option value="allow">ALLOW / WHITELIST</option>
-                  <option value="rescan">FORCE SCAN (VT/URLSCAN)</option>
                 </select>
               </div>
             </div>
@@ -342,22 +341,6 @@ export default function ThreatCacheSection({
                                 Block
                               </button>
                             )}
-                            <button
-                              title="Rescan"
-                              disabled={actionLoading === `rescan-${entry.url}`}
-                              onClick={() => handleExecuteAction(entry.url, 'rescan')}
-                              style={{
-                                padding: '4px 8px',
-                                fontSize: '11px',
-                                borderRadius: '4px',
-                                border: '1px solid var(--border)',
-                                background: 'var(--bg-elevated)',
-                                color: 'var(--text-secondary)',
-                                cursor: 'pointer',
-                              }}
-                            >
-                              <RefreshCw size={12} />
-                            </button>
                             <button
                               title="Purge Cache"
                               disabled={actionLoading === `purge-${entry.url}`}

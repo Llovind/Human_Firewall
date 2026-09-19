@@ -1,289 +1,232 @@
-"""
-test_local_suite.py — Comprehensive Local Test Suite for Afferent Security Platform
-Tests all core business logic, database migrations, auth, OTP, telegram commands,
-threat intelligence, and compliance metrics using Flask test_client.
-"""
+"""Core regression suite after the Phase 1 authentication migration."""
 
-import unittest
-import json
 import os
 import sys
-from datetime import datetime, timezone, timedelta
+import tempfile
+import unittest
+from unittest.mock import patch
 
-# Ensure backend directory is in path
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+TEST_DB = os.path.join(tempfile.gettempdir(), "afferent_regression_suite.db")
+if os.path.exists(TEST_DB):
+    os.remove(TEST_DB)
 
-# Configure environment before importing app
-os.environ['ADMIN_PASSWORD'] = 'hfl-admin-2026'
-os.environ['SECRET_KEY'] = 'test-secret-key-1234567890'
-os.environ['SERVICE_API_KEY'] = 'test-service-key-1234567890'
-os.environ['DEV_BYPASS_AUTH'] = 'false'
-os.environ['FLASK_DEBUG'] = '0'
+os.environ.update({
+    "APP_ENV": "test",
+    "DB_PATH": TEST_DB,
+    "ADMIN_PASSWORD": "BootstrapAdmin2026",
+    "BOOTSTRAP_ADMIN_EMAIL": "admin@humanfirewall.local",
+    "SECRET_KEY": "test-secret-key-1234567890-long-enough",
+    "SERVICE_API_KEY": "test-service-key-1234567890-long-enough",
+    "DEV_BYPASS_AUTH": "false",
+    "FLASK_DEBUG": "0",
+    "SMTP_HOST": "mailpit",
+    "SMTP_PORT": "1025",
+    "SMTP_SECURITY": "none",
+})
 
 import database
+import security
 from app import app
+from services import auth_service
+
 
 class AfferentLocalTestSuite(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
-        """Set up test database and test client."""
-        app.config['TESTING'] = True
+        # unittest discovery imports every module before executing classes;
+        # restore this suite's runtime secret after other test modules have
+        # configured their isolated environment.
+        os.environ["SERVICE_API_KEY"] = "test-service-key-1234567890-long-enough"
+        app.config["TESTING"] = True
         cls.client = app.test_client()
-        # Initialize DB in test mode
-        database.init_db()
-        conn = database.get_connection()
-        conn.execute("DELETE FROM user_history WHERE email = 'hadi.wijaya@infranexia.co.id'")
-        conn.execute("DELETE FROM registration_otp WHERE telegram_chat_id = '111222333' OR email = 'hadi.wijaya@infranexia.co.id'")
-        conn.execute("DELETE FROM inbox_emails WHERE to_email = 'hadi.wijaya@infranexia.co.id'")
-        conn.execute("DELETE FROM threat_reports WHERE email = 'hadi.wijaya@infranexia.co.id'")
-        conn.execute("DELETE FROM dashboard_tokens WHERE email = 'hadi.wijaya@infranexia.co.id'")
-        conn.commit()
-        conn.close()
+        cls.service_headers = {"Authorization": "Bearer test-service-key-1234567890-long-enough"}
 
-    def test_01_admin_login_success(self):
-        """Test Admin login with correct password."""
-        res = self.client.post('/api/auth/admin', json={'password': 'hfl-admin-2026'})
-        self.assertEqual(res.status_code, 200)
-        data = res.get_json()
-        self.assertTrue(data.get('success'))
-        self.assertEqual(data.get('user', {}).get('role'), 'admin')
+        # Existing seeded telemetry stays intact; accounts are linked separately.
+        auth_service.create_account(
+            email="employee.regression@demo.local",
+            password="EmployeeSecure2026",
+            role="employee",
+            division="IT",
+        )
+        auth_service.create_account(
+            email="ciso.regression@demo.local",
+            password="CisoSecurePassword2026",
+            role="ciso",
+            division="IT",
+        )
+        cls.employee_token = cls._login("employee.regression@demo.local", "EmployeeSecure2026")
+        cls.ciso_token = cls._login("ciso.regression@demo.local", "CisoSecurePassword2026")
+        cls.phishing_admin_token = cls._login("admin@humanfirewall.local", "BootstrapAdmin2026")
 
-    def test_02_admin_login_failure(self):
-        """Test Admin login with incorrect password."""
-        res = self.client.post('/api/auth/admin', json={'password': 'wrong-password'})
-        self.assertEqual(res.status_code, 401)
-        data = res.get_json()
-        self.assertIn('error', data)
+    @classmethod
+    def tearDownClass(cls):
+        if os.path.exists(TEST_DB):
+            os.remove(TEST_DB)
 
-    def test_03_telegram_start_unregistered(self):
-        """Test Telegram /start command from an unregistered user."""
-        test_chat_id = "111222333"
-        res = self.client.post('/api/telegram/command', json={
-            'chat_id': test_chat_id,
-            'command': '/start',
-            'first_name': 'Hadi'
-        })
-        self.assertEqual(res.status_code, 200)
-        data = res.get_json()
-        reply = data.get('reply', '')
-        self.assertIn('Afferent Security Bot', reply)
-        self.assertIn('Panduan Pendaftaran Akun', reply)
-        self.assertIn('<b>', reply) # Verifies HTML mode format
+    @classmethod
+    def _login(cls, email, password):
+        captured = {}
 
-    def test_04_telegram_email_registration_and_otp(self):
-        """Test user submitting corporate email in Telegram, generating OTP and webmail inbox entry."""
-        test_chat_id = "111222333"
-        test_email = "hadi.wijaya@infranexia.co.id"
+        def capture_otp(*, to_address, otp_code, expires_minutes):
+            captured["otp"] = otp_code
 
-        res = self.client.post('/api/telegram/command', json={
-            'chat_id': test_chat_id,
-            'command': test_email,
-            'first_name': 'Hadi'
-        })
-        self.assertEqual(res.status_code, 200)
-        reply = res.get_json().get('reply', '')
-        self.assertIn('Inbox Webmail', reply)
+        with patch.object(auth_service.EmailService, "send_login_otp", side_effect=capture_otp):
+            login = cls.client.post("/api/auth/login", json={"email": email, "password": password})
+        challenge_id = login.get_json()["challengeId"]
+        verified = cls.client.post(
+            "/api/auth/verify-otp",
+            json={"challengeId": challenge_id, "otp": captured["otp"]},
+        )
+        return verified.get_json()["sessionToken"]
 
-        # Verify OTP in Database
-        conn = database.get_connection()
-        otp_row = conn.execute(
-            'SELECT * FROM registration_otp WHERE telegram_chat_id = ? ORDER BY created_at DESC LIMIT 1',
-            (test_chat_id,)
-        ).fetchone()
-        self.assertIsNotNone(otp_row)
-        self.assertEqual(otp_row['email'], test_email)
-        self.assertEqual(len(otp_row['otp_code']), 6)
+    def test_01_legacy_identity_endpoints_are_retired(self):
+        for method, path, payload in (
+            ("post", "/api/auth/admin", {"password": "BootstrapAdmin2026"}),
+            ("post", "/api/telegram/command", {"chat_id": "1", "command": "/start"}),
+            ("get", "/api/auth/validate-token?token=legacy", None),
+        ):
+            response = getattr(self.client, method)(path, json=payload) if payload else getattr(self.client, method)(path)
+            self.assertEqual(response.status_code, 410)
 
-        # Verify Email in Webmail Inbox
-        inbox_row = conn.execute(
-            'SELECT * FROM inbox_emails WHERE to_email = ? ORDER BY created_at DESC LIMIT 1',
-            (test_email,)
-        ).fetchone()
-        self.assertIsNotNone(inbox_row)
-        self.assertIn(otp_row['otp_code'], inbox_row['body'])
-        conn.close()
-
-    def test_05_telegram_otp_verification_wrong_code(self):
-        """Test submitting incorrect OTP code."""
-        test_chat_id = "111222333"
-        res = self.client.post('/api/telegram/command', json={
-            'chat_id': test_chat_id,
-            'command': '000000', # wrong OTP
-            'first_name': 'Hadi'
-        })
-        self.assertEqual(res.status_code, 200)
-        reply = res.get_json().get('reply', '')
-        self.assertIn('❌', reply)
-        self.assertIn('salah', reply.lower())
-
-    def test_06_telegram_otp_verification_success(self):
-        """Test submitting correct OTP code to link account."""
-        test_chat_id = "111222333"
-        test_email = "hadi.wijaya@infranexia.co.id"
-
-        conn = database.get_connection()
-        otp_row = conn.execute(
-            'SELECT otp_code FROM registration_otp WHERE telegram_chat_id = ? ORDER BY created_at DESC LIMIT 1',
-            (test_chat_id,)
-        ).fetchone()
-        otp_code = otp_row['otp_code']
-        conn.close()
-
-        res = self.client.post('/api/telegram/command', json={
-            'chat_id': test_chat_id,
-            'command': otp_code,
-            'first_name': 'Hadi'
-        })
-        self.assertEqual(res.status_code, 200)
-        reply = res.get_json().get('reply', '')
-        self.assertIn('✅', reply)
-        self.assertIn('Verifikasi Berhasil', reply)
-        self.assertIn(test_email, reply)
-
-        # Verify user record is linked
-        conn = database.get_connection()
-        user_row = conn.execute('SELECT * FROM user_history WHERE email = ?', (test_email,)).fetchone()
-        self.assertEqual(user_row['telegram_chat_id'], test_chat_id)
-        conn.close()
-
-    def test_07_telegram_profile_registered(self):
-        """Test /profile command for registered user."""
-        test_chat_id = "111222333"
-        res = self.client.post('/api/telegram/command', json={
-            'chat_id': test_chat_id,
-            'command': '/profile',
-            'first_name': 'Hadi'
-        })
-        self.assertEqual(res.status_code, 200)
-        reply = res.get_json().get('reply', '')
-        self.assertIn('Profil Keamanan Anda', reply)
-        self.assertIn('hadi.wijaya@infranexia.co.id', reply)
-        self.assertIn('Skor Kepatuhan', reply)
-
-    def test_08_telegram_dashboard_magic_link(self):
-        """Test /dashboard command generating Magic Link."""
-        test_chat_id = "111222333"
-        res = self.client.post('/api/telegram/command', json={
-            'chat_id': test_chat_id,
-            'command': '/dashboard',
-            'first_name': 'Hadi'
-        })
-        self.assertEqual(res.status_code, 200)
-        reply = res.get_json().get('reply', '')
-        self.assertIn('Link Akses Dashboard Anda', reply)
-        self.assertIn('/auth?token=', reply)
-
-        # Extract token and test validate endpoint
-        import re
-        match = re.search(r'/auth\?token=([a-f0-9\-]+)', reply)
-        self.assertIsNotNone(match)
-        token = match.group(1)
-
-        val_res = self.client.get(f'/api/auth/validate-token?token={token}')
-        self.assertEqual(val_res.status_code, 200)
-        val_data = val_res.get_json()
-        self.assertTrue(val_data.get('valid'))
-        self.assertEqual(val_data.get('user', {}).get('email'), 'hadi.wijaya@infranexia.co.id')
-
-    def test_09_threat_intelligence_incident_creation(self):
-        """Test threat intelligence report and incident creation."""
-        test_email = "hadi.wijaya@infranexia.co.id"
-        headers = {'Authorization': 'Bearer test-service-key-1234567890'}
-
-        # Post report via service API
-        report_payload = {
-            "employee_id": test_email,
-            "telegram_user_id": "111222333",
-            "type": "file",
-            "target": "eicar_test_virus.com",
+    def test_02_threat_reporting_and_gamification_still_work(self):
+        payload = {
+            "employee_id": "employee.regression@demo.local",
+            "type": "url",
+            "target": "https://eicar.example/test",
             "verdict": "malicious",
             "source_engine": "vt",
             "severity_tier": "high",
-            "submitted_at": "2026-08-15T21:00:00Z"
+            "submitted_at": "2026-08-15T21:00:00Z",
         }
-        res = self.client.post('/api/reports', json=report_payload, headers=headers)
-        self.assertIn(res.status_code, [200, 201])
-
-        # Verify incident is recorded in threat_reports
+        response = self.client.post("/api/reports", json=payload, headers=self.service_headers)
+        self.assertIn(response.status_code, (200, 201))
         conn = database.get_connection()
-        inc_row = conn.execute(
-            'SELECT * FROM threat_reports WHERE email = ? ORDER BY submitted_at DESC LIMIT 1',
-            (test_email,)
-        ).fetchone()
-        self.assertIsNotNone(inc_row)
-        self.assertEqual(inc_row['verdict'], 'malicious')
-        self.assertEqual(inc_row['severity_tier'], 'high')
-        conn.close()
+        try:
+            report = conn.execute(
+                "SELECT verdict FROM threat_reports WHERE email=? ORDER BY id DESC LIMIT 1",
+                ("employee.regression@demo.local",),
+            ).fetchone()
+            self.assertEqual(report["verdict"], "malicious")
+        finally:
+            conn.close()
 
-    def test_11_compliance_summary(self):
-        """Test ISO 27001 & UU PDP compliance summary metrics."""
-        headers = {'Authorization': 'Bearer test-service-key-1234567890'}
-        res = self.client.get('/api/compliance-summary?role=ciso', headers=headers)
-        self.assertEqual(res.status_code, 200)
-        data = res.get_json()
-        self.assertIn('clause_readiness', data)
-        self.assertIn('overall_readiness_indicator', data)
+    def test_03_compliance_and_dashboard_metrics_preserved(self):
+        headers = {"X-Afferent-Session": self.ciso_token}
+        compliance = self.client.get("/api/compliance-summary", headers=headers)
+        self.assertEqual(compliance.status_code, 200)
+        self.assertIn("clause_readiness", compliance.get_json())
 
-    def test_12_dashboard_summary_and_leaderboard(self):
-        """Test admin dashboard aggregate metrics and leaderboard ranking."""
-        headers = {'Authorization': 'Bearer test-service-key-1234567890'}
-        res = self.client.get('/api/dashboard-summary', headers=headers)
-        self.assertEqual(res.status_code, 200)
-        summary = res.get_json()
-        self.assertIn('divisi_scores', summary)
+        summary = self.client.get("/api/dashboard-summary", headers=headers)
+        self.assertEqual(summary.status_code, 200)
+        self.assertIn("divisi_scores", summary.get_json())
 
-        lead_res = self.client.get('/api/admin/leaderboard', headers=headers)
-        self.assertEqual(lead_res.status_code, 200)
-        leaderboard = lead_res.get_json()
-        self.assertIn('individual', leaderboard)
-        self.assertIn('by_divisi', leaderboard)
+        leaderboard = self.client.get("/api/admin/leaderboard", headers=headers)
+        self.assertEqual(leaderboard.status_code, 200)
+        self.assertIn("individual", leaderboard.get_json())
 
-    def test_13_user_activity_feed(self):
-        """Test personal user activity timeline feed."""
-        test_email = "hadi.wijaya@infranexia.co.id"
-        # Seed a dashboard token
-        conn = database.get_connection()
-        token = "test-token-activity-123"
-        conn.execute("INSERT OR REPLACE INTO dashboard_tokens (token, email, expires_at) VALUES (?, ?, ?)",
-                     (token, test_email, (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()))
-        conn.commit()
-        conn.close()
+    def test_04_employee_activity_and_eligibility_preserved(self):
+        email = "employee.regression@demo.local"
+        headers = {"X-Afferent-Session": self.employee_token}
+        activity = self.client.get(f"/api/user-activity?email={email}", headers=headers)
+        self.assertEqual(activity.status_code, 200)
+        self.assertIsInstance(activity.get_json()["activities"], list)
 
-        res = self.client.get(f'/api/user-activity?email={test_email}&token={token}')
-        self.assertEqual(res.status_code, 200)
-        data = res.get_json()
-        self.assertIn('activities', data)
-        self.assertIsInstance(data['activities'], list)
+        eligibility = self.client.get(f"/api/user-eligibility?email={email}", headers=headers)
+        self.assertEqual(eligibility.status_code, 200)
+        self.assertIn("eligible", eligibility.get_json())
 
-    def test_14_user_eligibility_spot_fake(self):
-        """Test spot-the-fake mini game eligibility logic."""
-        test_email = "hadi.wijaya@infranexia.co.id"
-        token = "test-token-activity-123"
-        res = self.client.get(f'/api/user-eligibility?email={test_email}&token={token}')
-        self.assertEqual(res.status_code, 200)
-        data = res.get_json()
-        self.assertIn('eligible', data)
+    def test_05_employee_cannot_read_another_profile(self):
+        response = self.client.get(
+            "/api/user-activity?email=ciso.regression@demo.local",
+            headers={"X-Afferent-Session": self.employee_token},
+        )
+        self.assertEqual(response.status_code, 403)
 
-    def test_15_reports_summary_gamification(self):
-        """Test employee gamification & threat reporting summary."""
-        test_email = "hadi.wijaya@infranexia.co.id"
-        token = "test-token-activity-123"
-        res = self.client.get(f'/api/employee/{test_email}/reports-summary?token={token}')
-        self.assertEqual(res.status_code, 200)
-        summary = res.get_json()
-        self.assertIn('badges', summary)
-        self.assertIn('reports_count_malicious', summary)
-        self.assertIn('reports_count_total', summary)
+    def test_06_reports_summary_and_daily_quiz_preserved(self):
+        email = "employee.regression@demo.local"
+        headers = {"X-Afferent-Session": self.employee_token}
+        report = self.client.get(f"/api/employee/{email}/reports-summary", headers=headers)
+        self.assertEqual(report.status_code, 200)
+        self.assertIn("badges", report.get_json())
 
-    def test_16_quiz_today(self):
-        """Test Daily Quiz generation and retrieval."""
-        test_email = "hadi.wijaya@infranexia.co.id"
-        token = "test-token-activity-123"
-        res = self.client.get(f'/api/quiz/today?employee_id={test_email}&token={token}')
-        self.assertEqual(res.status_code, 200)
-        q = res.get_json()
-        self.assertTrue('question_text' in q or 'message' in q or 'completed_today' in q)
+        quiz = self.client.get(f"/api/quiz/today?employee_id={email}", headers=headers)
+        self.assertEqual(quiz.status_code, 200)
+        self.assertTrue(any(key in quiz.get_json() for key in ("question_text", "message", "completed_today")))
 
-if __name__ == '__main__':
+    def test_07_sensitive_routes_are_deny_by_default(self):
+        for path in ("/api/ai/router/status", "/api/emails", "/api/incidents"):
+            with self.subTest(path=path):
+                self.assertEqual(self.client.get(path).status_code, 401)
+
+        # The historical hardcoded magic token must not authenticate telemetry.
+        retired_magic = self.client.post("/api/event", json={
+            "email": "lovind@netengineering-dummy.local",
+            "event_type": "viewed_training",
+            "token": "demo-magic-link-2026",
+        })
+        self.assertEqual(retired_magic.status_code, 401)
+
+    def test_08_simulation_token_still_protects_training_telemetry(self):
+        email = "employee.regression@demo.local"
+        token = security.create_simulation_token(email, "security-test")
+        self.assertEqual(self.client.get(f"/api/user-profile?email={email}").status_code, 401)
+        profile = self.client.get(f"/api/user-profile?email={email}&simulation_token={token}")
+        self.assertEqual(profile.status_code, 200)
+        event = self.client.post("/api/event", json={
+            "email": email,
+            "event_type": "viewed_training",
+            "simulation_token": token,
+        })
+        self.assertEqual(event.status_code, 201)
+
+    def test_09_production_rejects_auth_bypass(self):
+        for unsafe in (
+            {"DEV_BYPASS_AUTH": "true", "FLASK_DEBUG": "false"},
+            {"DEV_BYPASS_AUTH": "false", "FLASK_DEBUG": "true"},
+        ):
+            with self.subTest(**unsafe), patch.dict(os.environ, {"APP_ENV": "production", **unsafe}, clear=False):
+                with self.assertRaises(RuntimeError):
+                    security.validate_runtime_security()
+
+    def test_10_phishing_admin_can_create_every_privileged_role(self):
+        headers = {"X-Afferent-Session": self.phishing_admin_token}
+        for role in ("soc", "grc", "ciso"):
+            with self.subTest(role=role):
+                response = self.client.post(
+                    "/api/admin/employees",
+                    headers=headers,
+                    json={
+                        "email": f"{role}.created@demo.local",
+                        "password": f"Secure{role.upper()}Password2026",
+                        "role": role,
+                        "divisi": "Security Operations",
+                        "is_active": 1,
+                    },
+                )
+                self.assertEqual(response.status_code, 201)
+                self.assertEqual(response.get_json()["account"]["role"], role)
+
+    def test_11_proxy_registration_allows_preflight_but_not_unauthenticated_post(self):
+        preflight = self.client.options(
+            "/api/proxy/device/register",
+            headers={
+                "Origin": "http://localhost:3000",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type",
+            },
+        )
+        self.assertEqual(preflight.status_code, 200)
+        self.assertEqual(
+            preflight.headers.get("Access-Control-Allow-Origin"),
+            "http://localhost:3000",
+        )
+        self.assertEqual(
+            self.client.post("/api/proxy/device/register", json={}).status_code,
+            401,
+        )
+
+
+if __name__ == "__main__":
     unittest.main(verbosity=2)

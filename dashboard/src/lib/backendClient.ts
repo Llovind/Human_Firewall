@@ -1,12 +1,16 @@
+import { cookies, headers as requestHeaders } from 'next/headers';
+import { AUTH_SESSION_COOKIE } from '@/lib/authSession';
+
 /**
  * Shared backend fetch helper for Next.js API route proxies.
  * Handles SERVICE_API_KEY header and tries target URLs in order.
  */
 
-const DEFAULT_SERVICE_KEY = '5f2970d4e3376a7e842e5f7f0f6df224cb01a50e3d8a60b75656de4372977036';
-
-export async function fetchFlaskBackend(path: string, options: RequestInit = {}): Promise<Response> {
-  const serviceApiKey = process.env.SERVICE_API_KEY || DEFAULT_SERVICE_KEY;
+export async function fetchFlaskBackend(path: string, options: RequestInit = {}, timeoutMs = 4000): Promise<Response> {
+  const serviceApiKey = process.env.SERVICE_API_KEY;
+  const cookieStore = await cookies();
+  const inboundHeaders = await requestHeaders();
+  const sessionToken = cookieStore.get(AUTH_SESSION_COOKIE)?.value;
 
   // Prioritize Docker container DNS hostnames first, then localhost fallback
   const targetUrls = Array.from(new Set([
@@ -21,15 +25,23 @@ export async function fetchFlaskBackend(path: string, options: RequestInit = {})
   let lastError: Error | null = null;
 
   const headers = new Headers(options.headers || {});
-  if (!headers.has('Authorization')) {
+  if (sessionToken) {
+    headers.set('X-Afferent-Session', sessionToken);
+  } else if (!headers.has('Authorization') && serviceApiKey) {
     headers.set('Authorization', `Bearer ${serviceApiKey}`);
+  } else if (!headers.has('Authorization')) {
+    throw new Error('Authenticated session or SERVICE_API_KEY is required');
   }
+  const forwardedFor = inboundHeaders.get('x-forwarded-for');
+  const userAgent = inboundHeaders.get('user-agent');
+  if (forwardedFor) headers.set('X-Forwarded-For', forwardedFor);
+  if (userAgent) headers.set('User-Agent', userAgent);
 
   for (const baseUrl of targetUrls) {
     try {
       const url = `${baseUrl}${path.startsWith('/') ? path : '/' + path}`;
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const timeoutId = timeoutMs > 0 ? setTimeout(() => controller.abort(), timeoutMs) : null;
 
       const res = await fetch(url, {
         ...options,
@@ -37,13 +49,13 @@ export async function fetchFlaskBackend(path: string, options: RequestInit = {})
         signal: options.signal || controller.signal,
         cache: 'no-store'
       });
-      clearTimeout(timeoutId);
+      if (timeoutId) clearTimeout(timeoutId);
 
       if (res && res.status < 500) {
         return res;
       }
-    } catch (err: any) {
-      lastError = err;
+    } catch (err: unknown) {
+      lastError = err instanceof Error ? err : new Error('Unknown backend connection error');
     }
   }
 

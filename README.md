@@ -2,6 +2,9 @@
 
 > **AI-Powered Adaptive Phishing Simulation, Multi-LLM Threat Triaging, Gamified Employee Awareness, and Role-Based Cyber Security Analytics Platform**
 
+> [!TIP]
+> 📖 **Panduan Pengujian Arsitektur & Setup Tim:** Lihat panduan lengkap step-by-step setup environment, pengujian multi-device (Host + VM), dan integrasi model ML di file [**`README_SETUP.md`**](README_SETUP.md).
+
 [![Docker Compose](https://img.shields.io/badge/Docker_Compose-Supported-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
 [![Next.js 16](https://img.shields.io/badge/Next.js-16.2.10-000000?logo=next.js&logoColor=white)](dashboard)
 [![Python Flask](https://img.shields.io/badge/Flask-3.0.0-000000?logo=flask&logoColor=white)](backend)

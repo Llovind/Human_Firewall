@@ -135,6 +135,86 @@ def init_db():
             )
         ''')
 
+        # Phase 1 authentication tables are deliberately separated from
+        # user_history. The latter remains the immutable telemetry/gamification
+        # profile; authentication data has a different lifecycle and access
+        # boundary.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS employee_accounts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'employee'
+                    CHECK (role IN ('employee', 'phishing_admin', 'soc', 'grc', 'ciso')),
+                is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                password_changed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_login_at TIMESTAMP
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS otp_challenges (
+                id TEXT PRIMARY KEY,
+                account_id INTEGER NOT NULL,
+                purpose TEXT NOT NULL DEFAULT 'login',
+                otp_hash TEXT NOT NULL,
+                expires_at TIMESTAMP NOT NULL,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                max_attempts INTEGER NOT NULL DEFAULT 5,
+                resend_count INTEGER NOT NULL DEFAULT 0,
+                last_sent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                request_ip_hash TEXT NOT NULL,
+                used_at TIMESTAMP,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (account_id) REFERENCES employee_accounts(id)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS auth_sessions (
+                id TEXT PRIMARY KEY,
+                account_id INTEGER NOT NULL,
+                token_hash TEXT NOT NULL UNIQUE,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL,
+                last_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                revoked_at TIMESTAMP,
+                ip_hash TEXT NOT NULL,
+                user_agent_hash TEXT NOT NULL,
+                FOREIGN KEY (account_id) REFERENCES employee_accounts(id)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS login_audit (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_id INTEGER,
+                email TEXT NOT NULL COLLATE NOCASE,
+                event_type TEXT NOT NULL,
+                success INTEGER NOT NULL CHECK (success IN (0, 1)),
+                reason TEXT,
+                request_id TEXT NOT NULL,
+                ip_hash TEXT NOT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (account_id) REFERENCES employee_accounts(id)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_otp_challenges_account_created
+            ON otp_challenges(account_id, created_at)
+        ''')
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_auth_sessions_token_active
+            ON auth_sessions(token_hash, expires_at, revoked_at)
+        ''')
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_login_audit_rate_limit
+            ON login_audit(email, ip_hash, event_type, created_at)
+        ''')
+
         # Tabel inbox_emails — menyimpan email tiruan untuk Mock Webmail
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS inbox_emails (
@@ -2082,12 +2162,13 @@ def redeem_link_token(token: str, telegram_chat_id: str) -> dict:
 
 
 def validate_dashboard_token(token: str) -> str:
-    """Validate a dashboard token. Returns the associated email if valid
-    and not expired, otherwise returns None."""
+    """Legacy data reader retained only for controlled migration tooling.
+
+    Active browser authentication no longer calls this function. Existing
+    rows are preserved so historical telemetry remains intact.
+    """
     if not token:
         return None
-    if token == 'demo-magic-link-2026':
-        return 'lovind@netengineering-dummy.local'
     conn = get_connection()
     try:
         row = conn.execute('''

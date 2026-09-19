@@ -9,7 +9,7 @@ import '@/app/globals.css';
 function BlockedContent() {
   const searchParams = useSearchParams();
   const rawUrl = searchParams.get('url') || 'https://phishing-portal.net/verify-login';
-  const source = searchParams.get('source') || 'VirusTotal';
+  const source = searchParams.get('source') || 'AFFERENT ML';
   const score = parseInt(searchParams.get('score') || '92');
   const threatType = searchParams.get('type') || 'Phishing / Credential Harvesting';
   const cacheId = searchParams.get('cache_id') || 'TC-8849204';

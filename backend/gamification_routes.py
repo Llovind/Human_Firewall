@@ -16,23 +16,14 @@ convert ke response/HTTP status sesuai contract. Sengaja tipis.
 from flask import Blueprint, request, jsonify
 
 import database as db
+from security import current_identity
 
 gamification_bp = Blueprint("gamification", __name__, url_prefix="/api")
 
 # CATATAN AUTH:
-# - POST /reports: SENGAJA tidak dimasukkan ke PUBLIC_ROUTES di app.py,
-#   jadi otomatis kena guard global app.py yang mewajibkan
-#   "Authorization: Bearer <SERVICE_API_KEY>" (server-to-server, dipanggil n8n).
-#
-# - GET /employee/<id>/reports-summary dan POST /quiz/complete: endpoint
-#   ini DIPANGGIL LANGSUNG dari browser employee (via Next.js dashboard),
-#   jadi mereka ADA di PUBLIC_ROUTES di app.py (supaya lolos dari guard
-#   admin/n8n). Karena itu, auth-nya HARUS divalidasi manual di sini,
-#   pakai dashboard_token (bukan admin Bearer, bukan session admin) —
-#   lihat _authenticate_employee() di bawah. Endpoint ini menolak request
-#   tanpa token, dan menolak token yang valid tapi milik employee lain
-#   (mencegah IDOR: employee A tidak bisa lihat/ubah data employee B
-#   hanya dengan menebak/mengetahui email B).
+# - POST /reports tetap dilindungi guard global dan hanya menerima service key.
+# - Endpoint self-service employee memakai session database dari Next.js BFF.
+# - Identitas dan role tidak pernah diterima dari body/query string klien.
 
 
 def error_response(status_code, code, message):
@@ -42,63 +33,19 @@ def error_response(status_code, code, message):
 
 
 def _authenticate_employee(requested_employee_id: str):
-    """Validasi dashboard_token milik employee yang sedang akses dashboard.
-
-    Token diterima dari query param `?token=` (dipakai GET) ATAU dari body
-    JSON `{"token": ...}` (dipakai POST), supaya satu helper ini bisa
-    dipakai di kedua endpoint tanpa duplikasi logic.
-
-    Selain validasi token itu sendiri (ada / belum expired), kita WAJIB
-    cross-check bahwa email hasil validasi token == employee_id yang
-    diminta di path/body. Tanpa cross-check ini, token employee A yang
-    valid tetap bisa dipakai buat baca/tulis data employee B — jadi
-    token doang gak cukup, harus token YANG COCOK sama resource yang
-    diminta.
-
-    Return (validated_email, None) kalau lolos, atau
-           (None, <flask response error>) kalau gagal — caller tinggal
-           `return err` kalau err bukan None.
-    """
-    import os
-    dev_bypass = os.environ.get("DEV_BYPASS_AUTH", "").lower() in ("true", "1", "yes")
-
-    token = request.args.get("token")
-    if not token and request.is_json:
-        body = request.get_json(silent=True) or {}
-        token = body.get("token")
-
-    if dev_bypass and (not token or token in ("dev_token", "undefined", "null", "")):
-        return requested_employee_id, None
-
-    if not token:
-        if dev_bypass:
-            return requested_employee_id, None
-        return None, error_response(
-            401, "UNAUTHORIZED", "Token dashboard wajib disertakan"
-        )
-
-    validated_email = db.validate_dashboard_token(token)
-    if not validated_email:
-        if dev_bypass:
-            return requested_employee_id, None
-        return None, error_response(
-            401, "UNAUTHORIZED", "Token tidak valid atau sudah kadaluarsa"
-        )
-
-    if requested_employee_id and validated_email != requested_employee_id:
-        if dev_bypass:
-            return requested_employee_id, None
-        # Token sah, tapi bukan milik employee yang datanya diminta —
-        # ini persis skenario IDOR yang mau dicegah.
-        return None, error_response(
-            403, "FORBIDDEN", "Token tidak cocok dengan employee_id yang diminta"
-        )
-
-    return validated_email, None
+    """Authorize employee self-service with the database-backed session."""
+    identity = current_identity()
+    if not identity:
+        return None, error_response(401, "UNAUTHORIZED", "Session login wajib tersedia")
+    if identity.role != "employee":
+        return None, error_response(403, "FORBIDDEN", "Endpoint ini khusus employee")
+    if requested_employee_id and identity.email.lower() != requested_employee_id.lower():
+        return None, error_response(403, "FORBIDDEN", "Session tidak cocok dengan employee_id")
+    return identity.email, None
 
 
 # ---------------------------------------------------------------------------
-# POST /api/reports — dipanggil n8n di ujung Flow B setelah triase VT+urlscan
+# POST /api/reports — kompatibilitas internal sampai Flow B dipindah ke backend
 # ---------------------------------------------------------------------------
 
 @gamification_bp.route("/reports", methods=["POST"])
@@ -112,7 +59,7 @@ def post_report():
         return error_response(400, "INVALID_PAYLOAD", "Body request kosong atau bukan JSON valid")
 
     # Validasi field required sesuai contract section 1.1
-    required_fields = ["employee_id", "telegram_user_id", "type", "target",
+    required_fields = ["employee_id", "type", "target",
                         "verdict", "source_engine", "submitted_at"]
     missing = [f for f in required_fields if f not in body or body[f] in (None, "")]
     if missing:
@@ -127,7 +74,9 @@ def post_report():
 
         result = db.create_threat_report(
             email=body["employee_id"],
-            telegram_user_id=body["telegram_user_id"],
+            # Kolom legacy dipertahankan agar data historis tidak rusak, tetapi
+            # identitas Telegram bukan lagi bagian dari auth atau payload wajib.
+            telegram_user_id=body.get("telegram_user_id"),
             type_=body["type"],
             target=body["target"],
             verdict=body["verdict"],

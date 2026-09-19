@@ -4,10 +4,10 @@ import { fetchFlaskBackend } from '@/lib/backendClient';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { employee_id, token } = body;
+    const { employee_id } = body;
 
-    if (!employee_id || !token) {
-      return NextResponse.json({ error: 'employee_id dan token wajib diisi' }, { status: 400 });
+    if (!employee_id) {
+      return NextResponse.json({ error: 'employee_id wajib diisi' }, { status: 400 });
     }
 
     const res = await fetchFlaskBackend('/api/quiz/revive', {
@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ employee_id, token }),
+      body: JSON.stringify({ employee_id }),
     });
 
     const data = await res.json();

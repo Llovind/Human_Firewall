@@ -4,6 +4,25 @@ import { seedIfEmpty } from '@/lib/seed';
 import { fetchFlaskBackend } from '@/lib/backendClient';
 import type { BehaviorScore } from '@/lib/store';
 
+type LeaderboardUser = {
+  points?: number;
+  email?: string;
+  divisi?: string;
+  badge?: string;
+  streak_weeks?: number;
+  daily_streak?: number;
+  reports_count_malicious?: number;
+  spot_fake_wins?: number;
+  rank?: number;
+  viewed_training_count?: number;
+};
+
+type LeaderboardDivision = {
+  divisi?: string;
+  avg_points?: number;
+  member_count?: number;
+};
+
 /**
  * POST /api/behavior — Receives behavior score updates from engine.
  */
@@ -38,13 +57,16 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
+    const requestedEmail = request.nextUrl.searchParams.get('email');
+    const employeeRequest = Boolean(requestedEmail);
+
     const res = await fetchFlaskBackend('/api/admin/leaderboard', { method: 'GET' });
     if (res.ok) {
       const data = await res.json();
-      const individual = Array.isArray(data.individual) ? data.individual : [];
-      const byDivisi = Array.isArray(data.by_divisi) ? data.by_divisi : [];
+      const individual: LeaderboardUser[] = Array.isArray(data.individual) ? data.individual : [];
+      const byDivisi: LeaderboardDivision[] = Array.isArray(data.by_divisi) ? data.by_divisi : [];
 
-      const scores: BehaviorScore[] = individual.map((u: any, idx: number) => {
+      const scores: BehaviorScore[] = individual.map((u, idx: number) => {
         const totalPoints = u.points || 0;
         const scoreVal = Math.max(0, Math.min(100, Math.round(totalPoints / 2.0)));
         const riskLevel = totalPoints >= 130 ? 'low' : totalPoints >= 60 ? 'medium' : 'high';
@@ -52,15 +74,15 @@ export async function GET(request: NextRequest) {
         
         const badgesList: string[] = [];
         if (u.badge && u.badge !== 'None') badgesList.push(u.badge);
-        if (u.streak_weeks >= 4) badgesList.push('4-Week Streak');
-        if (u.reports_count_malicious > 0) badgesList.push('Threat Reporter');
-        if (u.spot_fake_wins > 0) badgesList.push('Spotter Master');
-        if (u.daily_streak >= 5) badgesList.push('Quiz Champion');
+        if ((u.streak_weeks ?? 0) >= 4) badgesList.push('4-Week Streak');
+        if ((u.reports_count_malicious ?? 0) > 0) badgesList.push('Threat Reporter');
+        if ((u.spot_fake_wins ?? 0) > 0) badgesList.push('Spotter Master');
+        if ((u.daily_streak ?? 0) >= 5) badgesList.push('Quiz Champion');
 
         return {
           userId: `USR-${idx + 1}`,
           userName,
-          email: u.email,
+          email: u.email || '',
           division: u.divisi || 'General',
           score: scoreVal,
           risk: riskLevel,
@@ -75,14 +97,14 @@ export async function GET(request: NextRequest) {
         };
       });
 
-      const formattedByDivisi = byDivisi.map((d: any) => ({
+      const formattedByDivisi = byDivisi.map((d) => ({
         division: d.divisi,
         avg: d.avg_points || 0,
         memberCount: d.member_count || 0,
       }));
 
       return NextResponse.json({
-        scores,
+        scores: employeeRequest ? scores.filter((score) => score.email === requestedEmail) : scores,
         by_divisi: formattedByDivisi,
       });
     }

@@ -67,13 +67,15 @@ We have successfully migrated the Presentation Layer to Next.js (`dashboard/`) a
 1. **Open nextjs application**:
    - Visit [http://localhost:3000](http://localhost:3000). You should be redirected to `/auth` because you are unauthenticated.
 2. **Access Admin Panel**:
-   - Visit [http://localhost:3000/admin](http://localhost:3000/admin). You should be redirected to `/admin/login`.
-   - Submit password `hfl-admin-2026` -> Verify successful authentication and access to the SOC dashboard.
+   - Visit [http://localhost:3000/auth](http://localhost:3000/auth).
+   - Sign in with `BOOTSTRAP_ADMIN_EMAIL` and `ADMIN_PASSWORD` from the local `.env` file.
+   - Open the OTP email at [http://127.0.0.1:8025](http://127.0.0.1:8025), enter the six-digit code, and verify the role-based redirect.
 3. **Check GoPhish & Webmail**:
    - On the Admin panel, check the "GoPhish" tab and click "Sync Target Group" or "Launch Simulation" (pulls resource options dynamically).
    - Check the "Webmail" tab to view sent emails.
 4. **Access Employee Dashboard**:
-   - Visit [http://localhost:3000/auth?token=demo-magic-link-2026](http://localhost:3000/auth?token=demo-magic-link-2026).
-   - Verify redirect to `/` showing personal stats for user *Lovind*.
+   - Create an employee account from **Phishing Admin → Employees**, then sign out.
+   - Sign in at `/auth` using the employee email/password and the OTP in Mailpit.
+   - Verify redirect to `/` showing only that employee's personal stats.
    - Check the **Spot the Fake** tab. Since *Lovind* is seeded with points `105` (score `52.5`), the game should be **unlocked**.
    - Hover over the portals to see inspect tips. Click "PORTAL A adalah Palsu" -> verify **Educational Moment** bedah taktik popup, points increment, and daily cooldown activation on return to dashboard.

@@ -8,15 +8,31 @@ import MockWebmailSection from '@/components/admin/MockWebmailSection';
 import LeaderboardSection from '@/components/admin/LeaderboardSection';
 import AIIntelligenceSection from '@/components/admin/AIIntelligenceSection';
 import { usePolling } from '@/hooks/usePolling';
-import type { GoPhishCampaign, GoPhishResource, MockEmail, LeaderboardResponse } from '@/components/admin/types';
-import { X, Plus, Play, Mail, Globe, Users, Building, ShieldCheck, Download, Trash2, Edit3, Send, Target } from 'lucide-react';
+import type { Division, EmployeeAccount, GoPhishCampaign, GoPhishResource, MockEmail, LeaderboardResponse } from '@/components/admin/types';
+import { X, Play, Mail, Globe, Users, Building, Download, Edit3, Send, Target } from 'lucide-react';
+
+type EmailsPayload = MockEmail[] | { emails?: MockEmail[] };
+type EditableGoPhishResource = {
+  id: number;
+  name: string;
+  subject?: string;
+  html?: string;
+  text?: string;
+  capture_credentials?: boolean;
+  capture_passwords?: boolean;
+  redirect_url?: string;
+};
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Terjadi kesalahan yang tidak diketahui';
+}
 
 export default function PhishingAdminDashboard() {
   const [activeTab, setActiveTab] = useState('gophish');
   const [campaigns, setCampaigns] = useState<GoPhishCampaign[]>([]);
   const [resources, setResources] = useState<GoPhishResource | null>(null);
-  const [employees, setEmployees] = useState<any[]>([]);
-  const [divisions, setDivisions] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<EmployeeAccount[]>([]);
+  const [divisions, setDivisions] = useState<Division[]>([]);
   const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
   const [selectedEmail, setSelectedEmail] = useState<MockEmail | null>(null);
 
@@ -25,7 +41,7 @@ export default function PhishingAdminDashboard() {
   const [badgeFilter, setBadgeFilter] = useState('ALL');
 
   // Polling
-  const { data: emailsData } = usePolling<any>('/api/admin/emails', 2500);
+  const { data: emailsData } = usePolling<EmailsPayload>('/api/admin/emails', 2500);
   const emails: MockEmail[] = Array.isArray(emailsData) 
     ? emailsData 
     : (Array.isArray(emailsData?.emails) ? emailsData.emails : []);
@@ -71,6 +87,9 @@ export default function PhishingAdminDashboard() {
   const [empOldEmail, setEmpOldEmail] = useState('');
   const [empDivisi, setEmpDivisi] = useState('');
   const [empActive, setEmpActive] = useState(1);
+  const [empRole, setEmpRole] = useState('employee');
+  const [empPassword, setEmpPassword] = useState('');
+  const [empFormError, setEmpFormError] = useState('');
   const [isSavingEmp, setIsSavingEmp] = useState(false);
 
   // 5. Add Division Modal
@@ -131,10 +150,15 @@ export default function PhishingAdminDashboard() {
   };
 
   useEffect(() => {
-    loadCampaigns();
-    loadResources();
-    loadEmployees();
-    loadDivisions();
+    const initialLoad = window.setTimeout(() => {
+      void loadCampaigns();
+      void loadResources();
+      void loadEmployees();
+      void loadDivisions();
+    }, 0);
+    return () => window.clearTimeout(initialLoad);
+    // Loaders intentionally use the initial filter/resource selections.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── Actions & Handlers ───────────────────────────────────────────────────
@@ -163,7 +187,7 @@ export default function PhishingAdminDashboard() {
     }
   };
 
-  const handleCompleteCampaign = async (id: number) => {
+  const handleCompleteCampaign = async () => {
     await loadCampaigns();
   };
 
@@ -204,15 +228,15 @@ export default function PhishingAdminDashboard() {
       } else {
         alert(`Gagal meluncurkan: ${data.error || data.detail || 'Terjadi kesalahan'}`);
       }
-    } catch (err: any) {
-      alert(`Koneksi backend gagal: ${err.message}`);
+    } catch (err: unknown) {
+      alert(`Koneksi backend gagal: ${errorMessage(err)}`);
     } finally {
       setIsLaunching(false);
     }
   };
 
   // Template Modal Handlers
-  const handleOpenTemplateBuilder = (mode: 'new' | 'edit', type: 'template' | 'page', item?: any) => {
+  const handleOpenTemplateBuilder = (mode: 'new' | 'edit', type: 'template' | 'page', item?: EditableGoPhishResource) => {
     if (type === 'template') {
       setTemplateModalMode(mode);
       if (mode === 'edit' && item) {
@@ -283,8 +307,8 @@ export default function PhishingAdminDashboard() {
         const data = await res.json();
         alert(`Gagal menyimpan template: ${data.error || 'Terjadi kesalahan'}`);
       }
-    } catch (err: any) {
-      alert(`Koneksi backend gagal: ${err.message}`);
+    } catch (err: unknown) {
+      alert(`Koneksi backend gagal: ${errorMessage(err)}`);
     } finally {
       setIsSavingTemplate(false);
     }
@@ -324,8 +348,8 @@ export default function PhishingAdminDashboard() {
       } else {
         alert(`Gagal mengimpor website: ${data.error || 'Pastikan URL valid dan dapat diakses'}`);
       }
-    } catch (err: any) {
-      alert(`Koneksi gagal: ${err.message}`);
+    } catch (err: unknown) {
+      alert(`Koneksi gagal: ${errorMessage(err)}`);
     } finally {
       setIsImportingSite(false);
     }
@@ -365,8 +389,8 @@ export default function PhishingAdminDashboard() {
         const data = await res.json();
         alert(`Gagal menyimpan landing page: ${data.error || 'Terjadi kesalahan'}`);
       }
-    } catch (err: any) {
-      alert(`Koneksi backend gagal: ${err.message}`);
+    } catch (err: unknown) {
+      alert(`Koneksi backend gagal: ${errorMessage(err)}`);
     } finally {
       setIsSavingLanding(false);
     }
@@ -387,29 +411,45 @@ export default function PhishingAdminDashboard() {
   };
 
   // Employee CRUD Handlers
-  const handleOpenAddEmployee = () => {
-    setEmpEmail('');
-    setEmpDivisi(divisions[0]?.name || 'IT');
+  const handleOpenAddEmployee = (existing?: EmployeeAccount) => {
+    setEmpEmail(existing?.email || '');
+    setEmpDivisi(existing?.divisi || divisions[0]?.name || 'IT');
     setEmpActive(1);
+    setEmpRole('employee');
+    setEmpPassword('');
+    setEmpFormError('');
     setIsAddEmployeeModalOpen(true);
   };
 
-  const handleOpenEditEmployee = (emp: any) => {
+  const handleOpenEditEmployee = (emp: EmployeeAccount) => {
     setEmpOldEmail(emp.email);
     setEmpEmail(emp.email);
     setEmpDivisi(emp.divisi || 'IT');
     setEmpActive(emp.is_active ?? 1);
+    setEmpRole(emp.role || 'employee');
+    setEmpPassword('');
+    setEmpFormError('');
     setIsEditEmployeeModalOpen(true);
+  };
+
+  const requireFreshAdminLogin = async () => {
+    setEmpFormError('Session Phishing Administrator sudah berakhir atau diganti oleh akun lain. Mengarahkan ke login ulang…');
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } finally {
+      window.setTimeout(() => window.location.assign('/auth'), 900);
+    }
   };
 
   const handleAddEmployeeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!empEmail.trim()) {
-      alert('Email wajib diisi');
+    if (!empEmail.trim() || !empPassword) {
+      setEmpFormError('Email dan password awal wajib diisi.');
       return;
     }
 
     setIsSavingEmp(true);
+    setEmpFormError('');
     try {
       const res = await fetch('/api/admin/employees', {
         method: 'POST',
@@ -418,19 +458,22 @@ export default function PhishingAdminDashboard() {
           email: empEmail.trim(),
           divisi: empDivisi.trim(),
           is_active: empActive,
+          role: empRole,
+          password: empPassword,
         }),
       });
 
       const data = await res.json();
       if (res.ok) {
-        alert('Karyawan berhasil ditambahkan!');
         setIsAddEmployeeModalOpen(false);
         await loadEmployees();
+      } else if (res.status === 401 || res.status === 403) {
+        await requireFreshAdminLogin();
       } else {
-        alert(`Gagal menambah karyawan: ${data.error || 'Terjadi kesalahan'}`);
+        setEmpFormError(data.error || 'Gagal menambah akun employee.');
       }
-    } catch (err: any) {
-      alert(`Koneksi gagal: ${err.message}`);
+    } catch (err: unknown) {
+      setEmpFormError(`Koneksi gagal: ${errorMessage(err)}`);
     } finally {
       setIsSavingEmp(false);
     }
@@ -444,6 +487,7 @@ export default function PhishingAdminDashboard() {
     }
 
     setIsSavingEmp(true);
+    setEmpFormError('');
     try {
       const res = await fetch('/api/admin/employees', {
         method: 'PUT',
@@ -453,19 +497,22 @@ export default function PhishingAdminDashboard() {
           email: empEmail.trim(),
           divisi: empDivisi.trim(),
           is_active: empActive,
+          role: empRole,
+          password: empPassword || undefined,
         }),
       });
 
       const data = await res.json();
       if (res.ok) {
-        alert('Data karyawan berhasil diperbarui!');
         setIsEditEmployeeModalOpen(false);
         await loadEmployees();
+      } else if (res.status === 401 || res.status === 403) {
+        await requireFreshAdminLogin();
       } else {
-        alert(`Gagal memperbarui karyawan: ${data.error || 'Terjadi kesalahan'}`);
+        setEmpFormError(data.error || 'Gagal memperbarui akun employee.');
       }
-    } catch (err: any) {
-      alert(`Koneksi gagal: ${err.message}`);
+    } catch (err: unknown) {
+      setEmpFormError(`Koneksi gagal: ${errorMessage(err)}`);
     } finally {
       setIsSavingEmp(false);
     }
@@ -500,8 +547,8 @@ export default function PhishingAdminDashboard() {
       } else {
         alert(`Gagal menambah divisi: ${data.error || 'Terjadi kesalahan'}`);
       }
-    } catch (err: any) {
-      alert(`Koneksi gagal: ${err.message}`);
+    } catch (err: unknown) {
+      alert(`Koneksi gagal: ${errorMessage(err)}`);
     } finally {
       setIsSavingDivision(false);
     }
@@ -877,7 +924,7 @@ export default function PhishingAdminDashboard() {
           <div className="dialog-box fade-up font-body" style={{ maxWidth: '460px', width: '90%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
               <h3 style={{ fontSize: '16px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-primary)' }}>
-                <Users size={18} style={{ color: 'var(--accent)' }} /> Add Employee
+                <Users size={18} style={{ color: 'var(--accent)' }} /> Create Employee Account
               </h3>
               <button onClick={() => setIsAddEmployeeModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
                 <X size={18} />
@@ -896,6 +943,38 @@ export default function PhishingAdminDashboard() {
                   onChange={(e) => setEmpEmail(e.target.value)}
                   style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
                 />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                  Access Role *
+                </label>
+                <select
+                  value={empRole}
+                  onChange={(e) => setEmpRole(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
+                >
+                  <option value="employee">Employee</option>
+                  <option value="phishing_admin">Phishing Administrator</option>
+                  <option value="soc">SOC Analyst</option>
+                  <option value="grc">GRC Specialist</option>
+                  <option value="ciso">CISO Executive</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                  Initial Password *
+                </label>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="Minimum 12 characters"
+                  value={empPassword}
+                  onChange={(e) => setEmpPassword(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
+                />
+                <p style={{ color: 'var(--text-muted)', fontSize: '10px', margin: '6px 0 0' }}>Use uppercase, lowercase, and numbers. The password is stored using Argon2id.</p>
               </div>
 
               <div>
@@ -923,6 +1002,8 @@ export default function PhishingAdminDashboard() {
                 Active Employee (Receives simulation campaigns)
               </label>
 
+              {empFormError && <div className="auth-form-error" role="alert">{empFormError}</div>}
+
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
                 <button
                   type="button"
@@ -937,7 +1018,7 @@ export default function PhishingAdminDashboard() {
                   className="btn btn-primary"
                   style={{ padding: '8px 18px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '13px' }}
                 >
-                  {isSavingEmp ? 'Saving...' : 'Add Employee'}
+                  {isSavingEmp ? 'Creating account...' : 'Create account'}
                 </button>
               </div>
             </form>
@@ -973,6 +1054,37 @@ export default function PhishingAdminDashboard() {
 
               <div>
                 <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                  Access Role *
+                </label>
+                <select
+                  value={empRole}
+                  onChange={(e) => setEmpRole(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
+                >
+                  <option value="employee">Employee</option>
+                  <option value="phishing_admin">Phishing Administrator</option>
+                  <option value="soc">SOC Analyst</option>
+                  <option value="grc">GRC Specialist</option>
+                  <option value="ciso">CISO Executive</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                  Reset Password
+                </label>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="Leave blank to keep current password"
+                  value={empPassword}
+                  onChange={(e) => setEmpPassword(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
                   Division *
                 </label>
                 <select
@@ -995,6 +1107,8 @@ export default function PhishingAdminDashboard() {
                 />
                 Active Employee
               </label>
+
+              {empFormError && <div className="auth-form-error" role="alert">{empFormError}</div>}
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
                 <button

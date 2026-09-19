@@ -5,6 +5,14 @@ import json
 import requests
 import logging
 from datetime import datetime, timedelta
+from security import (
+    authenticate_session_request,
+    create_simulation_token,
+    current_identity,
+    is_valid_service_request,
+    require_employee_match,
+    verify_simulation_token,
+)
 
 # Set up logging warning
 logging.basicConfig(level=logging.INFO)
@@ -156,6 +164,10 @@ def redirect_handler():
         html = render_template('tier1.html')
         html = html.replace('"__USER_EMAIL__"', js_string_literal(email))
         html = html.replace(
+            '"__SIMULATION_TOKEN__"',
+            js_string_literal(create_simulation_token(email, rid or None))
+        )
+        html = html.replace(
             '__HISTORY_NOTE__',
             build_history_note(history["click_count"] + 1, history["viewed_training_count"])
         )
@@ -237,6 +249,17 @@ def save_event():
     if not email or not event_type:
         return jsonify({"error": "field 'email' dan 'event_type' wajib diisi"}), 400
 
+    # Browser-originated employee and training events must prove ownership.
+    # Trusted server-to-server callers continue to authenticate via bearer key.
+    simulation_token = data.get('simulation_token')
+    identity = current_identity() or authenticate_session_request(request)
+    is_employee = bool(
+        identity and identity.role == 'employee' and identity.email.lower() == email.lower()
+    )
+    is_simulation = verify_simulation_token(simulation_token or '', email)
+    if not (is_valid_service_request(request) or is_employee or is_simulation):
+        return jsonify({"error": "Unauthorized event submission"}), 401
+
     valid_event_types = (
         'clicked_link', 'submitted_data', 'viewed_training',
         'skipped_training', 'email_opened',
@@ -276,65 +299,13 @@ def save_event():
 
 
 @events_bp.route('/api/register-telegram', methods=['POST'])
-def register_telegram():
-    data = request.get_json(silent=True)
-    if not data or not data.get('email') or not data.get('telegram_chat_id'):
-        return jsonify({"error": "field 'email' dan 'telegram_chat_id' wajib diisi"}), 400
-
-    email = data['email']
-    telegram_chat_id = str(data['telegram_chat_id'])
-
-    try:
-        database.update_user_telegram_chat_id(email, telegram_chat_id)
-        return jsonify({"message": "Pendaftaran Telegram sukses", "email": email, "telegram_chat_id": telegram_chat_id}), 200
-    except Exception as e:
-        return jsonify({"error": "Gagal mendaftarkan Telegram", "detail": str(e)}), 500
-
-
 @events_bp.route('/api/otp/create', methods=['POST'])
-def create_otp():
-    data = request.get_json(silent=True)
-    if not data or not data.get('email') or not data.get('telegram_chat_id') or not data.get('otp_code'):
-        return jsonify({"error": "fields 'email', 'telegram_chat_id', and 'otp_code' are required"}), 400
-
-    email = data['email']
-    telegram_chat_id = str(data['telegram_chat_id'])
-    otp_code = str(data['otp_code'])
-
-    try:
-        database.create_otp(email, telegram_chat_id, otp_code)
-        subject = "Human Firewall — Kode Verifikasi OTP Telegram"
-        body = (
-            f"Halo Karyawan Infranexia,<br><br>"
-            f"Kami menerima permintaan verifikasi akun Telegram Anda untuk platform Human Firewall.<br>"
-            f"Kode OTP Anda adalah: <b>{otp_code}</b><br><br>"
-            f"Masukkan kode di atas pada chat bot Telegram untuk menyelesaikan pendaftaran.<br>"
-            f"Kode ini berlaku selama 15 menit.<br><br>"
-            f"Salam hangat,<br><b>Tim IT Security Infranexia</b>"
-        )
-        database.create_inbox_email(email, subject, body)
-        return jsonify({"message": "OTP created and email logged successfully"}), 201
-    except Exception as e:
-        return jsonify({"error": "Gagal membuat OTP", "detail": str(e)}), 500
-
-
 @events_bp.route('/api/otp/verify', methods=['POST'])
-def verify_otp():
-    data = request.get_json(silent=True)
-    if not data or not data.get('telegram_chat_id') or not data.get('otp_code'):
-        return jsonify({"error": "fields 'telegram_chat_id' and 'otp_code' are required"}), 400
-
-    telegram_chat_id = str(data['telegram_chat_id'])
-    otp_code = str(data['otp_code'])
-
-    try:
-        email = database.verify_otp(telegram_chat_id, otp_code)
-        if email:
-            return jsonify({"status": "success", "message": "Verification successful", "email": email}), 200
-        else:
-            return jsonify({"status": "fail", "error": "Kode OTP salah atau kedaluwarsa"}), 400
-    except Exception as e:
-        return jsonify({"error": "Gagal memverifikasi OTP", "detail": str(e)}), 500
+def retired_telegram_registration():
+    return jsonify({
+        "error": "Registrasi Telegram telah dinonaktifkan. Gunakan email, password, dan OTP.",
+        "code": "AUTH_FLOW_RETIRED",
+    }), 410
 
 
 @events_bp.route('/api/emails', methods=['GET'])
@@ -351,27 +322,24 @@ def user_profile():
     email = request.args.get('email')
     if not email:
         return jsonify({"error": "parameter 'email' wajib diisi"}), 400
+    simulation_token = request.args.get('simulation_token', '')
+    if not (
+        is_valid_service_request(request)
+        or verify_simulation_token(simulation_token, email)
+    ):
+        return jsonify({"error": "Unauthorized profile access"}), 401
     return jsonify(database.get_user_profile(email)), 200
 
 
 @events_bp.route('/api/user-eligibility', methods=['GET'])
 def api_user_eligibility():
     email = request.args.get('email')
-    token = request.args.get('token')
 
     if not email:
         return jsonify({"error": "Parameter 'email' wajib diisi"}), 400
-
-    dev_bypass = os.environ.get("DEV_BYPASS_AUTH", "").lower() in ("true", "1", "yes")
-    if dev_bypass and (not token or token in ("dev_token", "undefined", "null", "")):
-        token_email = email
-    else:
-        token_email = database.validate_dashboard_token(token) if token else None
-        if token_email is None or token_email != email:
-            if dev_bypass:
-                token_email = email
-            else:
-                return jsonify({"error": "Token tidak valid atau tidak cocok dengan email"}), 403
+    access_error = require_employee_match(email)
+    if access_error:
+        return access_error
 
     conn = database.get_connection()
     try:
@@ -430,21 +398,12 @@ def api_user_eligibility():
 @events_bp.route('/api/user-activity', methods=['GET'])
 def api_user_activity():
     email = request.args.get('email')
-    token = request.args.get('token')
 
     if not email:
         return jsonify({"error": "Parameter 'email' wajib diisi"}), 400
-
-    dev_bypass = os.environ.get("DEV_BYPASS_AUTH", "").lower() in ("true", "1", "yes")
-    if dev_bypass and (not token or token in ("dev_token", "undefined", "null", "")):
-        token_email = email
-    else:
-        token_email = database.validate_dashboard_token(token) if token else None
-        if token_email is None or token_email != email:
-            if dev_bypass:
-                token_email = email
-            else:
-                return jsonify({"error": "Token tidak valid atau tidak cocok dengan email"}), 403
+    access_error = require_employee_match(email)
+    if access_error:
+        return access_error
 
     try:
         activities = database.get_user_activity(email)
@@ -482,39 +441,7 @@ def dns_check():
 
 @events_bp.route('/api/telegram/user', methods=['GET'])
 def get_telegram_user():
-    chat_id = request.args.get('chat_id')
-    target = request.args.get('target', '').strip()
-    if not chat_id:
-        return jsonify({"registered": False, "error": "Parameter 'chat_id' is required"}), 400
-
-    conn = database.get_connection()
-    try:
-        row = conn.execute(
-            'SELECT email, divisi, points, badge, daily_streak FROM user_history WHERE telegram_chat_id = ?',
-            (str(chat_id),)
-        ).fetchone()
-
-        if row and row["email"]:
-            is_duplicate = False
-            if target:
-                is_duplicate = database.is_target_already_reported(row["email"], target)
-
-            return jsonify({
-                "registered": True,
-                "email": row["email"],
-                "divisi": row["divisi"] or "General",
-                "points": row["points"] or 0,
-                "badge": row["badge"] or "Guardian",
-                "daily_streak": row["daily_streak"] or 0,
-                "reporter_name": row["email"].split('@')[0].replace('.', ' ').title(),
-                "is_duplicate": is_duplicate
-            }), 200
-        else:
-            return jsonify({
-                "registered": False,
-                "email": None,
-                "message": "User not registered",
-                "is_duplicate": False
-            }), 200
-    finally:
-        conn.close()
+    return jsonify({
+        "error": "Integrasi identitas Telegram telah dinonaktifkan.",
+        "code": "AUTH_FLOW_RETIRED",
+    }), 410

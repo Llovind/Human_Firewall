@@ -288,7 +288,7 @@
     },
     {
       "parameters": {
-        "url": "=https://api.telegram.org/bot8771953552:AAEVMI5AcgvFX0BaZwXc88oyNrI9A5EqS0E/getFile?file_id={{ $('Parse Input').item.json.file_id }}",
+        "url": "=https://api.telegram.org/bot{{$env.TELEGRAM_BOT_TOKEN}}/getFile?file_id={{ $('Parse Input').item.json.file_id }}",
         "options": {}
       },
       "id": "06080838-eb05-4946-b1da-df5a62a51b9c",
@@ -302,7 +302,7 @@
     },
     {
       "parameters": {
-        "url": "=https://api.telegram.org/file/bot8771953552:AAEVMI5AcgvFX0BaZwXc88oyNrI9A5EqS0E/{{ $json.result.file_path }}",
+        "url": "=https://api.telegram.org/file/bot{{$env.TELEGRAM_BOT_TOKEN}}/{{ $json.result.file_path }}",
         "options": {}
       },
       "id": "e3c42a8c-b715-4bc9-ace7-0ff92aa9c196",
@@ -323,7 +323,7 @@
           "parameters": [
             {
               "name": "x-apikey",
-              "value": "fbfdaaa618dc7446a3e8417c08cd53d6d818e51d7d733dc2208de64e2902cb08"
+              "value": "={{$env.VT_API_KEY}}"
             }
           ]
         },
@@ -372,7 +372,7 @@
           "parameters": [
             {
               "name": "x-apikey",
-              "value": "fbfdaaa618dc7446a3e8417c08cd53d6d818e51d7d733dc2208de64e2902cb08"
+              "value": "={{$env.VT_API_KEY}}"
             }
           ]
         },
@@ -849,7 +849,7 @@
           "parameters": [
             {
               "name": "x-apikey",
-              "value": "fbfdaaa618dc7446a3e8417c08cd53d6d818e51d7d733dc2208de64e2902cb08"
+              "value": "={{$env.VT_API_KEY}}"
             }
           ]
         },
