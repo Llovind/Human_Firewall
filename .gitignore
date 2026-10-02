@@ -42,3 +42,10 @@ proxy/ssl/*.key
 .env
 .env.*
 !.env.example
+
+# Dataset files
+dataset/raw/
+dataset/processed/*.csv
+dataset/processed/*.parquet
+dataset/cache/
+.tranco_cache/

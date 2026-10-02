@@ -149,6 +149,12 @@ def analyze_indicator(indicator, is_scan=False, user_tier="Guardian"):
         return result
 
     # =====================================================
+    # CHAR-BILSTM DEEP LEARNING (AFFERENT v5)
+    # =====================================================
+
+    char_bilstm = integrations.scan_char_bilstm(indicator)
+
+    # =====================================================
     # VIRUSTOTAL
     # =====================================================
 
@@ -173,8 +179,8 @@ def analyze_indicator(indicator, is_scan=False, user_tier="Guardian"):
     # MERGE ANALYSIS
     # =====================================================
 
-    analysis = integrations.merge_analysis(vt, urlscan)
-    analysis["scanner_busy"] = is_scanner_busy and (vt is None and urlscan is None)
+    analysis = integrations.merge_analysis(vt, urlscan, char_bilstm=char_bilstm, url=indicator)
+    analysis["scanner_busy"] = is_scanner_busy and (vt is None and urlscan is None and char_bilstm is None)
 
     # =====================================================
     # POLICY ENGINE

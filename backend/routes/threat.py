@@ -94,6 +94,8 @@ def threat_stats():
         "daily_cap": database.DAILY_REWARD_CAP,
         "wib_date": wib_date
     }), 200
+
+
 @threat_bp.route("/api/debug/vt", methods=["POST"])
 def debug_vt():
 
@@ -104,3 +106,35 @@ def debug_vt():
     raw = integrations.scan_virustotal(indicator)
 
     return jsonify(raw)
+
+
+@threat_bp.route("/api/threat/scan-dl", methods=["POST"])
+def scan_dl():
+    """Scan a URL directly using the Char-BiLSTM Deep Learning model (Afferent v5)."""
+    body = request.get_json(silent=True) or {}
+    url = body.get("url") or body.get("indicator")
+
+    if not url:
+        return jsonify({
+            "success": False,
+            "error": "Field 'url' atau 'indicator' wajib diisi."
+        }), 400
+
+    import char_bilstm_scanner
+    if not char_bilstm_scanner.is_scanner_available():
+        return jsonify({
+            "success": False,
+            "error": "Char-BiLSTM model scanner tidak tersedia."
+        }), 503
+
+    dl_result = char_bilstm_scanner.scan_url_dl(url)
+    if dl_result is None:
+        return jsonify({
+            "success": False,
+            "error": "Gagal melakukan inferensi Char-BiLSTM."
+        }), 500
+
+    return jsonify({
+        "success": True,
+        "data": dl_result
+    }), 200

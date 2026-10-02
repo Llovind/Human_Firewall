@@ -74,10 +74,13 @@ def evaluate(analysis: dict, user_tier: str = "Guardian") -> dict:
     evidence = analysis.get("evidence") if isinstance(analysis.get("evidence"), dict) else {}
     vt_info = evidence.get("virustotal") if isinstance(evidence.get("virustotal"), dict) else {}
     urlscan_info = evidence.get("urlscan") if isinstance(evidence.get("urlscan"), dict) else {}
+    bilstm_info = evidence.get("char_bilstm") if isinstance(evidence.get("char_bilstm"), dict) else {}
+
     vt_score = vt_info.get("vt_score", 0)
     urlscan_score = urlscan_info.get("urlscan_score", 0)
+    char_bilstm_score = int(round(bilstm_info.get("adj_p_malicious", bilstm_info.get("p_malicious", 0)) * 100))
 
-    threat_score = max(confidence, vt_score * 5, urlscan_score)
+    threat_score = max(confidence, vt_score * 5, urlscan_score, char_bilstm_score)
     res = evaluate_2d(threat_score=threat_score, user_tier=user_tier, verdict=verdict)
     res["confidence"] = confidence
     res["verdict"] = verdict

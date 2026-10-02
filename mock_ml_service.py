@@ -29,8 +29,29 @@ async def scan_domain(request: Request, x_afferent_signature: str = Header(None)
     payload = await request.json()
     domain = payload.get("domain", "")
 
-    # 2. Logika Prediksi / Model Machine Learning
-    # TODO: Ganti bagian ini dengan load model (e.g. PyTorch, scikit-learn, XGBoost, ONNX)
+    # 2. Logika Prediksi / Model Machine Learning (Char-BiLSTM v5)
+    try:
+        import sys
+        backend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend")
+        if backend_dir not in sys.path:
+            sys.path.insert(0, backend_dir)
+        import char_bilstm_scanner
+
+        if char_bilstm_scanner.is_scanner_available():
+            dl = char_bilstm_scanner.scan_url_dl(domain)
+            if dl:
+                v = "malicious" if dl["action"] == "BLOCK" else "safe" if dl["action"] == "ALLOW" else "unknown"
+                conf = dl["p_malicious"] if v == "malicious" else dl["probabilities"].get("benign", 0.85)
+                return {
+                    "verdict": v,
+                    "confidence": round(float(conf), 4),
+                    "reason": f"Char-BiLSTM mendeteksi {dl['threat_type']} (P_mal={dl['p_malicious']:.2f}, action={dl['action']})",
+                    "modelVersion": "Afferent-CharBiLSTM-v5.0"
+                }
+    except Exception as e:
+        print(f"[ML Service] Char-BiLSTM inference failed: {e}")
+
+    # Fallback jika model DL belum diinisialisasi
     malicious_indicators = ["phish", "fakelogin", "secure-bank", "account-update", "verification-login"]
     is_malicious = any(indicator in domain.lower() for indicator in malicious_indicators)
 
@@ -55,6 +76,7 @@ async def scan_domain(request: Request, x_afferent_signature: str = Header(None)
             "reason": "Fitur reputasi dan struktur leksikal tergolong aman",
             "modelVersion": "mock-model-v1.0"
         }
+
 
 
 if __name__ == "__main__":

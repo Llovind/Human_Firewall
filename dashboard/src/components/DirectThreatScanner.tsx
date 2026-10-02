@@ -16,6 +16,9 @@ import {
   Layers,
   ArrowRight,
   Info,
+  Cpu,
+  Sparkles,
+  ExternalLink,
 } from 'lucide-react';
 
 interface DirectThreatScannerProps {
@@ -41,6 +44,34 @@ interface ScanResult {
     scores?: {
       vt?: number;
       urlscan?: number;
+    };
+    evidence?: {
+      char_bilstm?: {
+        provider?: string;
+        model_name?: string;
+        verdict?: string;
+        action?: string;
+        threat_type?: string;
+        confidence?: number;
+        p_malicious?: number;
+        adj_confidence?: number;
+        adj_p_malicious?: number;
+        adj_verdict?: string;
+        dl_weight?: number;
+        probabilities?: Record<string, number>;
+        calibrated?: boolean;
+      } | null;
+      domain_reputation?: {
+        trusted?: boolean;
+        suspicious?: boolean;
+        trust_level?: string;
+        apex_domain?: string;
+        hostname?: string;
+        reason?: string;
+        dl_weight?: number;
+      } | null;
+      virustotal?: any;
+      urlscan?: any;
     };
   };
   policy: {
@@ -77,10 +108,28 @@ interface ScanResult {
 
 const DEMO_PRESETS = [
   {
-    label: 'Internal Portal (Safe)',
-    url: 'https://internal.telkom.co.id/portal',
-    expected: 'Safe · Low Risk',
+    label: 'MS Support (Safe Whitelist)',
+    url: 'https://support.microsoft.com/en-us/windows/security/firewall/risks-of-allowing-apps-through-windows-firewall',
+    expected: 'Safe · Tier-1 Domain Whitelist Overrides Char-BiLSTM',
     type: 'safe',
+  },
+  {
+    label: 'Campus Tel-U (Official .ac.id)',
+    url: 'https://telkomuniversity.ac.id',
+    expected: 'Safe · Institutional TLD Verified',
+    type: 'safe',
+  },
+  {
+    label: 'BCA Phishing (Afferent AI)',
+    url: 'http://login-bca-klik-verifikasi-update.com',
+    expected: 'Malicious · Char-BiLSTM Zero-Day Phishing',
+    type: 'malicious',
+  },
+  {
+    label: 'Judol / Scam (Afferent AI)',
+    url: 'http://slot-gacor-maxwin-sensational-2026.net',
+    expected: 'Malicious · Char-BiLSTM Judol / Scam Model',
+    type: 'malicious',
   },
   {
     label: 'Payroll SSO (Suspicious)',
@@ -89,15 +138,9 @@ const DEMO_PRESETS = [
     type: 'suspicious',
   },
   {
-    label: 'Urgent Invoice Dropper (Malicious)',
+    label: 'Urgent Invoice Dropper',
     url: 'https://finance-urgent-invoice.top/update.exe',
     expected: 'Malicious · Auto Block & SOC Ticket',
-    type: 'malicious',
-  },
-  {
-    label: 'EICAR Test Signature',
-    url: 'eicar_test.txt',
-    expected: 'Malicious File · Standard AV Test',
     type: 'malicious',
   },
 ];
@@ -758,6 +801,182 @@ export default function DirectThreatScanner({
               </div>
             )}
           </div>
+
+          {/* Deep Learning & Threat Intelligence Evidence Section */}
+          {(result.analysis?.evidence?.char_bilstm || result.analysis?.evidence?.domain_reputation) && (
+            <div
+              style={{
+                padding: '16px',
+                borderRadius: '8px',
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Cpu size={16} style={{ color: '#a855f7' }} />
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    Afferent AI & Multi-Provider Evidence Triangulation:
+                  </span>
+                </div>
+                {result.analysis?.evidence?.domain_reputation?.trusted && (
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      background: 'rgba(34, 197, 94, 0.15)',
+                      border: '1px solid rgba(34, 197, 94, 0.4)',
+                      color: '#22c55e',
+                      fontWeight: 700,
+                    }}
+                  >
+                    🛡️ Trusted Apex Whitelist ({result.analysis.evidence.domain_reputation.trust_level || 'verified'})
+                  </span>
+                )}
+              </div>
+
+              {/* Grid: Char-BiLSTM Card + Domain Reputation Card */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
+                {/* Char-BiLSTM Box */}
+                {result.analysis?.evidence?.char_bilstm && (
+                  <div
+                    style={{
+                      padding: '12px',
+                      borderRadius: '6px',
+                      background: 'var(--bg-elevated)',
+                      border: '1px solid var(--border)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Sparkles size={14} style={{ color: '#a855f7' }} /> Char-BiLSTM v5.0 (Afferent)
+                      </span>
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          background:
+                            result.analysis.evidence.char_bilstm.verdict === 'malicious'
+                              ? 'rgba(239, 68, 68, 0.15)'
+                              : result.analysis.evidence.char_bilstm.verdict === 'suspicious'
+                              ? 'rgba(245, 158, 11, 0.15)'
+                              : 'rgba(34, 197, 94, 0.15)',
+                          color:
+                            result.analysis.evidence.char_bilstm.verdict === 'malicious'
+                              ? '#ef4444'
+                              : result.analysis.evidence.char_bilstm.verdict === 'suspicious'
+                              ? '#f59e0b'
+                              : '#22c55e',
+                        }}
+                      >
+                        {result.analysis.evidence.char_bilstm.verdict?.toUpperCase()}
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                      Kategori Ancaman: <strong style={{ color: 'var(--text-primary)' }}>{result.analysis.evidence.char_bilstm.threat_type || 'N/A'}</strong>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                      <span>Raw P(mal): {((result.analysis.evidence.char_bilstm.p_malicious || 0) * 100).toFixed(1)}%</span>
+                      {result.analysis.evidence.char_bilstm.dl_weight !== undefined && (
+                        <span>Bobot Domain: {result.analysis.evidence.char_bilstm.dl_weight}×</span>
+                      )}
+                      <span>Conf: {result.analysis.evidence.char_bilstm.adj_confidence ?? result.analysis.evidence.char_bilstm.confidence}%</span>
+                    </div>
+
+                    {result.analysis.evidence.char_bilstm.probabilities && (
+                      <div style={{ display: 'flex', gap: '4px', marginTop: '4px', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
+                        <div
+                          style={{
+                            width: `${((result.analysis.evidence.char_bilstm.probabilities.benign || 0) * 100).toFixed(0)}%`,
+                            background: '#22c55e',
+                          }}
+                          title={`Benign: ${((result.analysis.evidence.char_bilstm.probabilities.benign || 0) * 100).toFixed(1)}%`}
+                        />
+                        <div
+                          style={{
+                            width: `${((result.analysis.evidence.char_bilstm.probabilities.phishing || 0) * 100).toFixed(0)}%`,
+                            background: '#ef4444',
+                          }}
+                          title={`Phishing: ${((result.analysis.evidence.char_bilstm.probabilities.phishing || 0) * 100).toFixed(1)}%`}
+                        />
+                        <div
+                          style={{
+                            width: `${(((result.analysis.evidence.char_bilstm.probabilities.other || 0) + (result.analysis.evidence.char_bilstm.probabilities.malware || 0)) * 100).toFixed(0)}%`,
+                            background: '#f59e0b',
+                          }}
+                          title={`Judol/Malware: ${(((result.analysis.evidence.char_bilstm.probabilities.other || 0) + (result.analysis.evidence.char_bilstm.probabilities.malware || 0)) * 100).toFixed(1)}%`}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Domain Reputation Card */}
+                {result.analysis?.evidence?.domain_reputation && (
+                  <div
+                    style={{
+                      padding: '12px',
+                      borderRadius: '6px',
+                      background: 'var(--bg-elevated)',
+                      border: '1px solid var(--border)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Globe size={14} style={{ color: 'var(--accent)' }} /> Domain Intelligence
+                      </span>
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          background: result.analysis.evidence.domain_reputation.trusted
+                            ? 'rgba(34, 197, 94, 0.15)'
+                            : result.analysis.evidence.domain_reputation.suspicious
+                            ? 'rgba(239, 68, 68, 0.15)'
+                            : 'rgba(107, 114, 128, 0.15)',
+                          color: result.analysis.evidence.domain_reputation.trusted
+                            ? '#22c55e'
+                            : result.analysis.evidence.domain_reputation.suspicious
+                            ? '#ef4444'
+                            : 'var(--text-secondary)',
+                        }}
+                      >
+                        {result.analysis.evidence.domain_reputation.trusted
+                          ? 'TRUSTED'
+                          : result.analysis.evidence.domain_reputation.suspicious
+                          ? 'SUSPECT TLD'
+                          : 'NEUTRAL'}
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                      Apex: <strong style={{ color: 'var(--text-primary)', fontFamily: 'monospace' }}>{result.analysis.evidence.domain_reputation.apex_domain || '-'}</strong>
+                    </div>
+
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                      {result.analysis.evidence.domain_reputation.reason}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Bottom Row: SOC Dispatch & Reputation Bounty Alerts */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
