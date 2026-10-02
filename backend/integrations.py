@@ -21,6 +21,14 @@ def encode_vt_url(url: str) -> str:
 
 
 def scan_virustotal(url: str):
+    if not VT_API_KEY:
+        return {
+            "success": False,
+            "provider": "virustotal",
+            "status_code": 503,
+            "error": "VT_API_KEY not configured",
+            "data": None
+        }
 
     headers = {
         "x-apikey": VT_API_KEY
@@ -28,21 +36,35 @@ def scan_virustotal(url: str):
 
     url_id = encode_vt_url(url)
 
-    response = requests.get(
-        f"{VT_BASE_URL}/{url_id}",
-        headers=headers,
-        timeout=30
-    )
-    print("=" * 60)
-    print("VirusTotal Status :", response.status_code)
-    print("VirusTotal Response:")
-    print(response.text)
-    print("=" * 60)
+    try:
+        response = requests.get(
+            f"{VT_BASE_URL}/{url_id}",
+            headers=headers,
+            timeout=8
+        )
+    except requests.exceptions.Timeout:
+        return {
+            "success": False,
+            "provider": "virustotal",
+            "status_code": 408,
+            "error": "Timeout querying VirusTotal API",
+            "data": None
+        }
+    except requests.exceptions.RequestException as e:
+        return {
+            "success": False,
+            "provider": "virustotal",
+            "status_code": 502,
+            "error": f"Network error connecting to VirusTotal: {str(e)}",
+            "data": None
+        }
+
     if response.status_code != 200:
         return {
             "success": False,
             "provider": "virustotal",
             "status_code": response.status_code,
+            "error": "Rate limit exceeded (429)" if response.status_code == 429 else f"HTTP {response.status_code}",
             "data": None
         }
 
@@ -108,37 +130,52 @@ def normalize_virustotal(result):
 # ==========================================================
 
 def scan_urlscan(url):
+    if not URLSCAN_API_KEY:
+        return {
+            "success": False,
+            "provider": "urlscan",
+            "status_code": 503,
+            "error": "URLSCAN_API_KEY not configured",
+            "data": None
+        }
 
     headers = {
         "API-Key": URLSCAN_API_KEY
     }
 
-    response = requests.get(
-
-        URLSCAN_SEARCH_URL,
-
-        params={
-            "q": f'page.url:"{url}"'
-        },
-
-        headers=headers,
-
-        timeout=30
-
-    )
+    try:
+        response = requests.get(
+            URLSCAN_SEARCH_URL,
+            params={
+                "q": f'page.url:"{url}"'
+            },
+            headers=headers,
+            timeout=8
+        )
+    except requests.exceptions.Timeout:
+        return {
+            "success": False,
+            "provider": "urlscan",
+            "status_code": 408,
+            "error": "Timeout querying urlscan.io API",
+            "data": None
+        }
+    except requests.exceptions.RequestException as e:
+        return {
+            "success": False,
+            "provider": "urlscan",
+            "status_code": 502,
+            "error": f"Network error connecting to urlscan.io: {str(e)}",
+            "data": None
+        }
 
     if response.status_code != 200:
-
         return {
-
             "success": False,
-
             "provider": "urlscan",
-
             "status_code": response.status_code,
-
+            "error": "Rate limit exceeded (429)" if response.status_code == 429 else f"HTTP {response.status_code}",
             "data": None
-
         }
 
     return {

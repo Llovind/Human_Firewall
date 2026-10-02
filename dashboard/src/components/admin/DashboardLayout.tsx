@@ -9,7 +9,7 @@ import type { AdminRole } from '@/components/admin/types';
 import { ROLE_ROUTES } from '@/components/admin/types';
 import {
   LayoutDashboard, ShieldAlert, Trophy, FileWarning, Fish,
-  Mail, Users, Brain, BarChart3, Eye, FileCheck, Shield
+  Mail, Users, Brain, BarChart3, Eye, FileCheck, Shield, ExternalLink
 } from 'lucide-react';
 import '@/app/dashboard.css';
 
@@ -19,7 +19,7 @@ const ADMIN_ROLES: AdminRole[] = ['phishing_admin', 'soc', 'grc', 'ciso'];
 
 const ROLE_TABS: Record<AdminRole, TabDef[]> = {
   phishing_admin: [
-    { id: 'gophish', label: 'GoPhish', icon: <Fish size={20} /> },
+    { id: 'gophish', label: 'Simulations', icon: <Fish size={20} /> },
     { id: 'employees', label: 'Employees', icon: <Users size={20} /> },
     { id: 'webmail', label: 'Webmail', icon: <Mail size={20} /> },
     { id: 'leaderboard', label: 'Leaderboard', icon: <Trophy size={20} /> },
@@ -42,7 +42,7 @@ const ROLE_TABS: Record<AdminRole, TabDef[]> = {
     { id: 'threats', label: 'Threats', icon: <ShieldAlert size={20} /> },
     { id: 'leaderboard', label: 'Leaderboard', icon: <Trophy size={20} /> },
     { id: 'policy', label: 'Policy', icon: <FileWarning size={20} /> },
-    { id: 'gophish', label: 'GoPhish', icon: <Fish size={20} /> },
+    { id: 'gophish', label: 'Simulations', icon: <Fish size={20} /> },
     { id: 'employees', label: 'Employees', icon: <Users size={20} /> },
     { id: 'ai', label: 'AI Heatmap', icon: <Brain size={20} /> },
   ],
@@ -113,37 +113,44 @@ export default function DashboardLayout({ role, activeTab, onTabChange, children
   return (
     <div className="app-shell font-body">
       {/* ── Sidebar ─────────────────────────────────────── */}
-      <aside className="sidebar-nav" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', paddingTop: '8px' }}>
+      <aside className="sidebar-nav">
         <div className="radar-sweep-bg" />
-        <div className="sidebar-nav-logo" style={{ marginBottom: '12px', display: 'flex', justifyContent: 'center' }}>
-          <Logo variant="mark" size={54} />
-        </div>
 
-        {/* Role Badge */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-          padding: '6px 12px', margin: '0 12px 16px', borderRadius: '6px',
-          background: 'rgba(33, 150, 243, 0.08)', border: '1px solid var(--border)',
-          fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.5px',
-          textTransform: 'uppercase',
-        }}>
-          {roleInfo.icon}
-          {roleInfo.label}
+        {/* Logo + Wordmark */}
+        <div className="sidebar-nav-logo">
+          <Logo variant="mark" size={36} />
+          <span className="sidebar-wordmark">AFFERENT</span>
         </div>
 
         {/* Tab Navigation */}
-        <nav className="sidebar-menu" style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 'none' }}>
+        <nav className="sidebar-menu" aria-label="Main navigation" style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
           {tabs.map(tab => (
             <button
               key={tab.id}
               className={`sidebar-item font-body ${activeTab === tab.id ? 'active' : ''}`}
               onClick={() => onTabChange(tab.id)}
+              aria-current={activeTab === tab.id ? 'page' : undefined}
             >
               {tab.icon}
-              {tab.label}
+              <span>{tab.label}</span>
+              {tab.id === 'webmail' && <ExternalLink size={12} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
             </button>
           ))}
         </nav>
+
+        {/* User Card — bottom */}
+        <div className="sidebar-user-card">
+          <div className="sidebar-user-avatar">
+            {(user?.userName || roleInfo.label).charAt(0).toUpperCase()}
+          </div>
+          <div className="sidebar-user-info">
+            <span className="sidebar-user-name">{user?.userName || roleInfo.label}</span>
+            <span className="sidebar-role-chip">
+              {roleInfo.icon}
+              {roleInfo.label}
+            </span>
+          </div>
+        </div>
       </aside>
 
       {/* ── Main Content ────────────────────────────────── */}

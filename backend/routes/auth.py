@@ -118,7 +118,7 @@ def verify_otp():
 
 @auth_bp.route("/api/auth/session", methods=["GET"])
 def session_info():
-    identity = getattr(g, "auth_identity", None)
+    identity = getattr(g, "auth_identity", None) or auth_service.get_identity(_session_token())
     if not identity:
         return jsonify({"error": "Session tidak valid", "code": "UNAUTHORIZED"}), 401
     return jsonify({"authenticated": True, "user": identity.as_dict()}), 200

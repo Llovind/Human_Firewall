@@ -7,11 +7,13 @@ import Logo from '@/components/Logo';
 import ThemeToggle from '@/components/ThemeToggle';
 import ReportingBadgesWidget from '@/components/ReportingBadgesWidget';
 import ProxyConnectionCard from '@/components/ProxyConnectionCard';
+import DirectThreatScanner from '@/components/DirectThreatScanner';
 import { 
   LayoutDashboard, Fish, Shield, ShieldCheck, Timer, Lightbulb, Search, 
   Flame, BookOpen, Star, FileWarning, CheckCircle2, AlertTriangle, Trophy, 
   Flag, Info, XCircle, Sparkles, RefreshCw, Globe, Lock, ShieldAlert, 
-  ArrowRight, Award, HelpCircle, Check, X, ExternalLink, FileText, Fingerprint 
+  ArrowRight, Award, HelpCircle, Check, X, ExternalLink, FileText, Fingerprint,
+  Gamepad2, ArrowLeft
 } from 'lucide-react';
 import './dashboard.css';
 
@@ -71,6 +73,7 @@ export default function EmployeeDashboardPage() {
   const { user, isAuthenticated, isLoading: authLoading, logout } = useAuth();
   const [clock, setClock] = useState('');
   const [activeTab, setActiveTab] = useState<'dashboard' | 'game' | 'quiz'>('dashboard');
+  const [gameModalOpen, setGameModalOpen] = useState(false);
 
   // ── Polling & state data sources ───
   const behaviorUrl = user 
@@ -399,21 +402,27 @@ export default function EmployeeDashboardPage() {
           <div className="topbar-brand">
             <Logo variant="full" size={28} />
           </div>
-          <nav className="topbar-nav">
-            {(['dashboard', 'game', 'quiz'] as const).map(tab => (
-              <button
-                key={tab}
-                className={`nav-btn ${activeTab === tab ? 'active' : ''}`}
-                onClick={() => setActiveTab(tab)}
-              >
-                {tab === 'dashboard' ? <><LayoutDashboard size={14} style={{ marginRight: '8px', verticalAlign: 'text-bottom' }} /> My Dashboard</> : 
-                 tab === 'game' ? <><Fish size={14} style={{ marginRight: '8px', verticalAlign: 'text-bottom' }} /> Spot the Fake</> :
-                 <><BookOpen size={14} style={{ marginRight: '8px', verticalAlign: 'text-bottom' }} /> Daily Quiz</>}
-              </button>
-            ))}
-          </nav>
         </div>
         <div className="topbar-right">
+          <button
+            onClick={() => setGameModalOpen(true)}
+            style={{
+              fontSize: '12px',
+              padding: '6px 14px',
+              background: 'rgba(33, 150, 243, 0.12)',
+              border: '1px solid var(--border-active)',
+              borderRadius: '6px',
+              color: 'var(--accent)',
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              marginRight: '8px',
+            }}
+          >
+            <Gamepad2 size={15} /> Main Games
+          </button>
           <a
             href="/blocked?url=https://portal-keuangan-company.xyz/login&source=AFFERENT%20ML&score=94&type=Malicious%20Domain"
             target="_blank"
@@ -454,6 +463,11 @@ export default function EmployeeDashboardPage() {
         {activeTab === 'dashboard' && (
           <>
             <ProxyConnectionCard />
+            <DirectThreatScanner
+              currentUserTier={myScore ? ((myScore.totalPoints || 0) >= 130 ? 'Sentinel' : (myScore.totalPoints || 0) >= 60 ? 'Guardian' : 'Vulnerable') : 'Guardian'}
+              userEmail={user.email}
+              onScanComplete={pollBehavior}
+            />
             <div className="employee-dashboard-layout">
               <div className="employee-left-col" style={{ display: 'flex', flexDirection: 'column' }}>
                 {/* Hero Card */}
@@ -541,6 +555,29 @@ export default function EmployeeDashboardPage() {
                         })}
                       </div>
                     )}
+                    <button
+                      onClick={() => setGameModalOpen(true)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        padding: '11px 16px',
+                        borderRadius: '8px',
+                        marginTop: '16px',
+                        width: '100%',
+                        fontWeight: 600,
+                        background: 'linear-gradient(135deg, var(--accent), var(--accent-dim))',
+                        color: '#ffffff',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        boxShadow: '0 4px 12px rgba(33, 150, 243, 0.25)',
+                        transition: 'opacity 0.2s',
+                      }}
+                    >
+                      <Gamepad2 size={16} /> Main Game Keamanan (Tingkatkan Skor)
+                    </button>
                   </div>
                 ) : (
                   <div className="panel glass-card" style={{ height: 'auto' }}>
@@ -826,7 +863,28 @@ export default function EmployeeDashboardPage() {
 
         {/* ── SPOT THE FAKE TAB ─────────────────────────────── */}
         {activeTab === 'game' && (
-          <div className="panel glass-card" style={{ minHeight: '500px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div>
+              <button
+                onClick={() => setActiveTab('dashboard')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg-surface)',
+                  color: 'var(--text-primary)',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                <ArrowLeft size={16} /> Kembali ke Dashboard
+              </button>
+            </div>
+            <div className="panel glass-card" style={{ minHeight: '500px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {eligibility === null ? (
               <div style={{ textAlign: 'center' }}>
                 <div className="loading-spinner" style={{ margin: '0 auto var(--space-4)' }} />
@@ -1252,11 +1310,33 @@ export default function EmployeeDashboardPage() {
             </>
           )}
         </div>
+      </div>
       )}
 
       {/* ── DAILY QUIZ TAB ────────────────────────────────── */}
       {activeTab === 'quiz' && (
-        <div className="panel glass-card" style={{ minHeight: '500px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div>
+            <button
+              onClick={() => setActiveTab('dashboard')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 16px',
+                borderRadius: '8px',
+                border: '1px solid var(--border)',
+                background: 'var(--bg-surface)',
+                color: 'var(--text-primary)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              <ArrowLeft size={16} /> Kembali ke Dashboard
+            </button>
+          </div>
+          <div className="panel glass-card" style={{ minHeight: '500px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {quizLoading ? (
             <div style={{ textAlign: 'center' }}>
               <div className="loading-spinner" style={{ margin: '0 auto var(--space-4)' }} />
@@ -1444,8 +1524,180 @@ export default function EmployeeDashboardPage() {
             </div>
           )}
         </div>
+      </div>
       )}
       </main>
+
+      {/* ── Minigames Selection Modal ──────────────────────── */}
+      {gameModalOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.55)',
+            backdropFilter: 'blur(5px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px',
+          }}
+          onClick={() => setGameModalOpen(false)}
+        >
+          <div
+            style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border)',
+              borderRadius: '16px',
+              padding: '28px',
+              maxWidth: '560px',
+              width: '100%',
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.25)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '20px',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                  Pilih Mini-Game Keamanan
+                </h3>
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '4px 0 0' }}>
+                  Latih refleks keamanan Anda dan tingkatkan skor poin reputasi perusahaan.
+                </p>
+              </div>
+              <button
+                onClick={() => setGameModalOpen(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  padding: '6px',
+                  borderRadius: '6px',
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              {/* Option 1: Spot the Fake */}
+              <div
+                onClick={() => {
+                  setGameModalOpen(false);
+                  setActiveTab('game');
+                }}
+                style={{
+                  border: '1px solid var(--border)',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  background: 'var(--bg-elevated)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--accent)';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--border)';
+                  e.currentTarget.style.transform = 'none';
+                }}
+              >
+                <div
+                  style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '10px',
+                    background: 'rgba(33, 150, 243, 0.15)',
+                    color: 'var(--accent)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Fish size={22} />
+                </div>
+                <div>
+                  <h4 style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                    Spot the Fake
+                  </h4>
+                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '6px 0 0', lineHeight: 1.4 }}>
+                    Uji ketajaman membedakan email kerja asli vs jebakan phishing rekayasa sosial.
+                  </p>
+                </div>
+                <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--success)' }}>+5 Pts / Menang</span>
+                  <span style={{ fontSize: '12px', color: 'var(--accent)', fontWeight: 600 }}>Mulai Main →</span>
+                </div>
+              </div>
+
+              {/* Option 2: Daily Cyber Quiz */}
+              <div
+                onClick={() => {
+                  setGameModalOpen(false);
+                  setActiveTab('quiz');
+                }}
+                style={{
+                  border: '1px solid var(--border)',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  background: 'var(--bg-elevated)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = '#ea580c';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--border)';
+                  e.currentTarget.style.transform = 'none';
+                }}
+              >
+                <div
+                  style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '10px',
+                    background: 'rgba(234, 88, 12, 0.15)',
+                    color: '#ea580c',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <BookOpen size={22} />
+                </div>
+                <div>
+                  <h4 style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                    Daily Cyber Quiz
+                  </h4>
+                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '6px 0 0', lineHeight: 1.4 }}>
+                    1 Pertanyaan keamanan siber harian. Jawab benar & bangun streak harian Anda.
+                  </p>
+                </div>
+                <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--success)' }}>+10 Pts + Streak</span>
+                  <span style={{ fontSize: '12px', color: '#ea580c', fontWeight: 600 }}>Kuis Hari Ini →</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Footer ────────────────────────────────────────── */}
       <footer className="dashboard-footer">

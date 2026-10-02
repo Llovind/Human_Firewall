@@ -41,8 +41,17 @@ def _is_gophish_simulation(indicator: str) -> bool:
     return has_rid or is_known_host
 
 
-def _build_gophish_analysis(indicator: str) -> dict:
+def _build_gophish_analysis(indicator: str, user_tier: str = "Guardian") -> dict:
     """Build a synthetic analysis result for internal GoPhish simulation links."""
+    pol = policy.evaluate_2d(threat_score=100, user_tier=user_tier, verdict="malicious")
+    pol["confidence"] = 100
+    pol["severity"] = "high"
+    pol["verdict"] = "malicious"
+    pol["comparative"] = {
+        "Sentinel": policy.evaluate_2d(threat_score=100, user_tier="Sentinel", verdict="malicious"),
+        "Guardian": policy.evaluate_2d(threat_score=100, user_tier="Guardian", verdict="malicious"),
+        "Vulnerable": policy.evaluate_2d(threat_score=100, user_tier="Vulnerable", verdict="malicious"),
+    }
     return {
         "cache_hit": False,
         "analysis": {
@@ -56,17 +65,11 @@ def _build_gophish_analysis(indicator: str) -> dict:
                 "urlscan": {"urlscan_score": 0},
             },
         },
-        "policy": {
-            "action": "block",
-            "reason": "Internal phishing simulation campaign detected by Infranexia Sensor.",
-            "confidence": 100,
-            "severity": "high",
-            "verdict": "malicious",
-        },
+        "policy": pol,
     }
 
 
-def analyze_indicator(indicator, is_scan=False):
+def analyze_indicator(indicator, is_scan=False, user_tier="Guardian"):
 
     indicator = database.normalize_indicator(indicator)
 
@@ -77,8 +80,11 @@ def analyze_indicator(indicator, is_scan=False):
     cache = database.get_cached_indicator(indicator)
 
     if cache:
+        source_str = cache["source"] if "source" in cache and cache["source"] else "cached"
         analysis = {
-            "providers": cache["source"].split(","),
+            "providers": source_str.split(","),
+            "source": source_str,
+            "is_demo_seed": "demo_seed" in source_str,
             "verdict": cache["verdict"],
             "severity": cache["severity"],
             "confidence": cache["confidence"],
@@ -91,12 +97,26 @@ def analyze_indicator(indicator, is_scan=False):
             ),
         }
 
-        policy_result = policy.evaluate(analysis)
+        policy_result = policy.evaluate(analysis, user_tier=user_tier)
+
+        ticket_id = None
+        if policy_result["action"] == "block" and is_scan:
+            ticket_id = incident.create_incident(indicator, analysis)
+            incident.send_to_n8n(ticket_id, indicator, analysis)
+
+        if ticket_id:
+            soc_status_msg = f"Dispatched to SOC (Ticket #{ticket_id})"
+        else:
+            soc_status_msg = None
 
         return {
             "cache_hit": True,
+            "is_demo_seed": "demo_seed" in source_str,
             "analysis": analysis,
             "policy": policy_result,
+            "ticket_id": ticket_id,
+            "ticket_created": bool(ticket_id),
+            "soc_status": soc_status_msg,
         }
 
     # =====================================================
@@ -109,7 +129,7 @@ def analyze_indicator(indicator, is_scan=False):
     # should NOT be blocked unless they are a cache hit (reported).
 
     if is_scan and _is_gophish_simulation(indicator):
-        result = _build_gophish_analysis(indicator)
+        result = _build_gophish_analysis(indicator, user_tier=user_tier)
 
         # Save to cache so future clicks are instantly blocked
         database.save_threat_cache(
@@ -121,6 +141,10 @@ def analyze_indicator(indicator, is_scan=False):
         # Create incident for dashboard visibility
         ticket_id = incident.create_incident(indicator, result["analysis"])
         incident.send_to_n8n(ticket_id, indicator, result["analysis"])
+
+        result["ticket_id"] = ticket_id
+        result["ticket_created"] = bool(ticket_id)
+        result["soc_status"] = f"Dispatched to SOC (Ticket #{ticket_id})" if ticket_id else None
 
         return result
 
@@ -138,31 +162,51 @@ def analyze_indicator(indicator, is_scan=False):
     urlscan_raw = integrations.scan_urlscan(indicator)
     urlscan = integrations.normalize_urlscan(urlscan_raw)
 
+    # Rate limit and timeout detection
+    vt_status = vt_raw.get("status_code") if isinstance(vt_raw, dict) else None
+    urlscan_status = urlscan_raw.get("status_code") if isinstance(urlscan_raw, dict) else None
+    vt_rate_limited = vt_status in (429, 408)
+    urlscan_rate_limited = urlscan_status in (429, 408)
+    is_scanner_busy = vt_rate_limited or urlscan_rate_limited
+
     # =====================================================
     # MERGE ANALYSIS
     # =====================================================
 
     analysis = integrations.merge_analysis(vt, urlscan)
+    analysis["scanner_busy"] = is_scanner_busy and (vt is None and urlscan is None)
 
     # =====================================================
     # POLICY ENGINE
     # =====================================================
 
-    policy_result = policy.evaluate(analysis)
+    policy_result = policy.evaluate(analysis, user_tier=user_tier)
 
     # =====================================================
     # SAVE CACHE
     # =====================================================
 
-    database.save_threat_cache(indicator, "url", analysis)
+    if vt or urlscan:
+        database.save_threat_cache(indicator, "url", analysis)
 
     # =====================================================
     # INCIDENT + N8N
     # =====================================================
 
+    ticket_id = None
     if policy_result["action"] == "block":
         ticket_id = incident.create_incident(indicator, analysis)
         incident.send_to_n8n(ticket_id, indicator, analysis)
+
+    # STRICT REQUIREMENT:
+    # "pesan 'dispatched to SOC' hanya muncul kalau tiket benar-benar dibuat,
+    # kalau tidak pakai 'scanner busy, retry'"
+    if ticket_id:
+        soc_status_msg = f"Dispatched to SOC (Ticket #{ticket_id})"
+    elif is_scanner_busy:
+        soc_status_msg = "Scanner busy, retry"
+    else:
+        soc_status_msg = None
 
     # =====================================================
     # RETURN
@@ -170,8 +214,13 @@ def analyze_indicator(indicator, is_scan=False):
 
     return {
         "cache_hit": False,
+        "is_demo_seed": False,
+        "scanner_busy": analysis.get("scanner_busy", False),
         "analysis": analysis,
         "policy": policy_result,
+        "ticket_id": ticket_id,
+        "ticket_created": bool(ticket_id),
+        "soc_status": soc_status_msg,
     }
 
 

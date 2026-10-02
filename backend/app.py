@@ -119,27 +119,29 @@ def require_authenticated_request():
     if request.method == 'OPTIONS':
         return
 
+    if request.endpoint in PUBLIC_ROUTES:
+        return
+
+    # User requests carry an opaque database-backed session forwarded by
+    # the same-origin Next.js BFF. It is evaluated before service auth so
+    # an end-user request always retains its real RBAC identity.
+    identity = authenticate_session_request(request)
+    if identity:
+        g.auth_identity = identity
+        return
+
     if is_local_development() and env_flag('DEV_BYPASS_AUTH'):
         return
 
-    if request.endpoint and request.endpoint not in PUBLIC_ROUTES:
-        # User requests carry an opaque database-backed session forwarded by
-        # the same-origin Next.js BFF. It is evaluated before service auth so
-        # an end-user request always retains its real RBAC identity.
-        identity = authenticate_session_request(request)
-        if identity:
-            g.auth_identity = identity
-            return
+    # Service keys remain reserved for internal n8n/backend integration.
+    if is_valid_service_request(request):
+        g.service_authenticated = True
+        return
 
-        # Service keys remain reserved for internal n8n/backend integration.
-        if is_valid_service_request(request):
-            g.service_authenticated = True
-            return
-
-        if request.path.startswith('/api/'):
-            return jsonify({"error": "Unauthorized", "code": "UNAUTHORIZED"}), 401
-        dashboard_base = os.environ.get('NEXT_PUBLIC_BASE_URL', 'http://localhost:3000')
-        return redirect(f"{dashboard_base}/auth")
+    if request.path.startswith('/api/'):
+        return jsonify({"error": "Unauthorized", "code": "UNAUTHORIZED"}), 401
+    dashboard_base = os.environ.get('NEXT_PUBLIC_BASE_URL', 'http://localhost:3000')
+    return redirect(f"{dashboard_base}/auth")
 
 @app.route('/')
 def dashboard():

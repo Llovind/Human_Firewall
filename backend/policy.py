@@ -71,12 +71,20 @@ def evaluate(analysis: dict, user_tier: str = "Guardian") -> dict:
     """Legacy backward-compatible evaluate adapter that uses 2D matrix."""
     confidence = analysis.get("confidence", 0)
     verdict = analysis.get("verdict", "unknown")
-    vt_score = analysis.get("evidence", {}).get("virustotal", {}).get("vt_score", 0) if isinstance(analysis.get("evidence"), dict) else 0
-    urlscan_score = analysis.get("evidence", {}).get("urlscan", {}).get("urlscan_score", 0) if isinstance(analysis.get("evidence"), dict) else 0
+    evidence = analysis.get("evidence") if isinstance(analysis.get("evidence"), dict) else {}
+    vt_info = evidence.get("virustotal") if isinstance(evidence.get("virustotal"), dict) else {}
+    urlscan_info = evidence.get("urlscan") if isinstance(evidence.get("urlscan"), dict) else {}
+    vt_score = vt_info.get("vt_score", 0)
+    urlscan_score = urlscan_info.get("urlscan_score", 0)
 
     threat_score = max(confidence, vt_score * 5, urlscan_score)
     res = evaluate_2d(threat_score=threat_score, user_tier=user_tier, verdict=verdict)
     res["confidence"] = confidence
     res["verdict"] = verdict
     res["severity"] = analysis.get("severity", "medium")
+    res["comparative"] = {
+        "Sentinel": evaluate_2d(threat_score=threat_score, user_tier="Sentinel", verdict=verdict),
+        "Guardian": evaluate_2d(threat_score=threat_score, user_tier="Guardian", verdict=verdict),
+        "Vulnerable": evaluate_2d(threat_score=threat_score, user_tier="Vulnerable", verdict=verdict),
+    }
     return res

@@ -13,7 +13,7 @@ export default function SidebarNav({ activeTab, onTabChange }: SidebarNavProps) 
     { id: 'threats', label: 'Threats', icon: <ShieldAlert size={20} /> },
     { id: 'leaderboard', label: 'Leaderboard', icon: <Trophy size={20} /> },
     { id: 'policy', label: 'Policy', icon: <FileWarning size={20} /> },
-    { id: 'gophish', label: 'GoPhish', icon: <Fish size={20} /> },
+    { id: 'gophish', label: 'Simulations', icon: <Fish size={20} /> },
     { id: 'employees', label: 'Employees', icon: <Users size={20} /> },
     { id: 'webmail', label: 'Webmail', icon: <Mail size={20} /> },
   ];

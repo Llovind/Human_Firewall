@@ -65,14 +65,14 @@ export default function AuthPage() {
         body: JSON.stringify({ email: email.trim(), password }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Proses masuk gagal');
+      if (!response.ok) throw new Error(data.error || 'Sign in failed');
       setChallengeId(data.challengeId);
       setExpiresIn(Number(data.expiresIn || 300));
       setResendIn(Number(data.resendCooldown || 60));
       setPassword('');
       setStep('otp');
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Proses masuk gagal');
+      setError(caught instanceof Error ? caught.message : 'Sign in failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -81,7 +81,7 @@ export default function AuthPage() {
   async function handleOtp(event: FormEvent) {
     event.preventDefault();
     if (otp.length !== 6) {
-      setError('Masukkan enam digit kode OTP.');
+      setError('Enter a six-digit verification code.');
       return;
     }
     setError('');
@@ -93,7 +93,7 @@ export default function AuthPage() {
         body: JSON.stringify({ challengeId, otp }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Verifikasi OTP gagal');
+      if (!response.ok) throw new Error(data.error || 'OTP verification failed');
       setStep('success');
       const authenticatedUser = await refreshSession();
       window.setTimeout(() => {
@@ -101,7 +101,7 @@ export default function AuthPage() {
       }, 700);
     } catch (caught) {
       setOtp('');
-      setError(caught instanceof Error ? caught.message : 'Verifikasi OTP gagal');
+      setError(caught instanceof Error ? caught.message : 'OTP verification failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -118,12 +118,12 @@ export default function AuthPage() {
         body: JSON.stringify({ challengeId }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'OTP baru gagal dikirim');
+      if (!response.ok) throw new Error(data.error || 'Failed to resend OTP');
       setExpiresIn(Number(data.expiresIn || 300));
       setResendIn(Number(data.resendCooldown || 60));
       setOtp('');
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'OTP baru gagal dikirim');
+      setError(caught instanceof Error ? caught.message : 'Failed to resend OTP');
     } finally {
       setIsSubmitting(false);
     }
@@ -142,55 +142,62 @@ export default function AuthPage() {
         </div>
 
         <div className="login-story-copy">
-          <span className="login-eyebrow"><Radar size={15} /> Security awareness, made observable</span>
-          <h1>Bangun keputusan keamanan dari perilaku manusia yang nyata.</h1>
+          <div className="login-eyebrow-wrap">
+            <span className="login-eyebrow"><Radar size={15} /> Security awareness, made observable</span>
+          </div>
+          <h1>Build security decisions from real human behavior.</h1>
           <p>
-            Satu ruang kerja untuk simulasi phishing, telemetry employee, dan respons SOC—dirancang untuk tim yang membutuhkan konteks, bukan sekadar alert.
+            One workspace for phishing simulation, employee telemetry, and SOC response, built for teams that need context, not just alerts.
           </p>
           <div className="login-signal-row">
             <div><ShieldCheck size={18} /><span><strong>Protected</strong><small>OTP & session controls</small></span></div>
             <div><Radar size={18} /><span><strong>Observable</strong><small>Human-risk telemetry</small></span></div>
           </div>
         </div>
-
-        <p className="login-story-footer">AFFERENT Lab Environment · Authorized users only</p>
       </section>
 
       <section className="login-panel">
         <div className="login-card">
           <div className="login-mobile-brand"><Logo variant="mark" size={42} /><span>AFFERENT</span></div>
 
-          <div className="login-progress" aria-label="Tahapan autentikasi">
-            <span className="active">1</span><i className={step !== 'credentials' ? 'active' : ''} />
-            <span className={step !== 'credentials' ? 'active' : ''}>2</span>
+          <div className="login-progress" aria-label="Authentication steps">
+            <div className={`login-step ${step === 'credentials' ? 'active' : 'completed'}`}>
+              <span className={`login-step-circle ${step === 'credentials' ? 'active' : 'completed'}`}>1</span>
+              <span className="login-step-label">Credentials</span>
+            </div>
+            <i className={`login-step-connector ${step !== 'credentials' ? 'active' : ''}`} />
+            <div className={`login-step ${step === 'otp' ? 'active' : step === 'success' ? 'completed' : 'inactive'}`}>
+              <span className={`login-step-circle ${step === 'otp' ? 'active' : step === 'success' ? 'completed' : ''}`}>2</span>
+              <span className="login-step-label">OTP Verification</span>
+            </div>
           </div>
 
           {step === 'credentials' && (
             <>
               <div className="login-heading">
                 <span className="login-kicker">Secure workspace</span>
-                <h2>Masuk ke AFFERENT</h2>
-                <p>Gunakan akun yang dibuat oleh Phishing Administrator.</p>
+                <h2>Sign in to AFFERENT</h2>
+                <p>Use the account created by your Phishing Administrator.</p>
               </div>
               <form onSubmit={handleCredentials} className="login-form">
-                <label htmlFor="email">Email organisasi</label>
+                <label htmlFor="email">Organization email</label>
                 <div className="login-input-wrap">
                   <Mail size={18} />
-                  <input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="nama@organisasi.id" autoComplete="username" required autoFocus />
+                  <input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@organization.id" autoComplete="username" required autoFocus />
                 </div>
 
                 <label htmlFor="password">Password</label>
                 <div className="login-input-wrap">
                   <LockKeyhole size={18} />
-                  <input id="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Masukkan password" autoComplete="current-password" required />
-                  <button type="button" className="password-toggle" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}>
+                  <input id="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" autoComplete="current-password" required />
+                  <button type="button" className="password-toggle" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'}>
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
 
                 {error && <div className="login-error" role="alert">{error}</div>}
                 <button className="login-primary" disabled={isSubmitting}>
-                  {isSubmitting ? <span className="login-spinner" /> : <><span>Lanjutkan dengan OTP</span><ArrowRight size={18} /></>}
+                  {isSubmitting ? <span className="login-spinner" /> : <><span>Continue with OTP</span><ArrowRight size={18} /></>}
                 </button>
               </form>
             </>
@@ -200,11 +207,11 @@ export default function AuthPage() {
             <>
               <div className="login-heading">
                 <span className="otp-icon"><KeyRound size={22} /></span>
-                <h2>Periksa email Anda</h2>
-                <p>Kami mengirim kode verifikasi enam digit ke <strong>{maskedEmail}</strong>.</p>
+                <h2>Check your email</h2>
+                <p>We sent a six-digit verification code to <strong>{maskedEmail}</strong>.</p>
               </div>
               <form onSubmit={handleOtp} className="login-form">
-                <label htmlFor="otp">Kode verifikasi</label>
+                <label htmlFor="otp">Verification code</label>
                 <input
                   id="otp"
                   className="otp-input"
@@ -218,17 +225,17 @@ export default function AuthPage() {
                   autoFocus
                 />
                 <div className="otp-meta">
-                  <span className={expiresIn < 60 ? 'urgent' : ''}>Berlaku {formatCountdown(expiresIn)}</span>
+                  <span className={expiresIn < 60 ? 'urgent' : ''}>Expires in {formatCountdown(expiresIn)}</span>
                   <button type="button" disabled={resendIn > 0 || isSubmitting} onClick={handleResend}>
-                    {resendIn > 0 ? `Kirim ulang dalam ${resendIn}s` : 'Kirim ulang OTP'}
+                    {resendIn > 0 ? `Resend in ${resendIn}s` : 'Resend OTP'}
                   </button>
                 </div>
                 {error && <div className="login-error" role="alert">{error}</div>}
                 <button className="login-primary" disabled={isSubmitting || expiresIn === 0}>
-                  {isSubmitting ? <span className="login-spinner" /> : <><span>Verifikasi dan masuk</span><ArrowRight size={18} /></>}
+                  {isSubmitting ? <span className="login-spinner" /> : <><span>Verify and sign in</span><ArrowRight size={18} /></>}
                 </button>
                 <button type="button" className="login-secondary" onClick={() => { setStep('credentials'); setOtp(''); setError(''); }}>
-                  Gunakan akun lain
+                  Use a different account
                 </button>
               </form>
             </>
@@ -237,13 +244,13 @@ export default function AuthPage() {
           {step === 'success' && (
             <div className="login-success" role="status">
               <CheckCircle2 size={52} />
-              <h2>Identitas terverifikasi</h2>
-              <p>Menyiapkan workspace sesuai hak akses Anda…</p>
+              <h2>Identity verified</h2>
+              <p>Preparing workspace for your role…</p>
               <span className="login-spinner dark" />
             </div>
           )}
 
-          <div className="login-trust"><ShieldCheck size={14} /> Session disimpan dalam HTTP-only cookie</div>
+          <div className="login-trust"><ShieldCheck size={14} /> Session stored in an HTTP-only cookie</div>
         </div>
       </section>
     </main>

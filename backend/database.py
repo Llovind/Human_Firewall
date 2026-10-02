@@ -346,6 +346,28 @@ def init_db():
             ON daily_events(email, event_date)
         ''')
 
+        # Tabel threat_rewards — mencatat reward poin yang diberikan ke user per ancaman
+        # dengan daily cap (maksimal 3 reward per hari per email, berdasarkan waktu WIB)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS threat_rewards (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL,
+                target TEXT NOT NULL,
+                verdict TEXT NOT NULL,
+                points INTEGER NOT NULL DEFAULT 15,
+                wib_date TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_threat_rewards_email_wib
+            ON threat_rewards(email, wib_date)
+        ''')
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_threat_rewards_email_target
+            ON threat_rewards(email, target)
+        ''')
+
         # Migration: is_active column for employee enable/disable
         try:
             cursor.execute('ALTER TABLE user_history ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1')
@@ -790,22 +812,133 @@ def is_target_already_reported(email: str, target: str) -> bool:
         conn.close()
 
 
+DAILY_REWARD_CAP = 3
+POINTS_THREAT_SCAN_REWARD = 15
+
+
+def get_current_wib_date() -> str:
+    """Mengembalikan tanggal hari ini dalam format YYYY-MM-DD berdasarkan waktu Indonesia Barat (WIB, UTC+7)."""
+    wib_tz = timezone(timedelta(hours=7))
+    return datetime.now(wib_tz).strftime('%Y-%m-%d')
+
+
+def is_target_already_rewarded(email: str, target: str) -> bool:
+    """Cek apakah (email, target) sudah pernah mendapatkan reward di tabel threat_rewards."""
+    if not email or not target:
+        return False
+    conn = get_connection()
+    try:
+        row = conn.execute('''
+            SELECT id FROM threat_rewards
+            WHERE email = ? AND target = ?
+            LIMIT 1
+        ''', (email, target)).fetchone()
+        return row is not None
+    finally:
+        conn.close()
+
+
+def get_daily_threat_reward_count(email: str, wib_date: str = None) -> int:
+    """Hitung berapa kali email ini sudah menerima reward ancaman pada tanggal WIB tertentu."""
+    if not email:
+        return 0
+    if not wib_date:
+        wib_date = get_current_wib_date()
+    conn = get_connection()
+    try:
+        row = conn.execute('''
+            SELECT COUNT(*) as cnt FROM threat_rewards
+            WHERE email = ? AND wib_date = ?
+        ''', (email, wib_date)).fetchone()
+        return row["cnt"] if row else 0
+    finally:
+        conn.close()
+
+
+def award_threat_reward(email: str, target: str, verdict: str, points: int = POINTS_THREAT_SCAN_REWARD) -> dict:
+    """Beri reward poin reputasi untuk scan/laporan ancaman dengan aturan:
+    1. Hanya diberikan jika verdict adalah 'suspicious' atau 'malicious'.
+    2. Dedupe per (email, target) — target yang sama tidak bisa di-farm berulang kali.
+    3. Daily cap maksimal 3 reward per hari per email berdasarkan tanggal WIB (UTC+7).
+    """
+    if not email or not target:
+        return {"awarded": False, "points": 0, "reason": "Email atau target tidak valid"}
+
+    verdict_norm = (verdict or "").strip().lower()
+    if verdict_norm not in ("malicious", "suspicious"):
+        return {
+            "awarded": False,
+            "points": 0,
+            "reason": "Verdict safe/clean tidak mendapatkan poin reward",
+            "daily_cap": DAILY_REWARD_CAP,
+        }
+
+    # Dedupe check (sudah dilaporkan di threat_reports atau sudah direward di threat_rewards)
+    if is_target_already_reported(email, target) or is_target_already_rewarded(email, target):
+        return {
+            "awarded": False,
+            "points": 0,
+            "reason": "Target ancaman ini sudah pernah dilaporkan/diklaim sebelumnya",
+            "daily_cap": DAILY_REWARD_CAP,
+        }
+
+    wib_date = get_current_wib_date()
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            SELECT COUNT(*) as cnt FROM threat_rewards
+            WHERE email = ? AND wib_date = ?
+        ''', (email, wib_date))
+        row = cursor.fetchone()
+        today_count = row["cnt"] if row else 0
+
+        if today_count >= DAILY_REWARD_CAP:
+            return {
+                "awarded": False,
+                "points": 0,
+                "reason": f"Batas kuota harian ({DAILY_REWARD_CAP} reward/hari WIB) telah tercapai untuk hari ini",
+                "daily_count": today_count,
+                "daily_cap": DAILY_REWARD_CAP,
+                "wib_date": wib_date,
+            }
+
+        # User history lookup to get divisi
+        user_row = cursor.execute('SELECT divisi FROM user_history WHERE email = ?', (email,)).fetchone()
+        divisi = user_row["divisi"] if user_row and user_row["divisi"] else "General"
+
+        # Record reward in threat_rewards
+        cursor.execute('''
+            INSERT INTO threat_rewards (email, target, verdict, points, wib_date)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (email, target, verdict_norm, points, wib_date))
+
+        conn.commit()
+
+        # Adjust user reputation points and re-classify badge
+        updated = adjust_points(email, divisi, points)
+
+        return {
+            "awarded": True,
+            "points_awarded": points,
+            "daily_count": today_count + 1,
+            "daily_cap": DAILY_REWARD_CAP,
+            "wib_date": wib_date,
+            "new_points": updated["points"],
+            "new_badge": updated["badge"],
+        }
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def award_points_for_report(telegram_chat_id: str, target: str = None, points: int = POINTS_CONFIRMED_REPORT):
     """Beri poin ke user yang melaporkan threat terkonfirmasi berbahaya
     lewat Flow B (Telegram Bot). Reporter Flow B diidentifikasi lewat
-    telegram_chat_id (BUKAN email — Telegram tidak mengirim email),
-    jadi kita resolve chat_id -> email lewat mapping yang sudah dibuat
-    saat OTP registration (lihat update_user_telegram_chat_id).
-
-    Return None kalau:
-    - chat_id belum terdaftar/di-link ke email manapun (misal reporter
-      belum pernah verifikasi OTP) — caller (route /api/incidents) harus
-      toleran terhadap ini, karena laporan ancaman TETAP harus diproses
-      walau reporter belum ke-link, hanya saja tidak dapat poin.
-    - target ini SUDAH PERNAH dilaporkan sebelumnya oleh email yang sama
-      (dedupe) — mencegah user farming poin dengan spam lapor URL/file
-      yang SAMA berkali-kali. User LAIN yang lapor target yang sama tetap
-      dapat poin normal, karena dedupe di-scope per (email, target)."""
+    telegram_chat_id, di-resolve ke email, dan didelegasikan ke award_threat_reward
+    agar konsisten menerapkan deduplikasi dan daily cap (3/hari WIB)."""
     if not telegram_chat_id:
         return None
 
@@ -819,12 +952,37 @@ def award_points_for_report(telegram_chat_id: str, target: str = None, points: i
         if row is None:
             return None
 
-        if target and is_target_already_reported(row["email"], target):
-            return None
-
-        return adjust_points(row["email"], row["divisi"] or "Unknown", points)
+        result = award_threat_reward(
+            email=row["email"],
+            target=target or f"telegram_report_{telegram_chat_id}",
+            verdict="malicious",
+            points=points
+        )
+        if result.get("awarded"):
+            return {
+                "email": row["email"],
+                "points": result["new_points"],
+                "badge": result["new_badge"],
+            }
+        return None
     finally:
         conn.close()
+
+
+def get_user_by_telegram_chat_id(telegram_chat_id: str) -> dict | None:
+    """Ambil user_history berdasarkan telegram_chat_id."""
+    if not telegram_chat_id:
+        return None
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            'SELECT * FROM user_history WHERE telegram_chat_id = ?',
+            (str(telegram_chat_id),)
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
 
 
 def get_leaderboard():
@@ -2362,7 +2520,10 @@ def get_cached_indicator(indicator: str):
         if expires_at:
             try:
                 expires = datetime.fromisoformat(expires_at)
-                if datetime.utcnow() >= expires:
+                now_utc = datetime.now(timezone.utc)
+                if expires.tzinfo is None:
+                    expires = expires.replace(tzinfo=timezone.utc)
+                if now_utc >= expires:
                     conn.execute("""
                         DELETE
                         FROM threat_cache
@@ -2384,7 +2545,7 @@ def save_threat_cache(
 ):
     conn = get_connection()
     try:
-        expires_at = datetime.utcnow() + timedelta(hours=24)
+        expires_at = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
         conn.execute("""
         INSERT OR REPLACE INTO threat_cache(
             indicator,

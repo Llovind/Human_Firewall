@@ -38,3 +38,7 @@ proxy/ssl/*.key
 # IDE files
 .vscode/
 .idea/
+
+.env
+.env.*
+!.env.example
