@@ -1,0 +1,1 @@
+{"repos": [{"repoId": "sentence-transformers/all-MiniLM-L6-v2", "repoType": "model", "commitHash": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41", "filePaths": ["vocab.txt", "tokenizer_config.json", "special_tokens_map.json", "model.safetensors", "config.json", "tokenizer.json"]}]}

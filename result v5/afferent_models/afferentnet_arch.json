@@ -1,0 +1,8 @@
+{
+  "char_encoder": "CharEncoderBiLSTM",
+  "n_lex": 36,
+  "n_tfidf": 4000,
+  "n_cls": 4,
+  "vocab": 87,
+  "max_len": 200
+}

@@ -49,3 +49,16 @@ dataset/cache/
 dataset/.tld_cache/
 .tranco_cache/
 .tranco/
+
+# Large LLM model files (exceed GitHub 100MB limit — use HuggingFace Hub instead)
+*.gguf
+# Full Qwen 1.5B base weights (2.9 GB) — too large for GitHub
+Finetune LLM/qwen2.5-1.5b-firewall-agent/model.safetensors
+# GGUF quantized model (940 MB)
+Finetune LLM/qwen2.5-1.5b-firewall-agent_gguf/
+# HuggingFace tokenizer download cache
+Finetune LLM/huggingface_tokenizers_cache/
+# Unsloth compiled cache (auto-generated, not needed)
+Finetune LLM/unsloth_compiled_cache/
+# HuggingFace .cache inside model folder
+Finetune LLM/qwen2.5-1.5b-firewall-agent/.cache/

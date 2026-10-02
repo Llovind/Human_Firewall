@@ -1,0 +1,10 @@
+{
+  "thr_auto_block": 0.9920442700386047,
+  "target_fpr": 0.005,
+  "label_order": [
+    "benign",
+    "phishing",
+    "malware",
+    "other"
+  ]
+}

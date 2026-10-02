@@ -1,0 +1,1 @@
+{"classes": ["benign", "malware", "other", "phishing"], "mapping": {"benign": 0, "malware": 1, "other": 2, "phishing": 3}}
