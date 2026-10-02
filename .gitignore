@@ -43,9 +43,9 @@ proxy/ssl/*.key
 .env.*
 !.env.example
 
-# Dataset files
-dataset/raw/
-dataset/processed/*.csv
-dataset/processed/*.parquet
+# Dataset files — tracked intentionally
+# dataset/raw/ and processed CSVs are included for reproducibility
 dataset/cache/
+dataset/.tld_cache/
 .tranco_cache/
+.tranco/
