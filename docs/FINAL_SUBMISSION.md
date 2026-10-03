@@ -34,7 +34,8 @@ promise that every proposed feature is active.
 - Credential-bearing handoffs were replaced with safe pointers. Ignored recovery
   copies are server-owner-only and must not be distributed.
 - Runtime `backend/models/domain_v3` and original dataset/model evidence are kept.
-  Team-pushed offline experiments are not promoted merely because they are present.
+  At Daf's request, the final local code is authoritative. The team's last offline
+  experiment push is retained in Git history, not added to the final working tree.
 - `node scripts/check_submission.cjs` rejects known token formats, matching local
   credentials, generated/private paths and GitHub-oversized files. It is a bounded
   guard, not proof of a secret-free history or a penetration test.
@@ -83,7 +84,10 @@ Proxy protocol checks and synthetic hostname mappings are in
   Disposable Docker PKI generation and GoPhish chain/hostname verification passed.
 - Four selective-TLS protocol checks and the offline block-page renderer passed.
 - Production-only npm audit: zero reported vulnerabilities after the Next.js patch.
-- Docker build and final service health are checked again before the Git push.
+- All buildable Compose images built successfully. The patched dashboard production
+  build passed with TypeScript checks; the unused debug route is absent.
+- All 10 running services, including the optional local LLM, reported healthy after
+  the final image activation. Existing database volumes and CA material were preserved.
 
 The dashboard uses Next.js 16.3.8, including the fix for the critical
 [ImageResponse advisory](https://github.com/advisories/GHSA-vcvr-r3jv-pc5j).
