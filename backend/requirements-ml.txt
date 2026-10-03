@@ -1,0 +1,6 @@
+# CPU inference only. No GPU/CUDA downloads in the demo backend image.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.8.0+cpu
+# Matches the numpy namespace and sklearn version embedded in calibrators.pkl.
+numpy==2.2.6
+scikit-learn==1.6.1

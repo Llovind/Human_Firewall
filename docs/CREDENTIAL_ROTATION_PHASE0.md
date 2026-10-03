@@ -1,5 +1,10 @@
 # Phase 0 Credential Rotation Record
 
+> Historical Phase 0 record, not the current runtime. n8n and Telegram are now
+> retired. The current stack is documented in README_SETUP.md. Submission cleanup
+> on 3 October also withdrew credential-bearing handoffs/mock code; earlier Git
+> history still requires provider-side revocation. Do not reactivate old workflows.
+
 No secret values are included in this document. Local replacement values are
 stored only in the ignored `.env` file or ignored PKI directory.
 

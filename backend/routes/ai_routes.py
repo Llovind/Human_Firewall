@@ -22,10 +22,18 @@ import ai_prompts
 import ai_cache
 import ai_router
 import gophish_client
+from services.behavior_service import heatmap
+from security import require_roles, env_flag
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
 ai_bp = Blueprint('ai', __name__)
+
+
+@ai_bp.before_request
+def authorize_ai():
+    roles = ('phishing_admin',) if request.path.startswith('/api/ai/gophish') else ('soc', 'ciso', 'grc', 'phishing_admin')
+    return require_roles(*roles)(lambda: None)()
 
 
 # ─── LLM Caller (delegasi ke ai_router) ─────────────────────────────────────
@@ -44,18 +52,22 @@ def classify_all_users():
     Cache TTL: 1 jam.
     """
     force_refresh = request.args.get('refresh', 'false').lower() == 'true'
-    cache_key = "ai:classify_all"
+    cache_key = "ai:classify_all:v2"
 
-    if not force_refresh:
+    if not force_refresh and env_flag('AI_HEATMAP_USE_LLM'):
         cached = ai_cache.get_cached(cache_key)
         if cached:
             cached["_from_cache"] = True
             return jsonify(cached), 200
 
+    users = []
     try:
         users = ai_analysis.get_all_users_summary()
         if not users:
-            return jsonify({"error": "Tidak ada data user di database"}), 404
+            return jsonify(heatmap([])), 200
+
+        if not env_flag('AI_HEATMAP_USE_LLM'):
+            return jsonify(heatmap(users)), 200
 
         prompt = ai_prompts.build_batch_classification_prompt(users)
         result = ai_router.call_llm(
@@ -63,6 +75,22 @@ def classify_all_users():
             user_prompt=prompt,
             expect_json=True
         )
+        if not isinstance(result, dict) or not isinstance(result.get('classifications'), list):
+            raise ValueError('Missing classifications')
+        baseline = {item['email']: item for item in heatmap(users)['classifications']}
+        if len(result['classifications']) != len(baseline):
+            raise ValueError('Incomplete classification')
+        seen = set()
+        for item in result['classifications']:
+            if not isinstance(item, dict) or item.get('email') not in baseline or item.get('risk_level') not in {'SAFE', 'VULNERABLE', 'DANGER'}:
+                raise ValueError('Invalid classification')
+            item.update({key: value for key, value in baseline[item['email']].items() if key not in item})
+            if item['email'] in seen or isinstance(item['risk_score'], bool) or not isinstance(item['risk_score'], (int, float)) or not 0 <= item['risk_score'] <= 100:
+                raise ValueError('Invalid risk score')
+            if not all(isinstance(item[field], str) for field in ('divisi', 'primary_risk', 'one_line_assessment', 'education_tip')):
+                raise ValueError('Invalid classification text')
+            seen.add(item['email'])
+        result['_source'] = 'llm'
 
         result["_generated_at"] = datetime.utcnow().isoformat()
         result["_from_cache"] = False
@@ -72,9 +100,13 @@ def classify_all_users():
         return jsonify(result), 200
 
     except RuntimeError as e:
-        return jsonify({"error": "Konfigurasi AI Error", "detail": str(e)}), 503
+        result = heatmap(users)
+        result['_warning'] = 'Provider AI tidak tersedia; menampilkan baseline telemetry.'
+        return jsonify(result), 200
     except ValueError as e:
-        return jsonify({"error": "AI response tidak valid", "detail": str(e)}), 502
+        result = heatmap(users)
+        result['_warning'] = 'Respons AI tidak valid; menampilkan baseline telemetry.'
+        return jsonify(result), 200
     except Exception as e:
         logger.exception("classify_all_users error")
         return jsonify({"error": "Internal error", "detail": str(e)}), 500

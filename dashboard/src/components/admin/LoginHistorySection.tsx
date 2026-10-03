@@ -6,13 +6,13 @@ import { AdminLoginEvent } from '@/components/admin/types';
 
 interface LoginHistorySectionProps {
   readOnly: boolean;
-  loginHistory: AdminLoginEvent[];
+  loginHistory: AdminLoginEvent[] | { logs?: AdminLoginEvent[]; loginHistory?: AdminLoginEvent[] };
 }
 
-export default function LoginHistorySection({ readOnly, loginHistory }: LoginHistorySectionProps) {
+export default function LoginHistorySection({ loginHistory }: LoginHistorySectionProps) {
   const logs = Array.isArray(loginHistory)
     ? loginHistory
-    : (loginHistory as any)?.logs || (loginHistory as any)?.loginHistory || [];
+    : loginHistory?.logs || loginHistory?.loginHistory || [];
 
   return (
     <>
@@ -50,7 +50,7 @@ export default function LoginHistorySection({ readOnly, loginHistory }: LoginHis
                   </td>
                 </tr>
               ) : (
-                logs.map((log: any, idx: number) => {
+                logs.map((log, idx) => {
                   let badgeBg = 'var(--bg-success)';
                   let badgeColor = 'var(--text-success)';
                   let badgeBorder = 'var(--border-success)';

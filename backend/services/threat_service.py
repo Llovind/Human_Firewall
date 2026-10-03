@@ -102,7 +102,6 @@ def analyze_indicator(indicator, is_scan=False, user_tier="Guardian"):
         ticket_id = None
         if policy_result["action"] == "block" and is_scan:
             ticket_id = incident.create_incident(indicator, analysis)
-            incident.send_to_n8n(ticket_id, indicator, analysis)
 
         if ticket_id:
             soc_status_msg = f"Dispatched to SOC (Ticket #{ticket_id})"
@@ -128,6 +127,10 @@ def analyze_indicator(indicator, is_scan=False, user_tier="Guardian"):
     # ONLY run this during active scan/report actions. Normal visits
     # should NOT be blocked unless they are a cache hit (reported).
 
+    if not is_scan:
+        analysis = {'providers': [], 'verdict': 'unknown', 'severity': 'low', 'confidence': 0, 'recommendation': 'Review'}
+        return {'cache_hit': False, 'analysis': analysis, 'policy': {'action': 'allow'}, 'ticket_id': None}
+
     if is_scan and _is_gophish_simulation(indicator):
         result = _build_gophish_analysis(indicator, user_tier=user_tier)
 
@@ -140,7 +143,6 @@ def analyze_indicator(indicator, is_scan=False, user_tier="Guardian"):
 
         # Create incident for dashboard visibility
         ticket_id = incident.create_incident(indicator, result["analysis"])
-        incident.send_to_n8n(ticket_id, indicator, result["analysis"])
 
         result["ticket_id"] = ticket_id
         result["ticket_created"] = bool(ticket_id)
@@ -202,7 +204,6 @@ def analyze_indicator(indicator, is_scan=False, user_tier="Guardian"):
     ticket_id = None
     if policy_result["action"] == "block":
         ticket_id = incident.create_incident(indicator, analysis)
-        incident.send_to_n8n(ticket_id, indicator, analysis)
 
     # STRICT REQUIREMENT:
     # "pesan 'dispatched to SOC' hanya muncul kalau tiket benar-benar dibuat,

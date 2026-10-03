@@ -43,7 +43,9 @@ export interface BehaviorScore {
   score: number;
   risk: string;
   reason: string;
+  lastUpdated?: string;
   streak: number;
+  dailyStreak?: number;
   rank: number;
   totalPoints: number;
   trainingCompleted: number;
@@ -71,9 +73,12 @@ export interface Stats {
 
 export interface GoPhishCampaign {
   id: number;
+  source?: 'local' | 'gophish';
   name: string;
   status: string;
   created_date: string;
+  results?: { email: string; status: string; first_name?: string; last_name?: string; position?: string; send_date?: string }[];
+  timeline?: { email: string; time: string; message: string }[];
   stats?: {
     total?: number;
     sent: number;
@@ -93,8 +98,13 @@ export interface MockEmail {
 }
 
 export interface GoPhishResource {
+  educationUrl?: string;
+  connected?: boolean;
+  phishUrl?: string;
+  adminUrl?: string;
+  mailpitUrl?: string;
   templates: { id: number; name: string; subject?: string; html?: string; text?: string }[];
-  profiles: { id: number; name: string }[];
+  profiles: { id: number; name: string; host?: string; from_address?: string }[];
   pages: { id: number; name: string; html?: string; capture_credentials?: boolean; capture_passwords?: boolean; redirect_url?: string }[];
 }
 
@@ -113,7 +123,7 @@ export interface AdminLoginEvent {
   location: string;
   network: string;
   vpn: boolean;
-  risk: 'LOW' | 'MEDIUM' | 'HIGH';
+  risk: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | 'DANGER' | 'WARNING';
   reason: string;
 }
 
@@ -186,11 +196,11 @@ export function timeAgo(ts: string): string {
   const date = parseUtcDate(ts);
   const diff = Math.max(0, Date.now() - date.getTime());
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'Baru saja';
-  if (mins < 60) return `${mins} menit lalu`;
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins} min ago`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs} jam lalu`;
-  return `${Math.floor(hrs / 24)} hari lalu`;
+  if (hrs < 24) return `${hrs} hr ago`;
+  return `${Math.floor(hrs / 24)} days ago`;
 }
 
 /**
@@ -200,7 +210,7 @@ export function timeAgo(ts: string): string {
 export function formatWIB(ts: string): string {
   const date = parseUtcDate(ts);
   try {
-    const formatter = new Intl.DateTimeFormat('id-ID', {
+    const formatter = new Intl.DateTimeFormat('en-GB', {
       timeZone: 'Asia/Jakarta',
       weekday: 'long',
       day: 'numeric',
@@ -213,6 +223,6 @@ export function formatWIB(ts: string): string {
     });
     return `${formatter.format(date)} WIB`;
   } catch {
-    return date.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB';
+    return date.toLocaleString('en-GB', { timeZone: 'Asia/Jakarta' }) + ' WIB';
   }
 }

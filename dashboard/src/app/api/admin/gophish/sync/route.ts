@@ -1,25 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
+import { fetchFlaskBackend } from '@/lib/backendClient';
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://flask_api:5000';
-    const secretKey = process.env.SECRET_KEY || 'dev-fallback-key-change-in-production';
-
-    const res = await fetch(`${apiUrl}/api/admin/gophish/sync`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${secretKey}`,
-        'Content-Type': 'application/json',
-      },
-    });
-
-    const data = await res.json();
-    if (!res.ok) {
-      return NextResponse.json({ error: data.error || 'Gagal sinkronisasi target group' }, { status: res.status });
-    }
-
-    return NextResponse.json(data);
-  } catch (error: any) {
-    return NextResponse.json({ error: 'Gagal menghubungi server backend', detail: error.message }, { status: 500 });
+    const res = await fetchFlaskBackend(`/api/admin/gophish/sync`, { method: 'POST' }, 45000);
+    return NextResponse.json(await res.json(), { status: res.status });
+  } catch {
+    return NextResponse.json({ error: 'Layanan campaign belum dapat dihubungi. Periksa status campaign sebelum mencoba launch ulang.' }, { status: 503 });
   }
 }

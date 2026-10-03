@@ -10,22 +10,22 @@ import PolicySection from '@/components/admin/PolicySection';
 import GophishCampaignSection from '@/components/admin/GophishCampaignSection';
 import EmployeeRosterSection from '@/components/admin/EmployeeRosterSection';
 import { usePolling } from '@/hooks/usePolling';
-import type { Incident, Stats, ThreatCacheEntry, AISummary, BehaviorScore, PolicyDecision, ComplianceSummary, GoPhishCampaign, LeaderboardResponse } from '@/components/admin/types';
+import type { Incident, Stats, ThreatCacheEntry, AISummary, BehaviorScore, PolicyDecision, ComplianceSummary, GoPhishCampaign, LeaderboardResponse, EmployeeAccount, Division } from '@/components/admin/types';
 
 import AIIntelligenceSection from '@/components/admin/AIIntelligenceSection';
 
 export default function CISODashboard() {
   const [activeTab, setActiveTab] = useState('overview');
   const [campaigns, setCampaigns] = useState<GoPhishCampaign[]>([]);
-  const [employees, setEmployees] = useState<any[]>([]);
-  const [divisions, setDivisions] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<EmployeeAccount[]>([]);
+  const [divisions, setDivisions] = useState<Division[]>([]);
 
   // Polling core data
   const { data: incidentData, hasUpdated: incidentUpdated } = usePolling<{ incidents: Incident[]; stats: Stats }>('/api/incident', 3000);
   const { data: cacheData, hasUpdated: cacheUpdated } = usePolling<{ cache: ThreatCacheEntry[] }>('/api/cache', 3000);
   const { data: summaryData, hasUpdated: summaryUpdated } = usePolling<{ summaries: AISummary[] }>('/api/summary', 3000);
   const { data: behaviorData, hasUpdated: behaviorUpdated } = usePolling<{ scores: BehaviorScore[] }>('/api/behavior', 3000);
-  const { data: policyData, hasUpdated: policyUpdated } = usePolling<{ decisions: PolicyDecision[] }>('/api/policy', 3000);
+  const { data: policyData } = usePolling<{ decisions: PolicyDecision[] }>('/api/policy', 3000);
   const { data: complianceData } = usePolling<ComplianceSummary>('/api/admin/compliance-summary', 3000);
   const { data: leaderboardData } = usePolling<LeaderboardResponse>('/api/admin/leaderboard', 3000);
 
@@ -66,7 +66,7 @@ export default function CISODashboard() {
         fontSize: '13px',
         color: 'var(--text-warning)',
       }}>
-        <span><strong>CISO Executive View:</strong> Anda berada dalam mode Read-Only dengan akses visibilitas penuh ke seluruh 17 komponen sistem.</span>
+        <span><strong>Read-only.</strong> Decision operasional ditangani tim SOC dan administrator.</span>
       </div>
 
       {activeTab === 'overview' && (

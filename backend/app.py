@@ -2,7 +2,7 @@
 app.py — Flask API untuk Human Firewall Lite.
 """
 
-from flask import Flask, g, request, jsonify, render_template, redirect
+from flask import Flask, Request, g, request, jsonify, render_template, redirect
 from flask_cors import CORS
 import database
 import os
@@ -33,7 +33,19 @@ if not SECRET_KEY:
 if not SERVICE_API_KEY:
     raise RuntimeError("CRITICAL ERROR: Environment variable 'SERVICE_API_KEY' is not set! Flask application refuses to start.")
 
+class AfferentRequest(Request):
+    @property
+    def max_content_length(self):
+        # Flask 3.0's limit is read-only on a request. Override only uploads;
+        # never mutate global app config from concurrent request handlers.
+        if self.path == '/api/threat/file-scan':
+            from services.report_service import file_max_bytes
+            return file_max_bytes() + 64 * 1024
+        return super().max_content_length
+
+
 app = Flask(__name__)
+app.request_class = AfferentRequest
 app.secret_key = SECRET_KEY
 
 # CORS Whitelist configuration. During local development both loopback aliases
@@ -67,6 +79,9 @@ if env_flag('PROXY_FEATURE_ENABLED'):
     from services.proxy_store import init_proxy_runtime
     validate_runtime_configuration()
     init_proxy_runtime()
+    if env_flag('ML_LOCAL_ENABLED', default=True):
+        from services.domain_scanner import warmup as warmup_domain_ml
+        warmup_domain_ml()
 
 # Ensure there is one server-side RBAC account for the existing administrator.
 # This is idempotent and only uses ADMIN_PASSWORD during the one-time bootstrap.
@@ -133,7 +148,7 @@ def require_authenticated_request():
     if is_local_development() and env_flag('DEV_BYPASS_AUTH'):
         return
 
-    # Service keys remain reserved for internal n8n/backend integration.
+    # Service keys remain reserved for internal proxy/backend integration.
     if is_valid_service_request(request):
         g.service_authenticated = True
         return

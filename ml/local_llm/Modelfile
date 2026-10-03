@@ -1,0 +1,6 @@
+# Import locally with: ollama create afferent-hostname-06b:v1 --quantize int4 -f /training/Modelfile
+# The absolute path is internal to the optional local_llm container only.
+FROM /models/hostname_v1/merged
+PARAMETER temperature 0
+PARAMETER num_ctx 512
+PARAMETER num_predict 2

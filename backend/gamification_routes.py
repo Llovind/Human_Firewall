@@ -16,7 +16,7 @@ convert ke response/HTTP status sesuai contract. Sengaja tipis.
 from flask import Blueprint, request, jsonify
 
 import database as db
-from security import current_identity
+from security import current_identity, require_roles
 
 gamification_bp = Blueprint("gamification", __name__, url_prefix="/api")
 
@@ -48,7 +48,8 @@ def _authenticate_employee(requested_employee_id: str):
 # POST /api/reports — kompatibilitas internal sampai Flow B dipindah ke backend
 # ---------------------------------------------------------------------------
 
-@gamification_bp.route("/reports", methods=["POST"])
+@gamification_bp.route("/internal/reports", methods=["POST"])
+@require_roles(allow_service=True)
 def post_report():
     # Tidak butuh token check manual di sini — endpoint ini SENGAJA tidak
     # dimasukkan ke PUBLIC_ROUTES di app.py, jadi otomatis kena guard global

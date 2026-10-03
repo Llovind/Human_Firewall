@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST() {
   // Force invalidate cache
   try {
     const res = await fetchFlaskBackend('/api/ai/cache/invalidate', {

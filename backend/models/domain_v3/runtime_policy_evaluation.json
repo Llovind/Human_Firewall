@@ -1,0 +1,115 @@
+{
+  "modelVersion": "domain-tfidf-lr-v1-a9045a3e485e:generated-host-review-v1",
+  "test_invalid_rejected": 4,
+  "test_runtime_policy": {
+    "domain_label_observations": 7279,
+    "benign": 3062,
+    "malicious": 4217,
+    "block_false_positives": 3,
+    "block_true_positives": 893,
+    "block_fpr": 0.0009797517962116264,
+    "block_fpr_95pct_upper": 0.002876828355895032,
+    "block_precision": 0.9966517857142857,
+    "block_recall": 0.21176191605406688,
+    "generated_hostname_abstentions": 11,
+    "unknown_fraction": 0.867289462838302
+  },
+  "limitations": [
+    "Reused holdout: not an independent new generalization test",
+    "OOD case study is internal seed data, not verified current malicious sites",
+    "No adult-content labels; gambling is separate from phishing/malware"
+  ],
+  "ood_seed_by_category": {
+    "online_gambling_judol": {
+      "domain_label_observations": 70,
+      "benign": 0,
+      "malicious": 70,
+      "block_false_positives": 0,
+      "block_true_positives": 0,
+      "block_fpr": null,
+      "block_fpr_95pct_upper": null,
+      "block_precision": null,
+      "block_recall": 0.0,
+      "generated_hostname_abstentions": 0,
+      "unknown_fraction": 1.0
+    },
+    "typosquat_klikbca": {
+      "domain_label_observations": 3,
+      "benign": 0,
+      "malicious": 3,
+      "block_false_positives": 0,
+      "block_true_positives": 1,
+      "block_fpr": null,
+      "block_fpr_95pct_upper": null,
+      "block_precision": 1.0,
+      "block_recall": 0.3333333333333333,
+      "generated_hostname_abstentions": 0,
+      "unknown_fraction": 0.6666666666666666
+    },
+    "typosquat_bankmandiri": {
+      "domain_label_observations": 3,
+      "benign": 0,
+      "malicious": 3,
+      "block_false_positives": 0,
+      "block_true_positives": 1,
+      "block_fpr": null,
+      "block_fpr_95pct_upper": null,
+      "block_precision": 1.0,
+      "block_recall": 0.3333333333333333,
+      "generated_hostname_abstentions": 0,
+      "unknown_fraction": 0.6666666666666666
+    },
+    "typosquat_bri": {
+      "domain_label_observations": 3,
+      "benign": 0,
+      "malicious": 3,
+      "block_false_positives": 0,
+      "block_true_positives": 1,
+      "block_fpr": null,
+      "block_fpr_95pct_upper": null,
+      "block_precision": 1.0,
+      "block_recall": 0.3333333333333333,
+      "generated_hostname_abstentions": 0,
+      "unknown_fraction": 0.6666666666666666
+    },
+    "typosquat_dana": {
+      "domain_label_observations": 3,
+      "benign": 0,
+      "malicious": 3,
+      "block_false_positives": 0,
+      "block_true_positives": 0,
+      "block_fpr": null,
+      "block_fpr_95pct_upper": null,
+      "block_precision": null,
+      "block_recall": 0.0,
+      "generated_hostname_abstentions": 0,
+      "unknown_fraction": 1.0
+    },
+    "typosquat_gopay": {
+      "domain_label_observations": 2,
+      "benign": 0,
+      "malicious": 2,
+      "block_false_positives": 0,
+      "block_true_positives": 1,
+      "block_fpr": null,
+      "block_fpr_95pct_upper": null,
+      "block_precision": 1.0,
+      "block_recall": 0.5,
+      "generated_hostname_abstentions": 0,
+      "unknown_fraction": 0.5
+    },
+    "legitimate_indonesian_org": {
+      "domain_label_observations": 20,
+      "benign": 20,
+      "malicious": 0,
+      "block_false_positives": 0,
+      "block_true_positives": 0,
+      "block_fpr": 0.0,
+      "block_fpr_95pct_upper": 0.1611301254949332,
+      "block_precision": null,
+      "block_recall": null,
+      "generated_hostname_abstentions": 0,
+      "unknown_fraction": 1.0
+    }
+  }
+}

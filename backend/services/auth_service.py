@@ -668,6 +668,41 @@ def get_identity(raw_token: str) -> AuthIdentity | None:
         conn.close()
 
 
+def change_password(*, identity: AuthIdentity, current_password: str, new_password: str,
+                    ip_address: str, request_id: str) -> None:
+    if not isinstance(current_password, str) or not isinstance(new_password, str) or max(len(current_password), len(new_password)) > 256:
+        raise AuthError("INVALID_PASSWORD", "Password tidak valid")
+    validate_password(new_password)
+    ip_digest = client_ip_hash(ip_address)
+    conn = database.get_connection()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        failures = conn.execute("SELECT COUNT(*) FROM login_audit WHERE account_id = ? AND ip_hash = ? AND event_type = 'password_change_failed' AND created_at >= ?",
+                                (identity.account_id, ip_digest, _db_timestamp(_utcnow() - timedelta(minutes=15)))).fetchone()[0]
+        if failures >= 5:
+            raise AuthError("RATE_LIMITED", "Terlalu banyak percobaan. Coba lagi dalam 15 menit.", 429, 900)
+        row = conn.execute("SELECT password_hash FROM employee_accounts WHERE id = ? AND is_active = 1", (identity.account_id,)).fetchone()
+        if not row or not _verify_password(row["password_hash"], current_password):
+            _audit(conn, email=identity.email, account_id=identity.account_id, event_type="password_change_failed",
+                   success=False, request_id=request_id, ip_hash=ip_digest, reason="invalid_current_password")
+            conn.commit()
+            raise AuthError("INVALID_CREDENTIALS", "Password saat ini tidak benar", 401)
+        if current_password == new_password:
+            raise AuthError("PASSWORD_UNCHANGED", "Password baru harus berbeda")
+        conn.execute("UPDATE employee_accounts SET password_hash = ?, password_changed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                     (hash_password(new_password), identity.account_id))
+        conn.execute("UPDATE auth_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE account_id = ? AND revoked_at IS NULL", (identity.account_id,))
+        conn.execute("UPDATE otp_challenges SET used_at = CURRENT_TIMESTAMP WHERE account_id = ? AND used_at IS NULL", (identity.account_id,))
+        _audit(conn, email=identity.email, account_id=identity.account_id, event_type="password_changed",
+               success=True, request_id=request_id, ip_hash=ip_digest, reason="all_sessions_revoked")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def revoke_session(raw_token: str) -> None:
     if not raw_token:
         return

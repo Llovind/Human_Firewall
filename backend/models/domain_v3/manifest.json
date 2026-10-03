@@ -1,0 +1,98 @@
+{
+  "feature_scope": "domain",
+  "seed": 42,
+  "registered_domain_overlap": {
+    "train/val": 0,
+    "train/test": 0,
+    "val/test": 0
+  },
+  "invalid_hostname_rows_rejected": {
+    "train": 7,
+    "val": 3,
+    "test": 4
+  },
+  "training_unique_domains": 32519,
+  "training_mixed_label_domains_excluded": 37,
+  "calibration_rows": 6314,
+  "block_threshold": 0.9659728579361835,
+  "fpr_budget": 0.003,
+  "policy_validation": {
+    "rows": 10129,
+    "unique_domains": 4354,
+    "benign": 1925,
+    "malicious": 8204,
+    "binary_accuracy_at_0_5": 0.6550498568466778,
+    "roc_auc": 0.6985203606729691,
+    "block_false_positives": 0,
+    "block_true_positives": 1335,
+    "block_fpr": 0.0,
+    "block_fpr_95pct_upper": 0.0019916617310617936,
+    "block_precision": 1.0,
+    "block_recall": 0.16272549975621647,
+    "unknown_fraction": 0.8641524336064764
+  },
+  "policy_unique_domain_labels": {
+    "rows": 4357,
+    "unique_domains": 4354,
+    "benign": 1474,
+    "malicious": 2883,
+    "binary_accuracy_at_0_5": 0.7808124856552674,
+    "roc_auc": 0.8663866600212446,
+    "block_false_positives": 0,
+    "block_true_positives": 525,
+    "block_fpr": 0.0,
+    "block_fpr_95pct_upper": 0.0025994666816795517,
+    "block_precision": 1.0,
+    "block_recall": 0.18210197710718,
+    "unknown_fraction": 0.8705531328896029
+  },
+  "test": {
+    "rows": 18478,
+    "unique_domains": 7275,
+    "benign": 4011,
+    "malicious": 14467,
+    "binary_accuracy_at_0_5": 0.7275679186059097,
+    "roc_auc": 0.7516421239255695,
+    "block_false_positives": 4,
+    "block_true_positives": 2034,
+    "block_fpr": 0.0009972575417601596,
+    "block_fpr_95pct_upper": 0.002561582425316118,
+    "block_precision": 0.9980372914622179,
+    "block_recall": 0.14059583880555748,
+    "unknown_fraction": 0.8858101526139193
+  },
+  "test_unique_domain_labels": {
+    "rows": 7279,
+    "unique_domains": 7275,
+    "benign": 3062,
+    "malicious": 4217,
+    "binary_accuracy_at_0_5": 0.7319686770160736,
+    "roc_auc": 0.8214395187777629,
+    "block_false_positives": 3,
+    "block_true_positives": 893,
+    "block_fpr": 0.0009797517962116264,
+    "block_fpr_95pct_upper": 0.002876828355895032,
+    "block_precision": 0.9966517857142857,
+    "block_recall": 0.21176191605406688,
+    "unknown_fraction": 0.867289462838302
+  },
+  "training_seconds": 4.925172686000224,
+  "dataset_sha256": {
+    "train": "78924f1f87bff22d364ff6c311616b4f7950537329f27fed48c04405ba7432c2",
+    "val": "fe118a661ce6d4990b59dfc5182eeca9b7d675a30a268605bf01d2521c643017",
+    "test": "1ba4064401a49e6b874f3efb055e9136a687bf5a786d446ac6cde6eff03f3348"
+  },
+  "limitations": [
+    "No TLS/content/path inspection",
+    "No pornography category",
+    "Row-level URL labels projected onto domain-only scores",
+    "Holdout corpus is not a real-world traffic distribution"
+  ],
+  "enforcement_eligible": true,
+  "artifact_sha256": "16504b9c6c7b1729fce5b1acb592f4fd3b28f2dc915b8a639d5ae1d7ddba1441",
+  "model_version": "domain-tfidf-lr-v1-a9045a3e485e",
+  "cpu_inference_ms": {
+    "p50": 0.772977999986324,
+    "p95": 1.3106526996125465
+  }
+}

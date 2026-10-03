@@ -1,84 +1,86 @@
 from flask import Blueprint, request, jsonify
 import integrations
 import database
-from security import current_identity, authenticate_session_request
-from services.threat_service import analyze_indicator
+from security import current_identity, authenticate_session_request, require_roles
+from werkzeug.exceptions import RequestEntityTooLarge
 
 threat_bp = Blueprint("threat", __name__)
 
 
+@threat_bp.route("/api/reports", methods=["GET", "POST"])
+@require_roles("employee")
+def employee_reports():
+    from services import report_service
+    import uuid
+    identity = current_identity()
+    try:
+        if request.method == "GET":
+            return jsonify({"reports": report_service.list_reports(identity)})
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            return jsonify({"error": "JSON object wajib diisi"}), 400
+        result = report_service.submit(identity, body.get("url"), body.get("description", ""),
+                                       request.headers.get("X-Request-ID") or str(uuid.uuid4()))
+        return jsonify({"success": True, **result}), 200 if result["duplicate"] else 201
+    except (ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("Employee report could not be persisted")
+        return jsonify({"error": "Laporan belum diterima. Silakan coba kembali."}), 503
+
+
+@threat_bp.route('/api/reports/pdf', methods=['POST'])
+@require_roles('employee')
+def employee_pdf_report():
+    return jsonify({'error': 'PDF reporting is retired. Use Scan file in URL & file security.'}), 410
+
+
+@threat_bp.route('/api/threat/file-scan', methods=['GET', 'POST'])
+@require_roles('employee')
+def employee_file_scan():
+    from services import report_service
+    import uuid
+    # AfferentRequest limits parsing before accessing request.files.
+    try:
+        if request.method == 'GET':
+            response = jsonify({'scans': report_service.list_file_scans(current_identity()),
+                                'maxBytes': report_service.file_max_bytes()})
+            response.headers['Cache-Control'] = 'private, no-store'
+            return response
+        result = report_service.submit_file_scan(current_identity(), request.files.get('file'),
+            request.form.get('consent', ''),
+            request.headers.get('X-Request-ID') or str(uuid.uuid4()))
+        return jsonify({'success': True, **result}), 200 if result['duplicate'] else 202
+    except RequestEntityTooLarge:
+        return jsonify({'error': 'File upload exceeds the size limit.'}), 413
+    except (ValueError, TypeError) as exc:
+        return jsonify({'error': str(exc)}), 400
+    except Exception:
+        return jsonify({'error': 'File scan could not be accepted. Please retry.'}), 503
+
+
+@threat_bp.route('/api/threat/scan', methods=['POST'])
+@require_roles('employee')
+def scan_url_reputation():
+    from services import report_service
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({'error': 'A JSON object is required.'}), 400
+    try:
+        report_service.rate_limit(current_identity(), 'url-scan')
+        return jsonify({'success': True, 'data': report_service.analyze_url(body.get('url'))})
+    except (ValueError, TypeError) as exc:
+        return jsonify({'error': str(exc)}), 400
+    except Exception:
+        return jsonify({'error': 'Reputation providers are temporarily unavailable.'}), 503
+
+
 @threat_bp.route("/api/threat/analyze", methods=["POST"])
 def analyze_threat():
-
-    body = request.get_json(silent=True)
-
-    if body is None:
-        return jsonify({
-            "success": False,
-            "error": "Request body harus berupa JSON."
-        }), 400
-
-    indicator = body.get("indicator")
-
-    if not indicator:
-        return jsonify({
-            "success": False,
-            "error": "Field 'indicator' wajib diisi."
-        }), 400
-    chat_id = body.get("chat_id")
-
-    # SERVER-SIDE RESOLUTION: Resolve user tier strictly from authenticated session.
-    # Never accept user_tier or tier from client request body or query params.
-    identity = current_identity() or authenticate_session_request(request)
-    user_tier = "Guardian"
-    user_email = None
-
-    if identity and getattr(identity, "email", None):
-        user_email = identity.email
-        profile = database.get_user_history(user_email)
-        user_tier = profile.get("badge") or "Guardian"
-    elif chat_id:
-        user_row = database.get_user_by_telegram_chat_id(chat_id)
-        if user_row:
-            user_email = user_row.get("email")
-            user_tier = user_row.get("badge") or "Guardian"
-
-    result = analyze_indicator(indicator, is_scan=True, user_tier=user_tier)
-
-    # Award points bounded by daily cap (3/day WIB) and deduplicated
-    reward = None
-    if user_email:
-        reward = database.award_threat_reward(
-            email=user_email,
-            target=indicator,
-            verdict=result["analysis"].get("verdict", "clean")
-        )
-
-    wib_date = database.get_current_wib_date()
-    daily_count = database.get_daily_threat_reward_count(user_email, wib_date) if user_email else 0
-    daily_stats = {
-        "daily_count": daily_count,
-        "daily_cap": database.DAILY_REWARD_CAP,
-        "wib_date": wib_date
-    }
-
-    return jsonify({
-        "success": True,
-        "indicator": indicator,
-        "chat_id": chat_id,
-        "reported_url": indicator,
-        "user_email": user_email,
-        "user_tier": user_tier,
-        "cache_hit": result["cache_hit"],
-        "is_demo_seed": result.get("is_demo_seed", False),
-        "scanner_busy": result.get("scanner_busy", False),
-        "analysis": result["analysis"],
-        "policy": result["policy"],
-        "ticket_id": result.get("ticket_id"),
-        "soc_status": result.get("soc_status"),
-        "reward": reward,
-        "daily_stats": daily_stats
-    }), 200
+    # Retire the Telegram-era mixed ML/VT gateway. Full-URL scans and employee
+    # reports have distinct, authenticated contracts and reward ownership.
+    return jsonify({'error': 'Endpoint lama dihentikan. Gunakan /api/threat/scan-dl untuk ML atau /api/reports untuk laporan.'}), 410
 
 
 @threat_bp.route("/api/threat/stats", methods=["GET"])
@@ -97,6 +99,7 @@ def threat_stats():
 
 
 @threat_bp.route("/api/debug/vt", methods=["POST"])
+@require_roles('soc')
 def debug_vt():
 
     body = request.get_json()
@@ -120,21 +123,26 @@ def scan_dl():
             "error": "Field 'url' atau 'indicator' wajib diisi."
         }), 400
 
-    import char_bilstm_scanner
-    if not char_bilstm_scanner.is_scanner_available():
-        return jsonify({
-            "success": False,
-            "error": "Char-BiLSTM model scanner tidak tersedia."
-        }), 503
-
-    dl_result = char_bilstm_scanner.scan_url_dl(url)
+    from services.ml_service import scan
+    try:
+        dl_result = scan(url)
+    except ValueError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
     if dl_result is None:
         return jsonify({
             "success": False,
-            "error": "Gagal melakukan inferensi Char-BiLSTM."
-        }), 500
+            "error": "ML belum siap atau sibuk. Tidak ada verdict aman yang diasumsikan."
+        }), 503
 
     return jsonify({
         "success": True,
         "data": dl_result
     }), 200
+
+
+@threat_bp.route("/api/threat/model-status", methods=["GET"])
+@require_roles("soc", "ciso", "phishing_admin")
+def model_status():
+    import char_bilstm_scanner
+    from services.domain_scanner import status as domain_status
+    return jsonify({**char_bilstm_scanner.model_status(), "proxyDomainModel": domain_status()})

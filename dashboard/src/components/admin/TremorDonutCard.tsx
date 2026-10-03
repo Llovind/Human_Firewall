@@ -143,7 +143,7 @@ export function TremorDonutCard({
             </ResponsiveContainer>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#526f99', fontSize: '12px' }}>
-              Belum ada data
+              No data yet
             </div>
           )}
 

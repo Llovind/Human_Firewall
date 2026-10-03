@@ -2,17 +2,19 @@
 
 import { useAuth } from '@/context/AuthContext';
 import { usePolling } from '@/hooks/usePolling';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { redirect } from 'next/navigation';
 import Logo from '@/components/Logo';
 import ThemeToggle from '@/components/ThemeToggle';
 import ReportingBadgesWidget from '@/components/ReportingBadgesWidget';
 import ProxyConnectionCard from '@/components/ProxyConnectionCard';
-import DirectThreatScanner from '@/components/DirectThreatScanner';
+import EmployeeUrlScanner from '@/components/EmployeeUrlScanner';
+import AccountMenu from '@/components/AccountMenu';
 import { 
-  LayoutDashboard, Fish, Shield, ShieldCheck, Timer, Lightbulb, Search, 
+  Fish, Shield, ShieldCheck, Timer, Lightbulb, Search,
   Flame, BookOpen, Star, FileWarning, CheckCircle2, AlertTriangle, Trophy, 
-  Flag, Info, XCircle, Sparkles, RefreshCw, Globe, Lock, ShieldAlert, 
-  ArrowRight, Award, HelpCircle, Check, X, ExternalLink, FileText, Fingerprint,
+  Flag, Info, XCircle, Sparkles, Globe, Lock, ShieldAlert,
+  ArrowRight, X, FileText, Fingerprint,
   Gamepad2, ArrowLeft
 } from 'lucide-react';
 import './dashboard.css';
@@ -47,30 +49,30 @@ function timeAgo(ts: string): string {
   }
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'Baru saja';
-  if (mins < 60) return `${mins} menit lalu`;
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins} min ago`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs} jam lalu`;
-  return `${Math.floor(hrs / 24)} hari lalu`;
+  if (hrs < 24) return `${hrs} hr ago`;
+  return `${Math.floor(hrs / 24)} days ago`;
 }
 
 /* ── Formatting Helpers ───────────────────────────────────── */
 const eventLabels: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
-  clicked_link: { label: 'Mengklik Link Phishing', icon: <Fish size={14} />, color: 'var(--danger)' },
-  submitted_data: { label: 'Kebocoran Kredensial', icon: <FileWarning size={14} />, color: 'var(--danger)' },
-  viewed_training: { label: 'Mengikuti Retraining', icon: <CheckCircle2 size={14} />, color: 'var(--success)' },
-  skipped_training: { label: 'Melewati Retraining', icon: <AlertTriangle size={14} />, color: 'var(--warning)' },
-  phishing_click: { label: 'Terjebak Phishing Simulasi', icon: <Fish size={14} />, color: 'var(--danger)' },
-  spot_the_fake_correct: { label: 'Menang Spot the Fake (+5 pts)', icon: <Trophy size={14} />, color: 'var(--success)' },
-  spot_the_fake_incorrect: { label: 'Kalah Spot the Fake', icon: <AlertTriangle size={14} />, color: 'var(--warning)' },
-  report_malicious: { label: 'Melaporkan Ancaman Berbahaya (+15 pts)', icon: <ShieldCheck size={14} />, color: 'var(--text-success)' },
-  report_safe: { label: 'Melaporkan URL/File Aman', icon: <CheckCircle2 size={14} />, color: 'var(--accent)' },
-  daily_quiz_completed: { label: 'Kuis Harian Selesai & Streak Nambah (+10 pts)', icon: <Flame size={14} />, color: 'var(--text-warning)' },
-  quiz_completed: { label: 'Kuis Harian Selesai & Streak Nambah (+10 pts)', icon: <Flame size={14} />, color: 'var(--text-warning)' },
+  clicked_link: { label: 'Clicked a phishing link', icon: <Fish size={14} />, color: 'var(--danger)' },
+  submitted_data: { label: 'Submitted a simulation form', icon: <FileWarning size={14} />, color: 'var(--danger)' },
+  viewed_training: { label: 'Completed retraining', icon: <CheckCircle2 size={14} />, color: 'var(--success)' },
+  skipped_training: { label: 'Skipped retraining', icon: <AlertTriangle size={14} />, color: 'var(--warning)' },
+  phishing_click: { label: 'Clicked a simulation link', icon: <Fish size={14} />, color: 'var(--danger)' },
+  spot_the_fake_correct: { label: 'Spot the Fake completed (+5 pts)', icon: <Trophy size={14} />, color: 'var(--success)' },
+  spot_the_fake_incorrect: { label: 'Spot the Fake — review needed', icon: <AlertTriangle size={14} />, color: 'var(--warning)' },
+  report_malicious: { label: 'Confirmed threat report (+15 pts)', icon: <ShieldCheck size={14} />, color: 'var(--text-success)' },
+  report_safe: { label: 'Reported a safe URL/file', icon: <CheckCircle2 size={14} />, color: 'var(--accent)' },
+  daily_quiz_completed: { label: 'Daily quiz completed (+10 pts)', icon: <Flame size={14} />, color: 'var(--text-warning)' },
+  quiz_completed: { label: 'Daily quiz completed (+10 pts)', icon: <Flame size={14} />, color: 'var(--text-warning)' },
 };
 
 export default function EmployeeDashboardPage() {
-  const { user, isAuthenticated, isLoading: authLoading, logout } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const [clock, setClock] = useState('');
   const [activeTab, setActiveTab] = useState<'dashboard' | 'game' | 'quiz'>('dashboard');
   const [gameModalOpen, setGameModalOpen] = useState(false);
@@ -79,7 +81,7 @@ export default function EmployeeDashboardPage() {
   const behaviorUrl = user 
     ? `/api/behavior?email=${encodeURIComponent(user.email)}`
     : '';
-  const { data: behaviorData, hasUpdated: behaviorUpdated, refresh: pollBehavior } = usePolling<{ scores: BehaviorScore[]; by_divisi?: any[] }>(behaviorUrl, 5000);
+  const { data: behaviorData, hasUpdated: behaviorUpdated, refresh: pollBehavior } = usePolling<{ scores: BehaviorScore[]; by_divisi?: { division: string; avg: number }[] }>(behaviorUrl, 5000);
   const [activities, setActivities] = useState<UserActivity[]>([]);
   const [eligibility, setEligibility] = useState<EligibilityResponse | null>(null);
   const [cooldownTime, setCooldownTime] = useState<number | null>(null);
@@ -113,7 +115,7 @@ export default function EmployeeDashboardPage() {
   const [quizStreakBeforeBreak, setQuizStreakBeforeBreak] = useState(0);
   const [isSubmittingRevive, setIsSubmittingRevive] = useState(false);
 
-  const fetchDailyQuiz = async () => {
+  const fetchDailyQuiz = useCallback(async () => {
     if (!user) return;
     setQuizLoading(true);
     setQuizError(null);
@@ -124,15 +126,15 @@ export default function EmployeeDashboardPage() {
         setQuizQuestion(data);
       } else {
         const errData = await res.json();
-        setQuizError(errData.error || 'Gagal memuat kuis harian.');
+        setQuizError(errData.error || 'Could not load the daily quiz.');
       }
     } catch (err) {
       console.error('Error fetching quiz:', err);
-      setQuizError('Gagal menghubungi server.');
+      setQuizError('Could not reach the server.');
     } finally {
       setQuizLoading(false);
     }
-  };
+  }, [user]);
 
   const submitQuizAnswer = async (choiceIndex: number) => {
     if (!user || !quizQuestion || isSubmittingQuiz) return;
@@ -161,11 +163,11 @@ export default function EmployeeDashboardPage() {
         setQuizVerdict('verdict');
         pollBehavior(); // Refresh stats (points, streak)
       } else {
-        alert('Gagal mengirim status kuis.');
+        alert('Could not submit quiz status.');
       }
     } catch (err) {
       console.error('Error submitting quiz:', err);
-      alert('Gagal merekam kuis.');
+      alert('Could not record the quiz.');
     } finally {
       setIsSubmittingQuiz(false);
     }
@@ -188,18 +190,18 @@ export default function EmployeeDashboardPage() {
 
       if (res.ok) {
         const data = await res.json();
-        alert('Streak Anda berhasil dipulihkan!');
+        alert('Your streak has been restored.');
         setQuizReviveAvailable(false);
         setQuizQuestion(prev => prev ? { ...prev, daily_streak: data.daily_streak, completed_today: true } : null);
         setQuizVerdict('playing');
         pollBehavior();
       } else {
         const errData = await res.json();
-        alert(errData.error || 'Gagal memulihkan streak.');
+        alert(errData.error || 'Could not restore your streak.');
       }
     } catch (err) {
       console.error('Error reviving streak:', err);
-      alert('Gagal menghubungi server.');
+      alert('Could not reach the server.');
     } finally {
       setIsSubmittingRevive(false);
     }
@@ -214,20 +216,22 @@ export default function EmployeeDashboardPage() {
 
   useEffect(() => {
     if (activeTab === 'quiz' && !quizQuestion) {
+      // Loading/error state belongs to this network request, not derived UI state.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchDailyQuiz();
     }
-  }, [activeTab, user]);
+  }, [activeTab, quizQuestion, fetchDailyQuiz]);
 
   // ── Clock ───
   useEffect(() => {
-    const tick = () => setClock(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    const tick = () => setClock(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     tick();
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
   }, []);
 
   // ── Fetch User Activities & Eligibility ───
-  const loadUserActivities = async () => {
+  const loadUserActivities = useCallback(async () => {
     if (!user) return;
     try {
       const res = await fetch(`/api/user-activity?email=${encodeURIComponent(user.email)}`);
@@ -238,9 +242,9 @@ export default function EmployeeDashboardPage() {
     } catch (err) {
       console.error('Error fetching activities:', err);
     }
-  };
+  }, [user]);
 
-  const checkEligibility = async () => {
+  const checkEligibility = useCallback(async () => {
     if (!user) return;
     try {
       const res = await fetch(`/api/user-eligibility?email=${encodeURIComponent(user.email)}`);
@@ -254,14 +258,16 @@ export default function EmployeeDashboardPage() {
     } catch (err) {
       console.error('Error checking eligibility:', err);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     if (user) {
+      // Synchronize activity from the backend on authenticated tab transitions.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       loadUserActivities();
       checkEligibility();
     }
-  }, [user, activeTab]);
+  }, [user, activeTab, loadUserActivities, checkEligibility]);
 
   // Cooldown countdown timer
   useEffect(() => {
@@ -277,7 +283,7 @@ export default function EmployeeDashboardPage() {
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [cooldownTime]);
+  }, [cooldownTime, checkEligibility]);
 
   const formatCooldown = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600);
@@ -316,10 +322,10 @@ export default function EmployeeDashboardPage() {
         setGameState('verdict');
         pollBehavior(); // Refetch behavior score
       } else {
-        alert('Gagal mengirim jawaban.');
+        alert('Could not submit your answer.');
       }
     } catch {
-      alert('Gagal merekam data game.');
+      alert('Could not record your training result.');
     } finally {
       setIsSubmittingEvent(false);
     }
@@ -337,16 +343,13 @@ export default function EmployeeDashboardPage() {
     return (
       <div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <Logo size={48} variant="mark" logoAnimation="loading" />
-        <p>Memuat Dashboard Anda...</p>
+        <p>Loading your dashboard…</p>
       </div>
     );
   }
 
   if (!isAuthenticated || !user) {
-    if (typeof window !== 'undefined') {
-      window.location.href = '/auth';
-    }
-    return null;
+    redirect('/auth');
   }
 
   if (user.role) {
@@ -358,10 +361,7 @@ export default function EmployeeDashboardPage() {
       phishing_admin: '/dashboard/phishing-admin',
     };
     if (roleRoutes[user.role]) {
-      if (typeof window !== 'undefined') {
-        window.location.href = roleRoutes[user.role];
-      }
-      return null;
+      redirect(roleRoutes[user.role]);
     }
   }
 
@@ -370,7 +370,7 @@ export default function EmployeeDashboardPage() {
 
   // Calculate division averages and rankings
   const divisionAverages = behaviorData?.by_divisi 
-    ? behaviorData.by_divisi.map((d: any) => ({ division: d.division, avg: d.avg })).sort((a: any, b: any) => b.avg - a.avg)
+    ? behaviorData.by_divisi.map(d => ({ division: d.division, avg: d.avg })).sort((a, b) => b.avg - a.avg)
     : Object.entries(
         scores.reduce((acc, curr) => {
           if (!acc[curr.division]) acc[curr.division] = [];
@@ -386,11 +386,11 @@ export default function EmployeeDashboardPage() {
   const myDivRank = myDivRankIdx !== -1 ? myDivRankIdx + 1 : null;
 
   const tips = [
-    "Jangan pernah membagikan kode OTP atau kata sandi Anda kepada siapa pun, termasuk admin.",
-    "Periksa nama domain pengirim email secara teliti sebelum mengklik link apa pun.",
-    "Aktifkan Multi-Factor Authentication (MFA) di semua akun kerja Anda.",
-    "Hindari mengunduh file dengan ekstensi ganda seperti laporan.pdf.exe.",
-    "Selalu lapor ke tim SOC jika Anda mencurigai adanya email phishing."
+    "Never share your password or OTP, even with an administrator.",
+    "Check the sender and destination domain before clicking.",
+    "Enable multi-factor authentication on work accounts.",
+    "Watch for double file extensions, such as report.pdf.exe.",
+    "Report suspicious emails to your SOC team."
   ];
   const currentTip = tips[myScore ? Math.floor(myScore.score % tips.length) : 0];
 
@@ -421,39 +421,15 @@ export default function EmployeeDashboardPage() {
               marginRight: '8px',
             }}
           >
-            <Gamepad2 size={15} /> Main Games
+            <Gamepad2 size={15} /> Security training
           </button>
-          <a
-            href="/blocked?url=https://portal-keuangan-company.xyz/login&source=AFFERENT%20ML&score=94&type=Malicious%20Domain"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              fontSize: '11px',
-              padding: '6px 12px',
-              background: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid rgba(239, 68, 68, 0.25)',
-              borderRadius: '4px',
-              color: '#f87171',
-              textDecoration: 'none',
-              fontWeight: 600,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              marginRight: '8px'
-            }}
-          >
-            <ShieldAlert size={16} style={{ color: 'var(--danger)' }} /> Demo Gateway Block
-          </a>
           <div className="live-indicator">
             <span className="live-dot" />
-            <span>Karyawan</span>
+            <span>Employee</span>
           </div>
           <span className="clock mono">{clock}</span>
           <ThemeToggle />
-          <div className="user-badge" onClick={logout} title="Klik untuk logout">
-            <span className="user-avatar">{user.userName.charAt(0).toUpperCase()}</span>
-            <span className="user-name">{user.userName}</span>
-          </div>
+          <AccountMenu />
         </div>
       </header>
 
@@ -462,12 +438,12 @@ export default function EmployeeDashboardPage() {
         {/* ── MY DASHBOARD TAB ─────────────────────────────── */}
         {activeTab === 'dashboard' && (
           <>
+            <header className="employee-intro">
+              <div><h1>Hi, {user.userName || 'there'}.</h1><p>Check links, track your score, and keep learning.</p></div>
+              <a className="btn" href="/blocked?domain=blocked.afferent.test" target="_blank" rel="noopener noreferrer"><ShieldAlert size={15} />Preview block page</a>
+            </header>
             <ProxyConnectionCard />
-            <DirectThreatScanner
-              currentUserTier={myScore ? ((myScore.totalPoints || 0) >= 130 ? 'Sentinel' : (myScore.totalPoints || 0) >= 60 ? 'Guardian' : 'Vulnerable') : 'Guardian'}
-              userEmail={user.email}
-              onScanComplete={pollBehavior}
-            />
+            <EmployeeUrlScanner onReportComplete={pollBehavior} />
             <div className="employee-dashboard-layout">
               <div className="employee-left-col" style={{ display: 'flex', flexDirection: 'column' }}>
                 {/* Hero Card */}
@@ -484,7 +460,7 @@ export default function EmployeeDashboardPage() {
                       </span>
                     </div>
                     <div className="my-score-body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', margin: '24px 0' }}>
-                      <div className="score-ring-container" title="Poin Kepatuhan Keamanan Siber (0-200 pts)">
+                      <div className="score-ring-container" title="Security points (0–200)">
                         <svg className="score-ring" viewBox="0 0 120 120" style={{ width: '150px', height: '150px' }}>
                           <circle className="score-ring-bg" cx="60" cy="60" r="52" />
                           <circle
@@ -505,21 +481,21 @@ export default function EmployeeDashboardPage() {
                         <div className="mini-stat">
                           <span className="mini-stat-icon"><Trophy size={14} /></span>
                           <span className="mini-stat-value">#{myScore.rank}</span>
-                          <span className="mini-stat-label">Rank Perusahaan</span>
+                          <span className="mini-stat-label">Company rank</span>
                         </div>
                         <div className="mini-stat">
                           <span className="mini-stat-icon"><ShieldCheck size={14} /></span>
-                          <span className="mini-stat-value">{myScore.streak} minggu</span>
-                          <span className="mini-stat-label">Bebas Klik</span>
+                          <span className="mini-stat-value">{myScore.streak} weeks</span>
+                          <span className="mini-stat-label">Click-free</span>
                         </div>
                         <div className="mini-stat">
                           <span className="mini-stat-icon"><Star size={14} /></span>
                           <span className="mini-stat-value">{myScore.score}%</span>
-                          <span className="mini-stat-label">Skor Rating</span>
+                          <span className="mini-stat-label">Security score</span>
                         </div>
                         <div className="mini-stat">
                           <span className="mini-stat-icon"><Flame size={14} /></span>
-                          <span className="mini-stat-value">{myScore.dailyStreak || 0} hari</span>
+                          <span className="mini-stat-value">{myScore.dailyStreak || 0} days</span>
                           <span className="mini-stat-label">Daily Streak</span>
                         </div>
                       </div>
@@ -576,12 +552,12 @@ export default function EmployeeDashboardPage() {
                         transition: 'opacity 0.2s',
                       }}
                     >
-                      <Gamepad2 size={16} /> Main Game Keamanan (Tingkatkan Skor)
+                      <Gamepad2 size={16} /> Security training
                     </button>
                   </div>
                 ) : (
                   <div className="panel glass-card" style={{ height: 'auto' }}>
-                    Memuat skor Anda...
+                    Loading your score…
                   </div>
                 )}
 
@@ -605,9 +581,9 @@ export default function EmployeeDashboardPage() {
                         <Lightbulb size={18} />
                       </div>
                       <div style={{ textAlign: 'left' }}>
-                        <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>Tip Keamanan Hari Ini</h3>
+                        <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>Today’s security tip</h3>
                         <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
-                          "{currentTip}"
+                          &ldquo;{currentTip}&rdquo;
                         </p>
                       </div>
                     </div>
@@ -619,13 +595,13 @@ export default function EmployeeDashboardPage() {
                 {/* Timeline Activity Feed */}
                 <div className="panel glass-card">
                   <div className="panel-header">
-                    <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Shield size={18} /> Log Aktivitas Keamanan Anda</h2>
+                    <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Shield size={18} /> Security activity</h2>
                     <span className="panel-count">{activities.length} aktivitas</span>
                   </div>
                    <div style={{ maxHeight: '340px', overflowY: 'auto', paddingRight: '8px', paddingBottom: '24px' }} className="timeline-scroll-container">
                     <div className="timeline" style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '16px', position: 'relative', paddingLeft: '32px', borderLeft: '2px solid var(--border)', marginLeft: '16px' }}>
                       {activities.length === 0 ? (
-                        <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginLeft: '-32px' }}>Belum ada log aktivitas keamanan tercatat.</p>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginLeft: '-32px' }}>No security activity yet.</p>
                       ) : (
                         activities.map((act, i) => {
                           const details = eventLabels[act.event_type] || { label: act.event_type, icon: <FileWarning size={14} />, color: 'var(--text-muted)' };
@@ -642,7 +618,7 @@ export default function EmployeeDashboardPage() {
                                   </span>
                                 </div>
                                 <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                                  Aksi dicatat pada portal simulasi/ Telegram Bot.{' '}
+                                  Aktivitas AFFERENT.{' '}
                                   {act.campaign_id ? `Kampanye ID: ${act.campaign_id}` : ''}
                                 </p>
                               </div>
@@ -658,9 +634,9 @@ export default function EmployeeDashboardPage() {
                 <div className="panel glass-card">
                   <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Trophy size={18} style={{ color: 'var(--accent)' }} /> Peringkat Kompetisi Divisi
+                      <Trophy size={18} style={{ color: 'var(--accent)' }} /> Division leaderboard
                     </h2>
-                    <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono-data)', color: 'var(--text-muted)' }}>Top Divisions</span>
+                    <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono-data)', color: 'var(--text-muted)' }}>Top 5</span>
                   </div>
                   <div style={{ marginTop: '12px' }}>
                     {myScore && myDivRank && (
@@ -680,7 +656,7 @@ export default function EmployeeDashboardPage() {
                           <Info size={16} />
                         </span>
                         <span>
-                          Divisi Anda <strong>{myScore.division}</strong> saat ini berada di peringkat <strong>#{myDivRank}</strong> dari <strong>{divisionAverages.length}</strong> divisi dengan rata-rata <strong style={{ color: 'var(--brand-royal)' }}>{divisionAverages[myDivRankIdx]?.avg} pts</strong>.
+                          Your division <strong>{myScore.division}</strong> ranks <strong>#{myDivRank}</strong> of <strong>{divisionAverages.length}</strong> divisions, averaging <strong style={{ color: 'var(--brand-royal)' }}>{divisionAverages[myDivRankIdx]?.avg} pts</strong>.
                         </span>
                       </div>
                     )}
@@ -700,7 +676,7 @@ export default function EmployeeDashboardPage() {
                           <div
                             key={div.division}
                             style={{
-                              background: isMyDiv ? '#f0f7ff' : '#ffffff',
+                              background: isMyDiv ? 'var(--bg-elevated)' : 'var(--bg-surface)',
                               border: isMyDiv ? '1.5px solid var(--accent)' : '1px solid rgba(144, 202, 249, 0.45)',
                               borderRadius: '10px',
                               padding: '12px 14px',
@@ -745,7 +721,7 @@ export default function EmployeeDashboardPage() {
                                       letterSpacing: '0.04em'
                                     }}
                                   >
-                                    Divisi Anda
+                                    Your division
                                   </span>
                                 )}
                               </div>
@@ -785,19 +761,19 @@ export default function EmployeeDashboardPage() {
                   <div className="panel glass-card" style={{ height: 'auto', marginBottom: 0 }}>
                     <div className="panel-header" style={{ marginBottom: '12px' }}>
                       <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <ShieldCheck size={18} style={{ color: 'var(--accent)' }} /> Aturan Perolehan Skor
+                        <ShieldCheck size={18} style={{ color: 'var(--accent)' }} /> Points guide
                       </h2>
                     </div>
                     <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginBottom: '14px', textAlign: 'left', lineHeight: '1.5' }}>
-                      Skor Anda merefleksikan kedisiplinan keamanan siber. Pelajari aksi mitigasi dan penalti risiko berikut:
+                      Earn points through training and eligible reports.
                     </p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       {[
-                        { action: 'Laporkan Email Phishing (Telegram)', change: '+10 pts', isPositive: true, desc: 'Verifikasi & teruskan indikator ancaman ke SOC Bot' },
-                        { action: 'Menang Game "Spot the Fake"', change: '+5 pts', isPositive: true, desc: 'Identifikasi situs phishing tiruan pada sesi latihan' },
-                        { action: 'Menyelesaikan Pelatihan Ulang', change: '+10 pts', isPositive: true, desc: 'Modul Teachable Moment setelah intersep simulasi' },
-                        { action: 'Terjebak Klik Link Phishing', change: '-20 pts', isPositive: false, desc: 'Mengklik tautan tanpa verifikasi pada simulasi phishing' },
-                        { action: 'Membocorkan Kredensial Form', change: '-30 pts', isPositive: false, desc: 'Memasukkan kredensial akun pada portal palsu' },
+                        { action: 'Report a malicious URL', change: '+15 pts', isPositive: true, desc: 'Confirmed, unique reports · up to 3 rewards per day' },
+                        { action: 'Complete Spot the Fake', change: '+5 pts', isPositive: true, desc: 'Identify the phishing page in training' },
+                        { action: 'Complete retraining', change: '+10 pts', isPositive: true, desc: 'Complete the post-simulation lesson' },
+                        { action: 'Click a phishing link', change: '-20 pts', isPositive: false, desc: 'Click an unverified simulation link' },
+                        { action: 'Submit a phishing form', change: '-30 pts', isPositive: false, desc: 'Submit the simulation form' },
                       ].map((rule, idx) => (
                         <div
                           key={idx}
@@ -881,14 +857,14 @@ export default function EmployeeDashboardPage() {
                   cursor: 'pointer',
                 }}
               >
-                <ArrowLeft size={16} /> Kembali ke Dashboard
+                <ArrowLeft size={16} /> Back to dashboard
               </button>
             </div>
             <div className="panel glass-card" style={{ minHeight: '500px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {eligibility === null ? (
               <div style={{ textAlign: 'center' }}>
                 <div className="loading-spinner" style={{ margin: '0 auto var(--space-4)' }} />
-                <p style={{ color: 'var(--text-secondary)' }}>Memeriksa kelayakan pelatihan...</p>
+                <p style={{ color: 'var(--text-secondary)' }}>Checking training availability…</p>
               </div>
             ) : (
               <>
@@ -898,12 +874,12 @@ export default function EmployeeDashboardPage() {
                     <div className="verdict-hero-badge verdict-badge-success" style={{ margin: '0 auto 20px auto' }}>
                       <ShieldCheck size={42} />
                     </div>
-                    <h2 className="verdict-title" style={{ color: 'var(--brand-navy)' }}>Status Keamanan Perilaku: Terproteksi</h2>
+                    <h2 className="verdict-title" style={{ color: 'var(--brand-navy)' }}>Your score is in the safe range</h2>
                     <p className="verdict-subtitle">
-                      Skor perilaku Anda saat ini berada dalam zona aman. Pelatihan interaktif &ldquo;Spot the Fake&rdquo; dikhususkan sebagai modul mitigasi bagi personel yang memerlukan peningkatan ketahanan risiko.
+                      Spot the Fake is currently reserved for employees who need additional practice. You can still take the daily quiz.
                     </p>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 18px', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '24px', color: 'var(--success)', fontSize: '13px', fontWeight: 700, marginBottom: '24px' }}>
-                      <CheckCircle2 size={15} /> Skor Perilaku: {myScore?.score || 'Safe'} / 100 • Pertahankan Pertahanan Anda
+                      <CheckCircle2 size={15} /> Behavior score: {myScore?.score || 'Safe'} / 100 · Keep learning
                     </div>
                     <div>
                       <button
@@ -911,7 +887,7 @@ export default function EmployeeDashboardPage() {
                         className="btn btn-primary"
                         style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px', borderRadius: '8px', fontWeight: 600, fontSize: '13.5px' }}
                       >
-                        <BookOpen size={16} /> Ikuti Daily Security Quiz <ArrowRight size={15} />
+                        <BookOpen size={16} /> Take the daily quiz <ArrowRight size={15} />
                       </button>
                     </div>
                   </div>
@@ -923,12 +899,12 @@ export default function EmployeeDashboardPage() {
                     <div className="verdict-hero-badge" style={{ margin: '0 auto 20px auto', background: 'rgba(245, 158, 11, 0.12)', border: '2px solid var(--warning)', color: 'var(--warning)' }}>
                       <Timer size={42} />
                     </div>
-                    <h2 className="verdict-title" style={{ color: 'var(--brand-navy)' }}>Periode Jeda Evaluasi (Cooldown)</h2>
+                    <h2 className="verdict-title" style={{ color: 'var(--brand-navy)' }}>Training cooldown</h2>
                     <p className="verdict-subtitle">
-                      Anda telah menyelesaikan sesi pelatihan &ldquo;Spot the Fake&rdquo;. Sistem sedang merekam pembaruan skor perilaku Anda. Sesi evaluasi ulang berikutnya akan terbuka setelah jeda waktu berakhir.
+                      Your session is complete. Return when the cooldown ends to try again.
                     </p>
                     <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', padding: '16px 28px', background: '#f8fafc', border: '1px solid rgba(226, 232, 240, 0.9)', borderRadius: '12px', marginBottom: '20px' }}>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, marginBottom: '4px' }}>Masa Cooldown Tersisa</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, marginBottom: '4px' }}>Time remaining</span>
                       <span style={{ fontSize: '30px', fontWeight: 800, color: 'var(--warning)', fontFamily: 'var(--font-mono-data)', letterSpacing: '2px' }}>
                         {cooldownTime !== null ? formatCooldown(cooldownTime) : '24:00:00'}
                       </span>
@@ -942,14 +918,14 @@ export default function EmployeeDashboardPage() {
                     <div className="game-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid rgba(144, 202, 249, 0.3)', paddingBottom: '16px', marginBottom: '20px' }}>
                       <div>
                         <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--brand-navy)' }}>
-                          <Fish size={18} style={{ color: 'var(--accent)' }} /> Pelatihan Mitigasi Risiko: Spot the Fake
+                          <Fish size={18} style={{ color: 'var(--accent)' }} /> Spot the Fake
                         </h2>
                         <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginTop: '4px', lineHeight: 1.5 }}>
-                          Klik bubble point bernomor (<strong>①, ②, ③</strong>) pada masing-masing portal di bawah untuk mengaudit indikator teknis keamanan.
+                          Select the numbered markers (<strong>①, ②, ③</strong>) to compare each page.
                         </p>
                       </div>
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
-                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Status Personel:</span>
+                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Training status:</span>
                         <span className="badge badge-danger" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                           <AlertTriangle size={11} /> VULNERABLE
                         </span>
@@ -983,32 +959,32 @@ export default function EmployeeDashboardPage() {
                                 border: `1px solid ${activePin.startsWith('A') ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`
                               }}
                             >
-                              {activePin.startsWith('A') ? 'Indikator Mencurigakan (Phishing)' : 'Indikator Otentik (Resmi)'}
+                              {activePin.startsWith('A') ? 'Suspicious indicator' : 'Expected indicator'}
                             </span>
                           </div>
                           <button
                             onClick={() => setActivePin(null)}
                             style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}
                           >
-                            <X size={14} /> Tutup
+                            <X size={14} /> Close
                           </button>
                         </div>
                         <div>
                           <h4 style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--brand-navy)', marginBottom: '4px' }}>
                             {activePin === 'A1' && "Domain Typo-Squatting & TLD Murah"}
-                            {activePin === 'A2' && "Logo Generik Tanpa Sertifikat Integritas"}
-                            {activePin === 'A3' && "Hak Cipta Fiktif Tanpa Badan Hukum"}
+                            {activePin === 'A2' && "Unfamiliar branding"}
+                            {activePin === 'A3' && "Unfamiliar footer"}
                             {activePin === 'B1' && "Domain Resmi Berbadan Hukum Indonesia"}
                             {activePin === 'B2' && "Branding Legal Terverifikasi SSO"}
-                            {activePin === 'B3' && "Hak Cipta Sah & Standar Enkripsi 256-Bit"}
+                            {activePin === 'B3' && "Expected footer"}
                           </h4>
                           <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
-                            {activePin === 'A1' && "Domain 'sso.company-portal.xyz' adalah tiruan. Penyerang menambahkan kata '-portal' dan memakai TLD generik '.xyz'. Domain resmi organisasi selalu berakhir dengan '.co.id'."}
-                            {activePin === 'A2' && "Logo bertuliskan 'Corporate Portal SSO' adalah template generik tanpa identitas visual resmi dan tanpa tanda checkmark integritas terverifikasi."}
-                            {activePin === 'A3' && "Mencantumkan '© 2025 Corporate Portal'. Entitas ini fiktif dan dibuat untuk memanipulasi kepercayaan tanpa adanya pendaftaran badan hukum yang sah."}
+                            {activePin === 'A1' && "In this exercise, 'sso.company-portal.xyz' imitates the expected 'company.co.id' domain. A TLD alone does not prove phishing."}
+                            {activePin === 'A2' && "The branding differs from the known portal. Logos can be copied; verify the domain first."}
+                            {activePin === 'A3' && "The footer differs from the known portal. Treat it as a clue, not proof on its own."}
                             {activePin === 'B1' && "Domain 'sso.company.co.id' adalah domain resmi organisasi. Domain '.co.id' memerlukan verifikasi legalitas dokumen perusahaan resmi di Indonesia."}
-                            {activePin === 'B2' && "Memuat lambang legal 'Corporate Secure SSO' lengkap dengan checkmark integritas sistem yang terdaftar pada infrastruktur korporasi."}
-                            {activePin === 'B3' && "Mencantumkan '© 2025 Corporate Organization. Dilindungi oleh Enkripsi SSL 256-bit.' yang mengindikasikan standar kepatuhan hukum resmi."}
+                            {activePin === 'B2' && "This matches the expected branding in this exercise. A badge alone cannot verify a website."}
+                            {activePin === 'B3' && "The footer matches the example portal. Encryption claims are not proof that a site is legitimate."}
                           </p>
                         </div>
                       </div>
@@ -1017,7 +993,7 @@ export default function EmployeeDashboardPage() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <Search size={15} style={{ color: 'var(--accent)' }} />
                           <span style={{ color: 'var(--text-secondary)', fontSize: '12.5px' }}>
-                            <strong>Mode Audit Aktif:</strong> Klik bubble point bernomor (<strong>①, ②, ③</strong>) pada Portal A atau Portal B untuk membedah indikator forensik keamanan.
+                            <strong>Compare pages:</strong> Select a numbered marker (<strong>①, ②, ③</strong>) on either portal.
                           </span>
                         </div>
                         <span style={{ fontSize: '11px', color: 'var(--accent)', fontWeight: 700, padding: '3px 8px', background: 'rgba(2, 132, 199, 0.08)', borderRadius: '6px' }}>
@@ -1050,7 +1026,7 @@ export default function EmployeeDashboardPage() {
                             <button
                               type="button"
                               className={`inspect-pin pin-danger ${activePin === 'A1' ? 'active' : ''}`}
-                              title="Klik untuk inspeksi URL"
+                              title="Inspect URL"
                               onClick={(e) => { e.stopPropagation(); setActivePin(activePin === 'A1' ? null : 'A1'); }}
                             >
                               1
@@ -1078,7 +1054,7 @@ export default function EmployeeDashboardPage() {
                                 type="button"
                                 className={`inspect-pin pin-danger ${activePin === 'A2' ? 'active' : ''}`}
                                 style={{ position: 'absolute', right: '10px', top: '-4px' }}
-                                title="Klik untuk inspeksi Logo & Branding"
+                                title="Inspect branding"
                                 onClick={(e) => { e.stopPropagation(); setActivePin(activePin === 'A2' ? null : 'A2'); }}
                               >
                                 2
@@ -1089,7 +1065,7 @@ export default function EmployeeDashboardPage() {
                           
                           <input type="text" disabled placeholder="nama@perusahaan.co.id" style={{ width: '100%', padding: '8px', margin: '6px 0', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px' }} />
                           <input type="password" disabled placeholder="Password" style={{ width: '100%', padding: '8px', margin: '6px 0', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px' }} />
-                          <button type="button" disabled style={{ width: '100%', padding: '8px', background: '#1e293b', color: 'white', border: 'none', borderRadius: '4px', fontSize: '12px', fontWeight: 600, marginTop: '8px' }}>Masuk</button>
+                          <button type="button" disabled style={{ width: '100%', padding: '8px', background: '#1e293b', color: 'white', border: 'none', borderRadius: '4px', fontSize: '12px', fontWeight: 600, marginTop: '8px' }}>Sign in</button>
                         </div>
 
                         {/* Footer with Bubble Pin 3 */}
@@ -1104,7 +1080,7 @@ export default function EmployeeDashboardPage() {
                           <button
                             type="button"
                             className={`inspect-pin pin-danger ${activePin === 'A3' ? 'active' : ''}`}
-                            title="Klik untuk inspeksi Legalitas Footer"
+                            title="Inspect footer"
                             onClick={(e) => { e.stopPropagation(); setActivePin(activePin === 'A3' ? null : 'A3'); }}
                           >
                             3
@@ -1133,7 +1109,7 @@ export default function EmployeeDashboardPage() {
                             <button
                               type="button"
                               className={`inspect-pin pin-success ${activePin === 'B1' ? 'active' : ''}`}
-                              title="Klik untuk inspeksi URL Resmi"
+                              title="Inspect expected URL"
                               onClick={(e) => { e.stopPropagation(); setActivePin(activePin === 'B1' ? null : 'B1'); }}
                             >
                               1
@@ -1161,7 +1137,7 @@ export default function EmployeeDashboardPage() {
                                 type="button"
                                 className={`inspect-pin pin-success ${activePin === 'B2' ? 'active' : ''}`}
                                 style={{ position: 'absolute', right: '10px', top: '-4px' }}
-                                title="Klik untuk inspeksi Logo & Verifikasi"
+                                title="Inspect branding"
                                 onClick={(e) => { e.stopPropagation(); setActivePin(activePin === 'B2' ? null : 'B2'); }}
                               >
                                 2
@@ -1174,7 +1150,7 @@ export default function EmployeeDashboardPage() {
                           
                           <input type="text" disabled placeholder="nama@perusahaan.co.id" style={{ width: '100%', padding: '8px', margin: '6px 0', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px' }} />
                           <input type="password" disabled placeholder="Password" style={{ width: '100%', padding: '8px', margin: '6px 0', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px' }} />
-                          <button type="button" disabled style={{ width: '100%', padding: '8px', background: '#0284c7', color: 'white', border: 'none', borderRadius: '4px', fontSize: '12px', fontWeight: 600, marginTop: '8px' }}>Masuk</button>
+                          <button type="button" disabled style={{ width: '100%', padding: '8px', background: '#0284c7', color: 'white', border: 'none', borderRadius: '4px', fontSize: '12px', fontWeight: 600, marginTop: '8px' }}>Sign in</button>
                         </div>
 
                         {/* Footer with Bubble Pin 3 */}
@@ -1189,7 +1165,7 @@ export default function EmployeeDashboardPage() {
                           <button
                             type="button"
                             className={`inspect-pin pin-success ${activePin === 'B3' ? 'active' : ''}`}
-                            title="Klik untuk inspeksi Legalitas Footer"
+                            title="Inspect footer"
                             onClick={(e) => { e.stopPropagation(); setActivePin(activePin === 'B3' ? null : 'B3'); }}
                           >
                             3
@@ -1210,7 +1186,7 @@ export default function EmployeeDashboardPage() {
                           disabled={isSubmittingEvent}
                           style={{ padding: '12px 28px', borderRadius: '8px', fontWeight: 700, fontSize: '13.5px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                         >
-                          <ShieldAlert size={16} /> PORTAL A adalah Phishing
+                          <ShieldAlert size={16} /> Portal A is phishing
                         </button>
                         <button
                           className="btn btn-danger"
@@ -1218,7 +1194,7 @@ export default function EmployeeDashboardPage() {
                           disabled={isSubmittingEvent}
                           style={{ padding: '12px 28px', borderRadius: '8px', fontWeight: 700, fontSize: '13.5px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                         >
-                          <ShieldAlert size={16} /> PORTAL B adalah Phishing
+                          <ShieldAlert size={16} /> Portal B is phishing
                         </button>
                       </div>
                     </div>
@@ -1234,9 +1210,9 @@ export default function EmployeeDashboardPage() {
                           <div className="verdict-hero-badge verdict-badge-success">
                             <CheckCircle2 size={42} />
                           </div>
-                          <h2 className="verdict-title" style={{ color: 'var(--success)' }}>Verifikasi Akurat — Indikator Phishing Teridentifikasi</h2>
+                          <h2 className="verdict-title" style={{ color: 'var(--success)' }}>Correct — you spotted the phishing page</h2>
                           <p className="verdict-subtitle">
-                            Analisis Anda tepat. <strong>Portal A</strong> adalah portal tiruan phishing. Skor reputasi Anda bertambah <strong>+5 Poin</strong>.
+                            <strong>Portal A</strong> is the phishing page. You earned <strong>+5 points</strong>.
                           </p>
                         </>
                       ) : (
@@ -1244,9 +1220,9 @@ export default function EmployeeDashboardPage() {
                           <div className="verdict-hero-badge verdict-badge-danger">
                             <XCircle size={42} />
                           </div>
-                          <h2 className="verdict-title" style={{ color: 'var(--danger)' }}>Indikator Terlewat — Taktik Penipuan Tidak Terdeteksi</h2>
+                          <h2 className="verdict-title" style={{ color: 'var(--danger)' }}>Not quite — review the clues</h2>
                           <p className="verdict-subtitle">
-                            Pilihan Anda kurang tepat. <strong>Portal B</strong> adalah SSO resmi organisasi, sedangkan <strong>Portal A</strong> adalah portal phishing.
+                            <strong>Portal B</strong> is the expected SSO page in this exercise. <strong>Portal A</strong> is phishing.
                           </p>
                         </>
                       )}
@@ -1255,7 +1231,7 @@ export default function EmployeeDashboardPage() {
                     <div className="threat-breakdown-panel">
                       <div className="threat-breakdown-title">
                         <FileText size={16} style={{ color: 'var(--accent)' }} />
-                        <span>Analisis Forensik: Indikator Ancaman Portal A</span>
+                        <span>Why Portal A is phishing</span>
                       </div>
                       
                       <div className="threat-indicator-card">
@@ -1263,9 +1239,9 @@ export default function EmployeeDashboardPage() {
                           <Globe size={16} />
                         </div>
                         <div>
-                          <div className="threat-content-title">Indikator 1: Domain Typo-Squatting & TLD Palsu</div>
+                          <div className="threat-content-title">1. Lookalike domain</div>
                           <div className="threat-content-desc">
-                            Domain palsu menggunakan <code>sso.company-portal.xyz</code>. Taktik ini menyisipkan kata tambahan <code>-portal</code> dan memakai TLD generik murah <code>.xyz</code>. Domain legal organisasi selalu berakhiran <code>.co.id</code>.
+                            The domain <code>sso.company-portal.xyz</code> differs from the expected <code>company.co.id</code>. Check the full domain; a TLD alone is not a threat verdict.
                           </div>
                         </div>
                       </div>
@@ -1275,9 +1251,9 @@ export default function EmployeeDashboardPage() {
                           <FileWarning size={16} />
                         </div>
                         <div>
-                          <div className="threat-content-title">Indikator 2: Badan Hukum & Hak Cipta Fiktif</div>
+                          <div className="threat-content-title">2. Different footer</div>
                           <div className="threat-content-desc">
-                            Bagian footer Portal A mencantumkan <code>© 2025 Corporate Portal</code>. Ini bukan entitas hukum legal yang terdaftar di database korporasi.
+                            The footer uses <code>© 2025 Corporate Portal</code>, rather than the known organization name. This is a supporting clue, not standalone proof.
                           </div>
                         </div>
                       </div>
@@ -1287,9 +1263,9 @@ export default function EmployeeDashboardPage() {
                           <Fingerprint size={16} />
                         </div>
                         <div>
-                          <div className="threat-content-title">Indikator 3: Ketiadaan Verifikasi Integritas SSO</div>
+                          <div className="threat-content-title">3. Different branding</div>
                           <div className="threat-content-desc">
-                            Portal A tidak memuat sertifikasi visual keamanan SSL terverifikasi seperti yang selalu dipasang pada Portal B resmi.
+                            The branding differs from the expected portal. Logos, badges, and encryption claims can be copied.
                           </div>
                         </div>
                       </div>
@@ -1301,7 +1277,7 @@ export default function EmployeeDashboardPage() {
                         className="btn btn-primary"
                         style={{ padding: '12px 32px', borderRadius: '8px', fontWeight: 700, fontSize: '13.5px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                       >
-                        <span>Saya Mengerti, Kembali ke Dashboard</span>
+                        <span>Saya Mengerti, Back to dashboard</span>
                         <ArrowRight size={15} />
                       </button>
                     </div>
@@ -1333,19 +1309,19 @@ export default function EmployeeDashboardPage() {
                 cursor: 'pointer',
               }}
             >
-              <ArrowLeft size={16} /> Kembali ke Dashboard
+              <ArrowLeft size={16} /> Back to dashboard
             </button>
           </div>
           <div className="panel glass-card" style={{ minHeight: '500px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {quizLoading ? (
             <div style={{ textAlign: 'center' }}>
               <div className="loading-spinner" style={{ margin: '0 auto var(--space-4)' }} />
-              <p style={{ color: 'var(--text-secondary)' }}>Memuat Kuis Hari Ini...</p>
+              <p style={{ color: 'var(--text-secondary)' }}>Loading today’s quiz…</p>
             </div>
           ) : quizError ? (
             <div style={{ textAlign: 'center', padding: '60px 20px' }}>
               <AlertTriangle size={64} style={{ color: 'var(--danger)' }} />
-              <h2 style={{ fontSize: '22px', fontWeight: 700, margin: '20px 0 10px 0' }}>Gagal Memuat Kuis</h2>
+              <h2 style={{ fontSize: '22px', fontWeight: 700, margin: '20px 0 10px 0' }}>Could not load the quiz</h2>
               <p style={{ color: 'var(--text-secondary)', maxWidth: '500px', margin: '0 auto 24px auto', fontSize: '14px' }}>
                 {quizError}
               </p>
@@ -1353,7 +1329,7 @@ export default function EmployeeDashboardPage() {
                 onClick={fetchDailyQuiz}
                 style={{ background: 'var(--accent)', border: 'none', color: 'white', padding: '10px 24px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}
               >
-                Coba Lagi
+                Try again
               </button>
             </div>
           ) : quizQuestion?.completed_today ? (
@@ -1361,16 +1337,16 @@ export default function EmployeeDashboardPage() {
               <div className="verdict-hero-badge verdict-badge-success" style={{ margin: '0 auto 20px auto' }}>
                 <ShieldCheck size={42} />
               </div>
-              <h2 className="verdict-title" style={{ color: 'var(--brand-navy)' }}>Kuis Harian Selesai</h2>
+              <h2 className="verdict-title" style={{ color: 'var(--brand-navy)' }}>Daily quiz complete</h2>
               <p className="verdict-subtitle">
-                Evaluasi kesadaran keamanan siber Anda hari ini telah tuntas. Pertahankan konsistensi harian untuk memperkuat pertahanan organisasi.
+                You’re done for today. Come back tomorrow to keep learning.
               </p>
               <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginBottom: '28px' }}>
                 <div style={{ background: '#ffffff', border: '1.5px solid rgba(144, 202, 249, 0.45)', padding: '16px 28px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(9, 27, 56, 0.04)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                   <div style={{ fontSize: '26px', fontWeight: 800, color: 'var(--warning)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontFamily: 'var(--font-mono-data)' }}>
                     <Flame size={22} /> {quizQuestion.daily_streak || myScore?.dailyStreak || 0}
                   </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, marginTop: '4px' }}>Streak Kuis (Hari)</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, marginTop: '4px' }}>Quiz streak (days)</div>
                 </div>
               </div>
               <button
@@ -1378,7 +1354,7 @@ export default function EmployeeDashboardPage() {
                 className="btn btn-primary"
                 style={{ padding: '12px 32px', borderRadius: '8px', fontWeight: 700, fontSize: '13.5px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
               >
-                <span>Kembali ke Command Center</span>
+                <span>Back to dashboard</span>
                 <ArrowRight size={15} />
               </button>
             </div>
@@ -1390,7 +1366,7 @@ export default function EmployeeDashboardPage() {
                     <BookOpen size={18} style={{ color: 'var(--accent)' }} /> Daily Security Quiz
                   </h2>
                   <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                    Selesaikan 1 kuis harian untuk menjaga streak dan memperoleh <strong>+10 Poin Reputasi</strong>.
+                    Complete today’s quiz to keep your streak and earn <strong>+10 points</strong>.
                   </p>
                 </div>
                 <span className="badge badge-info" style={{ textTransform: 'uppercase', fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.04em' }}>
@@ -1453,9 +1429,9 @@ export default function EmployeeDashboardPage() {
                     <div className="verdict-hero-badge verdict-badge-success">
                       <CheckCircle2 size={42} />
                     </div>
-                    <h2 className="verdict-title" style={{ color: 'var(--success)' }}>Jawaban Tepat — Protokol Keamanan Terpenuhi</h2>
+                    <h2 className="verdict-title" style={{ color: 'var(--success)' }}>Correct answer</h2>
                     <p className="verdict-subtitle">
-                      Analisis Anda sesuai dengan prosedur keamanan operasional. Poin reputasi Anda bertambah <strong>+10 Poin</strong>.
+                      You earned <strong>+10 points</strong>. Review the explanation below.
                     </p>
                   </>
                 ) : (
@@ -1463,19 +1439,19 @@ export default function EmployeeDashboardPage() {
                     <div className="verdict-hero-badge verdict-badge-danger">
                       <XCircle size={42} />
                     </div>
-                    <h2 className="verdict-title" style={{ color: 'var(--danger)' }}>Protokol Keliru — Perlu Evaluasi Prosedur</h2>
+                    <h2 className="verdict-title" style={{ color: 'var(--danger)' }}>Review this answer</h2>
                     <p className="verdict-subtitle">
-                      Pilihan Anda tidak sesuai dengan standar mitigasi risiko siber. Streak harian Anda terhenti.
+                      That answer was incorrect. Your daily streak has ended.
                     </p>
 
                     {quizReviveAvailable && quizRevivesRemaining > 0 && (
                       <div className="revive-shield-box">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#92400e', fontWeight: 700, fontSize: '14.5px' }}>
                           <Flame size={18} style={{ color: '#f59e0b' }} />
-                          <span>Streak Shield Tersedia — Pulihkan Streak {quizStreakBeforeBreak} Hari</span>
+                          <span>Restore your {quizStreakBeforeBreak}-day streak</span>
                         </div>
                         <p style={{ fontSize: '12.5px', color: '#78350f', margin: 0, lineHeight: 1.5 }}>
-                          Gunakan 1 Cyber Recovery Token untuk menyelamatkan streak harian Anda sebelum direset permanen. (Sisa: <strong>{quizRevivesRemaining} Token</strong> bulan ini)
+                          Use one recovery token to restore your streak. <strong>{quizRevivesRemaining}</strong> remaining this month.
                         </p>
                         <button
                           onClick={handleReviveStreak}
@@ -1483,7 +1459,7 @@ export default function EmployeeDashboardPage() {
                           className="revive-btn"
                         >
                           <Sparkles size={16} />
-                          <span>{isSubmittingRevive ? 'Mengaktifkan Shield...' : 'Aktivasi Streak Shield'}</span>
+                          <span>{isSubmittingRevive ? 'Activating shield…' : 'Aktivasi Streak Shield'}</span>
                         </button>
                       </div>
                     )}
@@ -1494,20 +1470,20 @@ export default function EmployeeDashboardPage() {
               <div className="threat-breakdown-panel" style={{ margin: '0 auto 28px auto' }}>
                 <div className="threat-breakdown-title">
                   <FileText size={16} style={{ color: 'var(--accent)' }} />
-                  <span>Pembahasan & Prosedur Keamanan Operasional</span>
+                  <span>Answer explanation</span>
                 </div>
                 <div style={{ fontSize: '13px', lineHeight: 1.6, color: 'var(--text-primary)' }}>
                   <p style={{ marginBottom: '12px', color: 'var(--text-secondary)' }}>
-                    <strong style={{ color: 'var(--brand-navy)' }}>Pertanyaan:</strong> {quizQuestion.question_text}
+                    <strong style={{ color: 'var(--brand-navy)' }}>Question:</strong> {quizQuestion.question_text}
                   </p>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)', borderRadius: '8px', color: 'var(--success)', fontWeight: 600, marginBottom: quizChoice !== quizQuestion.correct_answer_index ? '8px' : 0 }}>
                     <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
-                    <span>Prosedur Rekomendasi (Jawaban Benar): {quizQuestion.options[quizQuestion.correct_answer_index]}</span>
+                    <span>Correct answer: {quizQuestion.options[quizQuestion.correct_answer_index]}</span>
                   </div>
                   {quizChoice !== quizQuestion.correct_answer_index && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px', background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '8px', color: 'var(--danger)', fontWeight: 600 }}>
                       <XCircle size={16} style={{ flexShrink: 0 }} />
-                      <span>Pilihan Anda (Beresiko): {quizQuestion.options[quizChoice as number]}</span>
+                      <span>Your answer: {quizQuestion.options[quizChoice as number]}</span>
                     </div>
                   )}
                 </div>
@@ -1518,7 +1494,7 @@ export default function EmployeeDashboardPage() {
                 className="btn btn-primary"
                 style={{ padding: '12px 32px', borderRadius: '8px', fontWeight: 700, fontSize: '13.5px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
               >
-                <span>Kembali ke Command Center</span>
+                <span>Back to dashboard</span>
                 <ArrowRight size={15} />
               </button>
             </div>
@@ -1565,10 +1541,10 @@ export default function EmployeeDashboardPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h3 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
-                  Pilih Mini-Game Keamanan
+                  Choose your training
                 </h3>
                 <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '4px 0 0' }}>
-                  Latih refleks keamanan Anda dan tingkatkan skor poin reputasi perusahaan.
+                  Practice spotting threats and earn security points.
                 </p>
               </div>
               <button
@@ -1632,12 +1608,12 @@ export default function EmployeeDashboardPage() {
                     Spot the Fake
                   </h4>
                   <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '6px 0 0', lineHeight: 1.4 }}>
-                    Uji ketajaman membedakan email kerja asli vs jebakan phishing rekayasa sosial.
+                    Compare two login pages and find the phishing attempt.
                   </p>
                 </div>
                 <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--success)' }}>+5 Pts / Menang</span>
-                  <span style={{ fontSize: '12px', color: 'var(--accent)', fontWeight: 600 }}>Mulai Main →</span>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--success)' }}>+5 points per win</span>
+                  <span style={{ fontSize: '12px', color: 'var(--accent)', fontWeight: 600 }}>Start training →</span>
                 </div>
               </div>
 
@@ -1686,12 +1662,12 @@ export default function EmployeeDashboardPage() {
                     Daily Cyber Quiz
                   </h4>
                   <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '6px 0 0', lineHeight: 1.4 }}>
-                    1 Pertanyaan keamanan siber harian. Jawab benar & bangun streak harian Anda.
+                    One security question a day. Answer correctly to keep your streak.
                   </p>
                 </div>
                 <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--success)' }}>+10 Pts + Streak</span>
-                  <span style={{ fontSize: '12px', color: '#ea580c', fontWeight: 600 }}>Kuis Hari Ini →</span>
+                  <span style={{ fontSize: '12px', color: '#ea580c', fontWeight: 600 }}>Today’s quiz →</span>
                 </div>
               </div>
             </div>
@@ -1701,7 +1677,7 @@ export default function EmployeeDashboardPage() {
 
       {/* ── Footer ────────────────────────────────────────── */}
       <footer className="dashboard-footer">
-        Afferent · Centralized Security Platform · Powered by Behavior Engine
+        AFFERENT · Team security
       </footer>
     </div>
   );

@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(data);
     }
     return NextResponse.json({ error: 'Flask backend returned error', status: res.status }, { status: res.status });
-  } catch (err: any) {
-    return NextResponse.json({ error: 'Failed to connect to Flask backend', detail: err.message }, { status: 502 });
+  } catch (err: unknown) {
+    return NextResponse.json({ error: 'Failed to connect to Flask backend', detail: err instanceof Error ? err.message : 'Unknown error' }, { status: 502 });
   }
 }

@@ -32,7 +32,7 @@ export default function ThreatCacheSection({
 }: ThreatCacheSectionProps) {
   const [isAddingIOC, setIsAddingIOC] = useState(false);
   const [newIndicator, setNewIndicator] = useState('');
-  const [newAction, setNewAction] = useState('block');
+  const [newAction, setNewAction] = useState<'block' | 'allow'>('block');
   const [newReason, setNewReason] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -53,6 +53,7 @@ export default function ThreatCacheSection({
       const data = await res.json();
       if (res.ok && data.success) {
         showNotification(data.message || `Action ${action} executed successfully.`);
+        return true;
       } else {
         showNotification(data.error || 'Failed to execute threat action.', 'error');
       }
@@ -61,19 +62,20 @@ export default function ThreatCacheSection({
     } finally {
       setActionLoading(null);
     }
+    return false;
   };
 
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newIndicator.trim()) return;
-    await handleExecuteAction(newIndicator.trim(), newAction as any, newReason.trim());
+    if (!await handleExecuteAction(newIndicator.trim(), newAction, newReason.trim())) return;
     setNewIndicator('');
     setNewReason('');
     setIsAddingIOC(false);
   };
 
   const threatChartData = Object.values(
-    (cacheData || []).reduce((acc: any, item: ThreatCacheEntry) => {
+    (cacheData || []).reduce<Record<string, { date: string; detections: number }>>((acc, item: ThreatCacheEntry) => {
       const date = item.detectedAt 
         ? new Date(item.detectedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
         : 'Today';
@@ -195,7 +197,7 @@ export default function ThreatCacheSection({
                 </label>
                 <select
                   value={newAction}
-                  onChange={(e) => setNewAction(e.target.value)}
+                onChange={(e) => setNewAction(e.target.value as 'block' | 'allow')}
                   style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: '13px' }}
                 >
                   <option value="block">BLOCK IMMEDIATELY</option>
@@ -205,12 +207,14 @@ export default function ThreatCacheSection({
             </div>
             <div>
               <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
-                REASON / NOTES (OPTIONAL)
+                REASON / NOTES (REQUIRED)
               </label>
               <input
                 type="text"
                 placeholder="e.g. Confirmed phishing domain reported in SOC incident"
                 value={newReason}
+                required
+                maxLength={1000}
                 onChange={(e) => setNewReason(e.target.value)}
                 style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: '13px' }}
               />
@@ -325,7 +329,7 @@ export default function ThreatCacheSection({
                             {!isBlocked && (
                               <button
                                 title="Block Indicator"
-                                disabled={actionLoading === `block-${entry.url}`}
+                                disabled={actionLoading !== null}
                                 onClick={() => handleExecuteAction(entry.url, 'block')}
                                 style={{
                                   padding: '4px 8px',
@@ -341,8 +345,9 @@ export default function ThreatCacheSection({
                                 Block
                               </button>
                             )}
+                            <button type="button" disabled={actionLoading !== null} className="btn" onClick={() => handleExecuteAction(entry.url, 'allow', 'SOC allowed from IoC feed')}>Allow</button>
                             <button
-                              title="Purge Cache"
+                              title="Purge cached evidence only; this does not remove proxy policy"
                               disabled={actionLoading === `purge-${entry.url}`}
                               onClick={() => handleExecuteAction(entry.url, 'purge')}
                               style={{

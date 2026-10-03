@@ -3,7 +3,7 @@ import { AUTH_SESSION_COOKIE } from '@/lib/authSession';
 
 /**
  * Shared backend fetch helper for Next.js API route proxies.
- * Handles SERVICE_API_KEY header and tries target URLs in order.
+ * One configured target, preserves backend errors and streaming responses.
  */
 
 export async function fetchFlaskBackend(path: string, options: RequestInit = {}, timeoutMs = 4000): Promise<Response> {
@@ -12,17 +12,8 @@ export async function fetchFlaskBackend(path: string, options: RequestInit = {},
   const inboundHeaders = await requestHeaders();
   const sessionToken = cookieStore.get(AUTH_SESSION_COOKIE)?.value;
 
-  // Prioritize Docker container DNS hostnames first, then localhost fallback
-  const targetUrls = Array.from(new Set([
-    'http://flask_api:5000',
-    process.env.API_URL,
-    'http://hfl-flask:5000',
-    process.env.NEXT_PUBLIC_API_URL,
-    'http://127.0.0.1:5000',
-    'http://localhost:5000'
-  ])).filter(Boolean) as string[];
-
-  let lastError: Error | null = null;
+  const baseUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL;
+  if (!baseUrl) throw new Error('API_URL is required');
 
   const headers = new Headers(options.headers || {});
   if (sessionToken) {
@@ -36,28 +27,15 @@ export async function fetchFlaskBackend(path: string, options: RequestInit = {},
   const userAgent = inboundHeaders.get('user-agent');
   if (forwardedFor) headers.set('X-Forwarded-For', forwardedFor);
   if (userAgent) headers.set('User-Agent', userAgent);
-
-  for (const baseUrl of targetUrls) {
-    try {
-      const url = `${baseUrl}${path.startsWith('/') ? path : '/' + path}`;
-      const controller = new AbortController();
-      const timeoutId = timeoutMs > 0 ? setTimeout(() => controller.abort(), timeoutMs) : null;
-
-      const res = await fetch(url, {
-        ...options,
-        headers,
-        signal: options.signal || controller.signal,
-        cache: 'no-store'
-      });
-      if (timeoutId) clearTimeout(timeoutId);
-
-      if (res && res.status < 500) {
-        return res;
-      }
-    } catch (err: unknown) {
-      lastError = err instanceof Error ? err : new Error('Unknown backend connection error');
-    }
+  headers.set('X-Request-ID', inboundHeaders.get('x-request-id') || crypto.randomUUID());
+  // Never replay a mutation against fallback hosts; return backend errors intact.
+  const controller = new AbortController();
+  const timeoutId = timeoutMs > 0 ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    return await fetch(`${baseUrl.replace(/\/$/, '')}${path.startsWith('/') ? path : '/' + path}`, {
+      ...options, headers, signal: options.signal || controller.signal, cache: 'no-store',
+    });
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
-
-  throw lastError || new Error(`Failed to connect to Flask backend at ${path}`);
 }

@@ -138,6 +138,22 @@ def logout():
     return jsonify({"success": True}), 200
 
 
+@auth_bp.route("/api/auth/change-password", methods=["POST"])
+def change_password():
+    identity = getattr(g, "auth_identity", None)
+    if not identity:
+        return jsonify({"error": "Session wajib diisi", "code": "UNAUTHORIZED"}), 401
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "JSON object wajib diisi"}), 400
+    try:
+        auth_service.change_password(identity=identity, current_password=body.get("currentPassword"),
+                                     new_password=body.get("newPassword"), ip_address=_client_ip(), request_id=_request_id())
+        return jsonify({"success": True, "message": "Password diubah. Masuk ulang dengan OTP."})
+    except auth_service.AuthError as exc:
+        return _error_response(exc)
+
+
 # Explicit tombstones prevent old integrations from silently issuing identity.
 @auth_bp.route("/api/auth/admin", methods=["POST"])
 @auth_bp.route("/api/telegram/command", methods=["POST"])

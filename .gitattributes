@@ -1,0 +1,25 @@
+# Keep Docker/Linux source executable and portable across Windows checkouts.
+*.py text eol=lf
+*.sh text eol=lf
+*.js text eol=lf
+*.cjs text eol=lf
+*.mjs text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.css text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.MD text eol=lf
+*.json text eol=lf
+.env.example text eol=lf
+Dockerfile text eol=lf
+*.joblib binary
+*.pkl binary
+*.pt binary
+*.onnx binary
+*.safetensors binary
+# Preserve dataset/notebook bytes and provenance; do not normalize raw evidence.
+*.csv -text
+*.jsonl -text
+*.ipynb -text

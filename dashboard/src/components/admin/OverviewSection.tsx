@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import type { Stats, Incident, ThreatCacheEntry, AISummary, BehaviorScore, ComplianceSummary } from '@/components/admin/types';
 import { timeAgo } from '@/components/admin/types';
-import { AlertTriangle, Activity, Shield, TrendingUp, Bot, Users, Trophy, ShieldAlert, ShieldCheck, Info, Flame, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Activity, Shield, TrendingUp, Users, ShieldAlert, ShieldCheck, Info, Flame, RefreshCw } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { TremorDonutCard } from '@/components/admin/TremorDonutCard';
 import { TrendBadge } from '@/components/admin/TrendBadge';
@@ -21,49 +21,36 @@ interface OverviewSectionProps {
   summaryUpdated: boolean;
   behaviorUpdated: boolean;
   onSelectIncident?: (inc: Incident) => void;
+  onRefreshSummary?: () => void;
 }
 
 export default function OverviewSection({
-  readOnly,
   stats,
   incidents,
   summaries,
   scores,
   cache,
-  complianceData,
   incidentUpdated,
   cacheUpdated,
   summaryUpdated,
   behaviorUpdated,
-  onSelectIncident
+  onRefreshSummary
 }: OverviewSectionProps) {
-  const [isRegenerating, setIsRegenerating] = useState(false);
-
-  const handleRegenerateBrief = async () => {
-    setIsRegenerating(true);
-    try {
-      await fetch('/api/ai/classify', { method: 'POST' });
-      await fetch('/api/summary');
-    } catch {
-      // ignore
-    } finally {
-      setIsRegenerating(false);
-    }
-  };
+  const isRegenerating = false;
   // Chart Data Calculations
-  const divScores = scores.reduce((acc: any, user: BehaviorScore) => {
+  const divScores = scores.reduce<Record<string, { total: number; count: number }>>((acc, user) => {
     if (!acc[user.division]) acc[user.division] = { total: 0, count: 0 };
     acc[user.division].total += user.score;
     acc[user.division].count += 1;
     return acc;
   }, {});
 
-  const divisionChartData = Object.entries(divScores).map(([name, data]: [string, any]) => ({
+  const divisionChartData = Object.entries(divScores).map(([name, data]) => ({
     name,
     score: Math.min(100, Math.round(data.total / data.count))
-  })).sort((a, b) => b.score - a.score);
+  })).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
 
-  const severityCounts = incidents.reduce((acc: any, inc: Incident) => {
+  const severityCounts = incidents.reduce<Record<string, number>>((acc, inc) => {
     const sev = (inc.severity || '').toLowerCase();
     if (sev === 'critical') acc['Critical'] = (acc['Critical'] || 0) + 1;
     else if (sev === 'high') acc['High'] = (acc['High'] || 0) + 1;
@@ -103,7 +90,7 @@ export default function OverviewSection({
         <div className={`stat-card glass-card ${incidentUpdated ? 'value-flash' : ''}`}>
           <div className="stat-icon stat-icon-danger"><AlertTriangle size={26} /></div>
           <div className="stat-value font-mono-data">{stats?.totalIncidents ?? incidents.length}</div>
-          <div className="stat-label">Total Incidents</div>
+          <div className="stat-label">Total incidents</div>
           <div style={{ marginTop: '10px' }}>
             <TrendBadge type="danger" value={criticalCount} suffix=" critical" iconType="arrow" />
           </div>
@@ -111,7 +98,7 @@ export default function OverviewSection({
         <div className={`stat-card glass-card ${incidentUpdated ? 'value-flash' : ''}`}>
           <div className="stat-icon stat-icon-warning"><Activity size={26} /></div>
           <div className="stat-value font-mono-data">{stats?.openIncidents ?? incidents.filter(i => i.status !== 'resolved').length}</div>
-          <div className="stat-label">Open Incidents</div>
+          <div className="stat-label">Open incidents</div>
           <div style={{ marginTop: '10px' }}>
             <TrendBadge type="success" value={resolvedCount} suffix=" resolved" iconType="arrow" />
           </div>
@@ -127,7 +114,7 @@ export default function OverviewSection({
         <div className={`stat-card glass-card ${behaviorUpdated ? 'value-flash' : ''}`}>
           <div className="stat-icon stat-icon-success"><TrendingUp size={26} /></div>
           <div className="stat-value font-mono-data">{avgScore || 0}</div>
-          <div className="stat-label">Avg. Behavior Score</div>
+          <div className="stat-label">Average score</div>
           <div style={{ marginTop: '10px' }}>
             <TrendBadge type={scorePostureType} value={scorePosture} iconType="trend" />
           </div>
@@ -136,18 +123,18 @@ export default function OverviewSection({
 
       {/* Charts Row */}
       <div className="charts-grid fade-up font-body">
-        {/* Security Posture by Division Bar Chart */}
+        {/* Division scores Bar Chart */}
         <div className="chart-card glass-card">
           <div className="chart-header">
             <div>
-              <h3 className="chart-title font-heading">Security Posture by Division</h3>
+              <h3 className="chart-title font-heading">Division scores</h3>
               <p style={{ fontSize: '12px', color: '#526f99', margin: '4px 0 0 0' }}>
-                Average behavioral score and security compliance by department
+                Average behavior score · 0–100
               </p>
             </div>
             <span className="chart-badge font-mono-data">Score 0-100</span>
           </div>
-          <div className="chart-container bar-chart">
+          <div className="chart-container bar-chart" style={{ height: Math.max(280, divisionChartData.length * 44) }}>
             {divisionChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
@@ -163,10 +150,10 @@ export default function OverviewSection({
                     contentStyle={{ background: '#ffffff', border: '1px solid rgba(13, 71, 161, 0.15)', borderRadius: '8px', boxShadow: '0 4px 14px rgba(13, 71, 161, 0.1)' }}
                     itemStyle={{ color: '#091b38', fontWeight: 600 }}
                   />
-                  <Bar dataKey="score" radius={[0, 4, 4, 0]} barSize={16} isAnimationActive={true} animationDuration={250} animationEasing="ease-out">
-                    {divisionChartData.map((entry, index) => (
+                  <Bar dataKey="score" radius={[0, 4, 4, 0]} barSize={16} isAnimationActive={false}>
+                    {divisionChartData.map((entry) => (
                       <Cell
-                        key={`cell-${index}`}
+                        key={entry.name}
                         fill={entry.score >= 80 ? 'var(--success)' : entry.score >= 50 ? 'var(--warning)' : 'var(--danger)'}
                       />
                     ))}
@@ -174,34 +161,34 @@ export default function OverviewSection({
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="chart-empty-state">No division activity data available</div>
+              <div className="chart-empty-state">No division data yet.</div>
             )}
           </div>
         </div>
 
         {/* Tremor-Style Donut Chart Card */}
         <TremorDonutCard
-          title="Incident Severity Distribution"
-          description="Real-time proportion of threat severity levels across active triage events"
+          title="Incident severity"
+          description="Severity of recorded incidents."
           data={donutSeverityData}
-          totalLabel="Total Incidents"
-          unit="tickets"
+          totalLabel="Total incidents"
+          unit="incidents"
         />
       </div>
 
-      {/* Bento Grid: Threat Intelligence & Risk Synthesis & Human Telemetry Spotlight */}
+      {/* Bento Grid: Risk summary & Human Telemetry Spotlight */}
       <div className="admin-overview-grid font-body">
         {/* Threat Intelligence Synthesis Panel */}
         <div className={`panel glass-card fade-up-1 ${summaryUpdated ? 'value-flash' : ''}`} style={{ marginBottom: 0 }}>
           <div className="panel-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <h2 className="panel-title font-heading"><ShieldAlert size={20} style={{ marginRight: "8px", verticalAlign: "text-bottom", color: "var(--accent)" }} /> Threat Intelligence & Risk Synthesis</h2>
+            <h2 className="panel-title font-heading"><ShieldAlert size={20} style={{ marginRight: "8px", verticalAlign: "text-bottom", color: "var(--accent)" }} /> Risk summary</h2>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="panel-badge" style={{ background: 'rgba(33, 150, 243, 0.08)', color: 'var(--accent)', borderColor: 'rgba(33, 150, 243, 0.3)' }}>Live Telemetry</span>
-              {!readOnly && (
+              <span className="panel-badge" style={{ background: 'rgba(33, 150, 243, 0.08)', color: 'var(--accent)', borderColor: 'rgba(33, 150, 243, 0.3)' }}>Snapshot</span>
+              {onRefreshSummary && (
                 <button
-                  onClick={handleRegenerateBrief}
+                  onClick={onRefreshSummary}
                   disabled={isRegenerating}
-                  title="Synthesize / Refresh Threat Intelligence Synthesis"
+                  title="Refresh risk summary"
                   style={{
                     background: 'transparent',
                     border: '1px solid var(--border)',
@@ -218,7 +205,7 @@ export default function OverviewSection({
                   }}
                 >
                   <RefreshCw size={11} className={isRegenerating ? 'spin-icon' : ''} />
-                  {isRegenerating ? 'Synthesizing...' : 'Refresh'}
+                  {isRegenerating ? 'Processing…' : 'Refresh'}
                 </button>
               )}
             </div>
@@ -234,20 +221,23 @@ export default function OverviewSection({
                     <span className="summary-time font-mono-data">{timeAgo(s.timestamp)}</span>
                   </div>
                   <h3 className="summary-title font-heading">{s.title}</h3>
-                  <p className="summary-text">{s.summary}</p>
+                  <details className="summary-details">
+                    <summary>View analysis & recommendations</summary>
+                    <p className="summary-text">{s.summary}</p>
                   {s.recommendations.length > 0 && (
                     <div className="summary-recs">
-                      <span className="rec-label">Recommendations:</span>
+                      <span className="rec-label">Rekomendasi:</span>
                       <ul>
                         {s.recommendations.map((r, i) => <li key={i}>{r}</li>)}
                       </ul>
                     </div>
                   )}
+                  </details>
                 </div>
               ))
             ) : (
               <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                Awaiting threat telemetry for LLM analysis...
+                No risk summary yet.
               </div>
             )}
           </div>
@@ -466,7 +456,7 @@ export default function OverviewSection({
           }}>
             <Info size={16} style={{ color: '#2196F3', flexShrink: 0, marginTop: '2px' }} />
             <div>
-              <span style={{ fontWeight: 700, color: 'var(--accent)' }}>SOC Remediation Target:</span> Automated intervention training is scheduled for employees with scores &lt; 50 to minimize phishing click rates.
+              <span style={{ fontWeight: 700, color: 'var(--accent)' }}>Learning baseline:</span> SOC/GRC dapat meninjau skor dan mengirim warning edukasi melalui tab Inbox. Baseline menggunakan points /200, bukan skor chart /100.
             </div>
           </div>
         </div>

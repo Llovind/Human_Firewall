@@ -30,12 +30,18 @@ export function usePolling<T>(
   const [hasUpdated, setHasUpdated] = useState(false);
   const previousDataRef = useRef<string>('');
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
+  const flashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchData = useCallback(async () => {
+    if (controllerRef.current) return;
+    const controller = new AbortController();
+    controllerRef.current = controller;
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
+      if (controller.signal.aborted) return;
       const result = transform ? transform(json) : json as T;
       
       // Check if data actually changed to trigger animations
@@ -43,36 +49,39 @@ export function usePolling<T>(
       if (serialized !== previousDataRef.current) {
         setHasUpdated(true);
         previousDataRef.current = serialized;
+        setData(result);
         // Reset the flash after animation duration
-        setTimeout(() => setHasUpdated(false), 500);
+        if (flashRef.current) clearTimeout(flashRef.current);
+        flashRef.current = setTimeout(() => setHasUpdated(false), 500);
       }
       
-      setData(result);
       setError(null);
     } catch (err) {
+      if (controller.signal.aborted) return;
       setError(err instanceof Error ? err.message : 'Failed to fetch');
     } finally {
-      setIsLoading(false);
+      if (controllerRef.current === controller) controllerRef.current = null;
+      if (!controller.signal.aborted) setIsLoading(false);
     }
   }, [url, transform]);
 
   const refresh = useCallback(() => {
     setIsLoading(true);
-    fetchData();
+    void fetchData();
   }, [fetchData]);
 
   useEffect(() => {
+    previousDataRef.current = '';
     // Initial fetch
-    fetchData();
+    const initialFetch = setTimeout(() => void fetchData(), 0);
 
     // Setup polling
     intervalRef.current = setInterval(fetchData, interval);
 
     // Pause polling when tab is hidden
     const handleVisibility = () => {
-      if (document.hidden) {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-      } else {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (!document.hidden) {
         fetchData();
         intervalRef.current = setInterval(fetchData, interval);
       }
@@ -81,6 +90,10 @@ export function usePolling<T>(
     document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
+      clearTimeout(initialFetch);
+      controllerRef.current?.abort();
+      controllerRef.current = null;
+      if (flashRef.current) clearTimeout(flashRef.current);
       if (intervalRef.current) clearInterval(intervalRef.current);
       document.removeEventListener('visibilitychange', handleVisibility);
     };

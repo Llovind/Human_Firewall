@@ -18,6 +18,23 @@ def _request_id() -> str:
     return request.headers.get("X-Request-ID", "").strip()[:128] or str(uuid.uuid4())
 
 
+@proxy_bp.route('/api/proxy/second-opinion', methods=['GET', 'POST'])
+@require_roles('soc')
+def second_opinion():
+    from services import local_llm_service
+    try:
+        if request.method == 'GET':
+            return jsonify(local_llm_service.get_review(request.args.get('domain', '')))
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            return jsonify({'error': 'A JSON object is required.'}), 400
+        return jsonify(local_llm_service.queue_review(current_identity(), body.get('domain', ''), _request_id())), 202
+    except (ValueError, TypeError, proxy_service.ProxyError) as exc:
+        return jsonify({'error': str(exc)}), 400
+    except Exception:
+        return jsonify({'error': 'Local review unavailable.'}), 503
+
+
 def _client_ip() -> str:
     if os.environ.get("TRUST_PROXY_HEADERS", "false").lower() in {"1", "true", "yes"}:
         forwarded = request.headers.get("X-Forwarded-For", "")
@@ -126,6 +143,20 @@ def ml_verdict_webhook():
         return _error(exc)
 
 
+@proxy_bp.route("/api/proxy/enforcement/check", methods=["POST"])
+@require_roles(allow_service=True)
+def enforcement_check():
+    """Internal controller reconciliation; not exposed through dashboard BFF."""
+    body = request.get_json(silent=True)
+    try:
+        if not isinstance(body, dict):
+            raise proxy_service.ProxyError("INVALID_PAYLOAD", "JSON object diperlukan")
+        actions = proxy_service.enforcement_decisions(body.get("domains"))
+        return jsonify({"schemaVersion": proxy_service.SCHEMA_VERSION, "actions": actions})
+    except proxy_service.ProxyError as exc:
+        return _error(exc)
+
+
 def _limit() -> int:
     try:
         return min(max(int(request.args.get("limit", 200)), 1), 500)
@@ -224,8 +255,11 @@ def alert_stream():
 def proxy_config():
     return jsonify({
         "proxyUrl": os.environ.get("PUBLIC_PROXY_URL", "http://127.0.0.1:3128"),
-        "monitoringScope": "full-url",
-        "tlsInspection": True,
+        "monitoringScope": "domain",
+        "tlsInspection": False,
+        "tlsMode": "splice-allowed-bump-denied",
+        "caRequiredForBlockPage": True,
+        "activeTunnelRevocation": True,
         "caDownloadUrl": "/api/proxy/ca.crt",
     })
 

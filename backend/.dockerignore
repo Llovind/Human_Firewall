@@ -1,0 +1,11 @@
+.env
+.env.*
+instance/
+__pycache__/
+*.pyc
+*.db
+*.db-journal
+*.key
+venv/
+.venv/
+models/domain_v1/

@@ -38,7 +38,7 @@ services:
   # Local SMTP inbox for lab/demo. SMTP stays inside the Docker network;
   # only the web inbox is exposed to the host.
   mailpit:
-    image: axllent/mailpit:latest
+    image: axllent/mailpit@sha256:98b916bd3c8d61f7633a52d3ea2f58d00620cb01ca57ab59edde68c347a95365
     container_name: hfl-mailpit
     ports:
       - "${MAILPIT_BIND_IP:-127.0.0.1}:8025:8025"
@@ -47,41 +47,12 @@ services:
       - MP_DATABASE=/data/mailpit.db
     volumes:
       - mailpit_data:/data
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
     restart: unless-stopped
-    networks:
-      - hfl_network
-
-  # 1. ORCHESTRATOR LAYER
-  n8n:
-    image: docker.n8n.io/n8nio/n8n
-    container_name: hfl-n8n
-    ports:
-      - "${WEB_BIND_IP:-127.0.0.1}:5678:5678"
-    environment:
-      - N8N_HOST=${N8N_HOST:-127.0.0.1}
-      - N8N_PORT=5678
-      - N8N_PROTOCOL=http
-      - NODE_ENV=production
-      - WEBHOOK_URL=${WEBHOOK_URL}
-      - N8N_WEBHOOK_URL=${WEBHOOK_URL}
-      - GENERIC_TIMEZONE=Asia/Jakarta
-      - NODE_OPTIONS=--dns-result-order=ipv4first
-      # Legacy n8n expressions still read environment variables for existing
-      # non-critical campaign automation. Proxy and authentication do not.
-      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
-      - N8N_ALLOW_ENV_VARIABLES=*
-      - NODE_FUNCTION_ALLOW_BUILTIN=crypto
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - SOC_CHAT_ID=${SOC_CHAT_ID}
-      - SECRET_KEY=${SECRET_KEY}
-      - SERVICE_API_KEY=${SERVICE_API_KEY}
-      - N8N_PROXY_HOPS=1
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
-    volumes:
-      - n8n_data:/home/node/.n8n
-    restart: unless-stopped
-    depends_on:
-      - flask_api
     networks:
       - hfl_network
 
@@ -92,9 +63,14 @@ services:
   gophish:
     build: ./gophish
     container_name: hfl-gophish
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/3333"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
     ports:
-      - "3333:3333"   # Admin Panel (HTTPS)
-      - "8080:80"      # Phishing Server (Landing Pages) - dipindah ke 8080
+      - "${GOPHISH_ADMIN_BIND_IP:-127.0.0.1}:3333:3333"
+      - "${WEB_BIND_IP:-127.0.0.1}:8080:80"
                         # supaya tidak konflik dengan service lain yang
                         # mungkin sudah pakai port 80 di laptop
     volumes:
@@ -126,7 +102,7 @@ services:
     ports:
       - "${WEB_BIND_IP:-127.0.0.1}:5000:5000"
     volumes:
-      - ./backend:/app           # Live-reload pas development
+      - ./backend:/app           # Source mount; restart gunicorn after edits.
       - flask_db:/app/instance   # Persistence SQLite Flask
       - type: bind
         source: ${GOPHISH_CERT_DIR:-./secrets/gophish-pki}/afferent-lab-ca.crt
@@ -143,6 +119,7 @@ services:
       - FLASK_APP=app.py
       - FLASK_ENV=production
       - FLASK_DEBUG=0
+      - DB_PATH=/app/instance/human_firewall.db
 
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - SECRET_KEY=${SECRET_KEY}
@@ -160,13 +137,17 @@ services:
       - AUTH_SESSION_TTL_SECONDS=${AUTH_SESSION_TTL_SECONDS:-28800}
       - PASSWORD_MIN_LENGTH=${PASSWORD_MIN_LENGTH:-12}
 
-      - SMTP_HOST=${SMTP_HOST:-mailpit}
-      - SMTP_PORT=${SMTP_PORT:-1025}
-      - SMTP_USER=${SMTP_USER:-}
-      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_HOST=mailpit
+      - SMTP_PORT=1025
+      - SMTP_USER=
+      - SMTP_PASSWORD=
       - SMTP_FROM_ADDRESS=${SMTP_FROM_ADDRESS:-AFFERENT Security <security@afferent.local>}
-      - SMTP_SECURITY=${SMTP_SECURITY:-none}
+      - SMTP_SECURITY=none
       - SMTP_TIMEOUT_SECONDS=${SMTP_TIMEOUT_SECONDS:-10}
+      - EDUCATION_EMAIL_ENABLED=${EDUCATION_EMAIL_ENABLED:-true}
+      - EDUCATION_AUTO_ENABLED=${EDUCATION_AUTO_ENABLED:-false}
+      - EDUCATION_SCORE_THRESHOLD=${EDUCATION_SCORE_THRESHOLD:-60}
+      - EDUCATION_COOLDOWN_SECONDS=${EDUCATION_COOLDOWN_SECONDS:-86400}
 
       - PROXY_FEATURE_ENABLED=true
       - PROXY_DB_HOST=proxy_postgres
@@ -176,6 +157,10 @@ services:
       - REDIS_HOST=proxy_redis
       - REDIS_PORT=6379
       - ML_SCANNER_URL=${ML_SCANNER_URL:-}
+      - ML_LOCAL_ENABLED=${ML_LOCAL_ENABLED:-true}
+      - ML_DOMAIN_MODEL_DIR=${ML_DOMAIN_MODEL_DIR:-/app/models/domain_v3}
+      - ML_CPU_THREADS=${ML_CPU_THREADS:-2}
+      - ML_URL_CACHE_TTL_SECONDS=${ML_URL_CACHE_TTL_SECONDS:-3600}
       - ML_TLS_CA_BUNDLE=${ML_TLS_CA_BUNDLE:-}
       - ML_SCANNER_TIMEOUT_SECONDS=${ML_SCANNER_TIMEOUT_SECONDS:-1.5}
       - ML_BLOCK_CONFIDENCE_THRESHOLD=${ML_BLOCK_CONFIDENCE_THRESHOLD:-0.85}
@@ -195,15 +180,31 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GROQ_API_KEY=${GROQ_API_KEY}
       - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY}
+      - GROQ_MODEL=${GROQ_MODEL:-}
+      - AI_HEATMAP_USE_LLM=${AI_HEATMAP_USE_LLM:-false}
+      - VT_API_KEY=${VT_API_KEY:-}
+      - URLSCAN_API_KEY=${URLSCAN_API_KEY:-}
+      - FILE_SCAN_MAX_MB=${FILE_SCAN_MAX_MB:-${PDF_REPORT_MAX_MB:-10}}
+      - FILE_SCAN_RETENTION_SECONDS=${FILE_SCAN_RETENTION_SECONDS:-${PDF_REPORT_RETENTION_SECONDS:-3600}}
+      - VT_REQUESTS_PER_MINUTE=${VT_REQUESTS_PER_MINUTE:-4}
+      - LOCAL_LLM_ENABLED=${LOCAL_LLM_ENABLED:-false}
+      - LOCAL_LLM_MODEL=${LOCAL_LLM_MODEL:-qwen3:4b-instruct-2507-q4_K_M}
+      - LOCAL_LLM_OUTPUT_MODE=${LOCAL_LLM_OUTPUT_MODE:-json}
+      - LOCAL_LLM_URL=${LOCAL_LLM_URL:-http://local_llm:11434}
+      - LOCAL_LLM_TIMEOUT_SECONDS=${LOCAL_LLM_TIMEOUT_SECONDS:-45}
 
       - GOPHISH_API_KEY=${GOPHISH_API_KEY}
       - GOPHISH_API_URL=${GOPHISH_API_URL}
       - GOPHISH_CA_BUNDLE=${GOPHISH_CA_BUNDLE:-}
+      - GOPHISH_PHISH_PUBLIC_URL=${GOPHISH_PHISH_PUBLIC_URL:-}
+      - GOPHISH_ADMIN_PUBLIC_URL=${GOPHISH_ADMIN_PUBLIC_URL:-https://localhost:3333}
+      - MAILPIT_PUBLIC_URL=${MAILPIT_PUBLIC_URL:-http://127.0.0.1:8025}
 
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
 
-      - SOC_CHAT_ID=${SOC_CHAT_ID}
-      - WEBHOOK_URL=${WEBHOOK_URL}
+      - SERVER_BASE_URL=${SERVER_BASE_URL:-}
+      - SIMULATION_BASE_URL=${SIMULATION_BASE_URL:-}
+      - SIMULATION_EDUCATION_URL=${SIMULATION_EDUCATION_URL:-}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=2)"]
       interval: 10s
@@ -221,13 +222,16 @@ services:
       - hfl_network
 
   # 4. PRESENTATION LAYER (User-Faced Dashboard — Next.js)
-  # Arsitektur: Dashboard TIDAK berisi business logic. Hanya menerima
-  # data dari Threat Intelligence Service (flask_api / n8n) via webhook
-  # POST ke /api/incident, /api/cache, /api/summary, lalu menampilkannya.
+  # Same-origin BFF forwards session identity to Flask; SOC uses SSE.
   # Login: email + password + OTP, dengan session cookie via Next.js BFF.
   dashboard:
     build: ./dashboard
     container_name: hfl-dashboard
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/config').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
     ports:
       - "${WEB_BIND_IP:-127.0.0.1}:3000:3000"
     environment:
@@ -240,6 +244,7 @@ services:
       - DEV_BYPASS_AUTH=${DEV_BYPASS_AUTH}
       - NEXT_PUBLIC_PROXY_URL=${PUBLIC_PROXY_URL:-http://127.0.0.1:3128}
       - NEXT_PUBLIC_PROXY_PROBE_URL=${PUBLIC_PROXY_PROBE_URL:-http://proxy-check.afferent.invalid/__afferent_probe__}
+      - FILE_SCAN_MAX_MB=${FILE_SCAN_MAX_MB:-${PDF_REPORT_MAX_MB:-10}}
     depends_on:
       flask_api:
         condition: service_healthy
@@ -249,28 +254,32 @@ services:
 
   # Explicit forward proxy for employee devices. Bind to a Tailscale/LAN IP
   # via PROXY_BIND_IP; loopback is the safe default for local development.
-  # TLS inspection (ssl-bump) is enabled: clients must trust the AFFERENT
-  # Proxy CA (proxy/ssl/afferent-proxy-ca.crt) in their browser/OS store.
+  # Allowed TLS is spliced. Only denied connections use the lab CA for a
+  # branded HTTPS block page. A TCP relay owns/revokes individual tunnels;
+  # no privileged container, NET_ADMIN, or Docker socket is needed.
   centralized_proxy:
     build: ./proxy
     container_name: hfl-centralized-proxy
     ports:
       - "${PROXY_BIND_IP:-127.0.0.1}:${PROXY_PORT:-3128}:3128"
     environment:
+      - PROXY_PORTAL_URL=${PROXY_PORTAL_URL:-}
+      - SERVER_BASE_URL=${SERVER_BASE_URL:-}
       - PROXY_DECISION_API_URL=http://flask_api:5000/api/proxy/decision
       - PROXY_DECISION_TIMEOUT_SECONDS=${PROXY_DECISION_TIMEOUT_SECONDS:-2.5}
-      # Demo/lab default: preserve Internet access if the Decision API is
-      # temporarily unavailable. Set to closed explicitly for fail-closed use.
-      - PROXY_FAIL_MODE=${PROXY_FAIL_MODE:-open}
+      - PROXY_FAIL_MODE=${PROXY_FAIL_MODE:-closed}
+      - PROXY_ENFORCEMENT_API_URL=http://flask_api:5000/api/proxy/enforcement/check
+      - PROXY_REVOCATION_INTERVAL_SECONDS=${PROXY_REVOCATION_INTERVAL_SECONDS:-0.5}
+      - PROXY_MAX_CONNECTIONS=${PROXY_MAX_CONNECTIONS:-1000}
       - SERVICE_API_KEY=${SERVICE_API_KEY}
     volumes:
-      # CA cert + key used by Squid to sign per-site certificates (ssl-bump).
+      # CA is used only for denial pages, never to inspect allowed HTTPS.
       - ./proxy/ssl:/etc/squid/ssl_cert:ro
     depends_on:
       flask_api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "squidclient -p 3128 mgr:info >/dev/null 2>&1"]
+      test: ["CMD", "python3", "-c", "import http.client,time; from pathlib import Path; c=http.client.HTTPConnection('127.0.0.1',3130,timeout=2); c.request('GET','/squid-internal-mgr/info',headers={'Host':'127.0.0.1:3130'}); assert c.getresponse().status==200; assert time.time()-Path('/run/afferent/controller-heartbeat').stat().st_mtime < 15"]
       interval: 10s
       timeout: 4s
       retries: 12
@@ -278,9 +287,101 @@ services:
     networks:
       - hfl_network
 
+  # Mailpit-only education/warnings; no SMTP provider or n8n is required.
+  notification_worker:
+    build: ./backend
+    container_name: hfl-notification-worker
+    command: ["python", "notification_worker.py"]
+    volumes:
+      - flask_db:/app/instance
+      - type: bind
+        source: ${GOPHISH_CERT_DIR:-./secrets/gophish-pki}/afferent-lab-ca.crt
+        target: /etc/afferent-ca/gophish-ca.crt
+        read_only: true
+    environment:
+      - DB_PATH=/app/instance/human_firewall.db
+      - GOPHISH_SYNC_ENABLED=${GOPHISH_SYNC_ENABLED:-true}
+      - GOPHISH_API_KEY=${GOPHISH_API_KEY}
+      - GOPHISH_API_URL=${GOPHISH_API_URL}
+      - GOPHISH_CA_BUNDLE=${GOPHISH_CA_BUNDLE:-}
+      - SMTP_HOST=mailpit
+      - SMTP_PORT=1025
+      - SMTP_SECURITY=none
+      - SMTP_FROM_ADDRESS=${SMTP_FROM_ADDRESS:-AFFERENT Security <security@afferent.local>}
+      - SMTP_TIMEOUT_SECONDS=10
+      - EDUCATION_EMAIL_ENABLED=${EDUCATION_EMAIL_ENABLED:-true}
+      - EDUCATION_SCORE_THRESHOLD=${EDUCATION_SCORE_THRESHOLD:-60}
+      - EDUCATION_AUTO_ENABLED=${EDUCATION_AUTO_ENABLED:-false}
+      - EDUCATION_COOLDOWN_SECONDS=${EDUCATION_COOLDOWN_SECONDS:-86400}
+    depends_on:
+      flask_api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import time; from pathlib import Path; assert time.time()-Path('/tmp/afferent-mail-heartbeat').stat().st_mtime < 120"]
+      interval: 15s
+      timeout: 3s
+      retries: 8
+    restart: unless-stopped
+    networks:
+      - hfl_network
+
+  # Optional offline hostname second opinion. No public API port is published.
+  local_llm:
+    image: ollama/ollama:0.35.1
+    profiles: [llm]
+    environment:
+      - OLLAMA_NO_CLOUD=true
+      - OLLAMA_NUM_PARALLEL=1
+      - OLLAMA_MAX_LOADED_MODELS=1
+      - OLLAMA_CONTEXT_LENGTH=2048
+    gpus: all
+    volumes:
+      - local_llm_models:/root/.ollama
+      - ./ml/artifacts:/models:ro
+      - ./ml/local_llm/Modelfile:/training/Modelfile:ro
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    networks: [hfl_network]
+
+  review_worker:
+    build: ./backend
+    command: ["python", "review_worker.py"]
+    env_file: [.env.proxy.local]
+    volumes:
+      - flask_db:/app/instance
+    environment:
+      - DB_PATH=/app/instance/human_firewall.db
+      - PROXY_DB_HOST=proxy_postgres
+      - PROXY_DB_PORT=5432
+      - PROXY_DB_NAME=${PROXY_DB_NAME:-afferent_proxy}
+      - PROXY_DB_USER=${PROXY_DB_USER:-afferent_proxy_app}
+      - REDIS_HOST=proxy_redis
+      - REDIS_PORT=6379
+      - VT_API_KEY=${VT_API_KEY:-}
+      - VT_REQUESTS_PER_MINUTE=${VT_REQUESTS_PER_MINUTE:-4}
+      - LOCAL_LLM_ENABLED=${LOCAL_LLM_ENABLED:-false}
+      - LOCAL_LLM_URL=${LOCAL_LLM_URL:-http://local_llm:11434}
+      - LOCAL_LLM_MODEL=${LOCAL_LLM_MODEL:-qwen3:4b-instruct-2507-q4_K_M}
+      - LOCAL_LLM_TIMEOUT_SECONDS=${LOCAL_LLM_TIMEOUT_SECONDS:-45}
+      - LOCAL_LLM_OUTPUT_MODE=${LOCAL_LLM_OUTPUT_MODE:-json}
+    depends_on:
+      flask_api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import time; from pathlib import Path; assert time.time()-Path('/tmp/afferent-review-heartbeat').stat().st_mtime < 120"]
+      interval: 15s
+      timeout: 3s
+      retries: 8
+    restart: unless-stopped
+    networks: [hfl_network]
+
 volumes:
+  local_llm_models:
   mailpit_data:
-  n8n_data:
   gophish_data:
   flask_db:
   proxy_postgres_data:

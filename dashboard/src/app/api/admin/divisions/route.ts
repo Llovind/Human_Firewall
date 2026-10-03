@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFlaskBackend } from '@/lib/backendClient';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const res = await fetchFlaskBackend('/api/admin/divisions', { method: 'GET' });
     const data = await res.json();
@@ -9,8 +9,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: data.error || 'Gagal mengambil data divisi' }, { status: res.status });
     }
     return NextResponse.json(data);
-  } catch (error: any) {
-    return NextResponse.json({ error: 'Gagal menghubungi server backend', detail: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: 'Gagal menghubungi server backend', detail: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 });
   }
 }
 
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: data.error || 'Gagal menambah divisi' }, { status: res.status });
     }
     return NextResponse.json(data, { status: res.status });
-  } catch (error: any) {
-    return NextResponse.json({ error: 'Gagal menghubungi server backend', detail: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: 'Gagal menghubungi server backend', detail: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 });
   }
 }

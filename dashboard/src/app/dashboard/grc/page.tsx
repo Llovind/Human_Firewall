@@ -6,16 +6,17 @@ import OverviewSection from '@/components/admin/OverviewSection';
 import LeaderboardSection from '@/components/admin/LeaderboardSection';
 import EmployeeRosterSection from '@/components/admin/EmployeeRosterSection';
 import { usePolling } from '@/hooks/usePolling';
-import type { Incident, Stats, ThreatCacheEntry, AISummary, BehaviorScore, ComplianceSummary, LeaderboardResponse } from '@/components/admin/types';
+import type { Incident, Stats, ThreatCacheEntry, AISummary, BehaviorScore, ComplianceSummary, LeaderboardResponse, EmployeeAccount, Division } from '@/components/admin/types';
 import { ComplianceReadinessSection } from '@/components/admin/ComplianceReadinessSection';
 import AIIntelligenceSection from '@/components/admin/AIIntelligenceSection';
+import SecurityInboxSection from '@/components/admin/SecurityInboxSection';
 
 export default function GCDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
   const [divisiFilter, setDivisiFilter] = useState('ALL');
   const [badgeFilter, setBadgeFilter] = useState('ALL');
-  const [employees, setEmployees] = useState<any[]>([]);
-  const [divisions, setDivisions] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<EmployeeAccount[]>([]);
+  const [divisions, setDivisions] = useState<Division[]>([]);
 
   const { data: incidentData, hasUpdated: incidentUpdated } = usePolling<{ incidents: Incident[]; stats: Stats }>('/api/incident', 3000);
   const { data: cacheData, hasUpdated: cacheUpdated } = usePolling<{ cache: ThreatCacheEntry[] }>('/api/cache', 3000);
@@ -40,6 +41,7 @@ export default function GCDashboard() {
 
   return (
     <DashboardLayout role="grc" activeTab={activeTab} onTabChange={setActiveTab}>
+      {activeTab === 'inbox' && <SecurityInboxSection />}
       {activeTab === 'overview' && (
         <OverviewSection
           readOnly={true}

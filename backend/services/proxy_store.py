@@ -469,11 +469,26 @@ def upsert_verdict(verdict: dict[str, Any]) -> dict[str, Any]:
     return dict(row)
 
 
+def enforcement_verdicts(domains: list[str]) -> dict[str, dict[str, Any]]:
+    """Read committed policy without Redis staleness, scans, or traffic events."""
+    with connection() as conn:
+        rows = conn.execute(
+            """SELECT DISTINCT ON (domain) * FROM proxy_url_verdicts
+               WHERE domain = ANY(%s) AND active = TRUE
+                 AND (expires_at IS NULL OR expires_at > NOW())
+               ORDER BY domain, CASE WHEN source = 'soc' THEN 0
+                 WHEN source = 'ml' THEN 1 ELSE 2 END, updated_at DESC""",
+            (domains,),
+        ).fetchall()
+    return {row["domain"]: dict(row) for row in rows}
+
+
 def list_verdicts(limit: int = 200) -> list[dict[str, Any]]:
     with connection() as conn:
         rows = conn.execute(
             """
             SELECT * FROM proxy_url_verdicts WHERE active = TRUE
+              AND (expires_at IS NULL OR expires_at > NOW())
             ORDER BY updated_at DESC LIMIT %s
             """,
             (limit,),
@@ -552,26 +567,41 @@ def create_alert(alert: dict[str, Any]) -> dict[str, Any]:
             """
             SELECT * FROM proxy_alerts
             WHERE domain = %(domain)s AND source = %(source)s AND status = 'open'
+              AND (%(source)s != 'employee_report' OR account_id = %(account_id)s)
             ORDER BY sequence DESC LIMIT 1
             """,
             alert,
         ).fetchone()
         if existing:
-            return dict(existing)
-        row = conn.execute(
-            """
-            INSERT INTO proxy_alerts
-                (id, domain, device_id, account_id, employee_email, urgency,
-                 status, verdict, reason, confidence, source, request_id)
-            VALUES (%(id)s, %(domain)s, %(device_id)s, %(account_id)s,
-                    %(employee_email)s, %(urgency)s, 'open', %(verdict)s,
-                    %(reason)s, %(confidence)s, %(source)s, %(request_id)s)
-            RETURNING *
-            """,
-            alert,
-        ).fetchone()
+            if alert['source'] == 'ml' and (existing['verdict'], existing['reason']) != (alert['verdict'], alert['reason']):
+                # Corrections update the open prediction, never a SOC decision
+                # or historical traffic/audit. Keep the stable alert identity.
+                corrected = conn.execute('''UPDATE proxy_alerts SET urgency=%s,
+                    verdict=%s, reason=%s, confidence=%s, request_id=%s
+                    WHERE id=%s AND status='open' RETURNING *''',
+                    (alert['urgency'], alert['verdict'], alert['reason'], alert['confidence'],
+                     alert['request_id'], existing['id'])).fetchone()
+                existing = corrected or existing
+                # Publish only after the transaction commits (below).
+            else:
+                return dict(existing)
+        if existing:
+            row = existing
+        else:
+            row = conn.execute(
+                """INSERT INTO proxy_alerts
+                    (id, domain, device_id, account_id, employee_email, urgency,
+                     status, verdict, reason, confidence, source, request_id)
+                VALUES (%(id)s, %(domain)s, %(device_id)s, %(account_id)s,
+                        %(employee_email)s, %(urgency)s, 'open', %(verdict)s,
+                        %(reason)s, %(confidence)s, %(source)s, %(request_id)s)
+                ON CONFLICT (id) DO NOTHING RETURNING *""", alert).fetchone()
+        if not row:
+            # Retry after PostgreSQL committed but a downstream write failed:
+            # preserve the original (possibly already resolved) alert.
+            return dict(conn.execute('SELECT * FROM proxy_alerts WHERE id=%s', (alert['id'],)).fetchone())
     payload = dict(row)
-    publish_alert({"type": "alert.created", "alert": payload})
+    publish_alert({"type": "alert.updated" if existing else "alert.created", "alert": payload})
     return payload
 
 

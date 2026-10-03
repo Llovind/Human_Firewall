@@ -1,13 +1,15 @@
 from flask import Blueprint, request, jsonify
 import database
 import uuid
+from security import require_roles
 
 incidents_bp = Blueprint('incidents', __name__)
 
 @incidents_bp.route('/api/incidents', methods=['POST'])
+@require_roles('soc', allow_service=True)
 def create_incident():
     data = request.get_json(silent=True)
-    if not data:
+    if not isinstance(data, dict) or not data:
         return jsonify({"error": "body JSON wajib diisi"}), 400
 
     reported_url = data.get('reported_url', '')
@@ -37,22 +39,7 @@ def create_incident():
             "received": source_type
         }), 400
 
-    divisi = data.get('divisi')
-    reporter_chat_id = data.get('reporter_chat_id')
-    if reporter_chat_id:
-        conn = database.get_connection()
-        try:
-            row = conn.execute(
-                'SELECT email, divisi FROM user_history WHERE telegram_chat_id = ?',
-                (str(reporter_chat_id),)
-            ).fetchone()
-            if row and row['divisi'] and (not divisi or divisi == 'User Report'):
-                divisi = row['divisi']
-        finally:
-            conn.close()
-
-    if not divisi:
-        divisi = 'User Report'
+    divisi = data.get('divisi') or 'User Report'
 
     ticket_id = f"INC-{uuid.uuid4().hex[:8].upper()}"
 
@@ -83,21 +70,14 @@ def create_incident():
                       "ticket_id": ticket_id, "source_type": source_type,
                       "severity": severity, "source_verdict": source_verdict}
 
-    if (source_type == 'real_world_report' or source_type == 'simulation') and severity in ('medium', 'high'):
-        reporter_chat_id = data.get('reporter_chat_id')
-        # target dipakai buat dedupe poin: sama dengan target yang dipakai
-        # create_threat_report() di gamification_routes.py, biar dedupe
-        # "sudah pernah lapor X" konsisten di kedua jalur (poin & badge).
-        report_target = reported_url or data.get('file_hash') or data.get('original_filename')
-        award = database.award_points_for_report(reporter_chat_id, target=report_target)
-        if award:
-            response_body["points_awarded"] = database.POINTS_CONFIRMED_REPORT
-            response_body["reporter"] = award
+    # Employee rewards belong to the authenticated /api/reports transaction,
+    # never an administrator-supplied reporter identity or Telegram chat ID.
 
     return jsonify(response_body), 201
 
 
 @incidents_bp.route('/api/incidents/<ticket_id>', methods=['PATCH'])
+@require_roles('soc')
 def update_incident(ticket_id):
     data = request.get_json(silent=True)
     if not data or 'status' not in data:
@@ -116,6 +96,7 @@ def update_incident(ticket_id):
 
 
 @incidents_bp.route('/api/incidents', methods=['GET'])
+@require_roles('soc', 'ciso', 'phishing_admin', 'grc')
 def list_incidents():
     source_type = request.args.get('source_type')
     status = request.args.get('status')

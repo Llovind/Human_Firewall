@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { dataStore } from '@/lib/store';
-import { seedIfEmpty } from '@/lib/seed';
 import { fetchFlaskBackend } from '@/lib/backendClient';
-import type { BehaviorScore } from '@/lib/store';
+import type { BehaviorScore } from '@/components/admin/types';
 
 type LeaderboardUser = {
   points?: number;
@@ -15,6 +13,7 @@ type LeaderboardUser = {
   spot_fake_wins?: number;
   rank?: number;
   viewed_training_count?: number;
+  updated_at?: string;
 };
 
 type LeaderboardDivision = {
@@ -26,29 +25,8 @@ type LeaderboardDivision = {
 /**
  * POST /api/behavior — Receives behavior score updates from engine.
  */
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const score: BehaviorScore = {
-      userId: body.userId || `USR-${Date.now()}`,
-      userName: body.userName || 'Unknown',
-      email: body.email || '',
-      division: body.division || 'Unknown',
-      score: body.score ?? 50,
-      risk: body.risk || 'medium',
-      reason: body.reason || '',
-      lastUpdated: body.lastUpdated || new Date().toISOString(),
-      streak: body.streak ?? 0,
-      rank: body.rank ?? 0,
-      totalPoints: body.totalPoints ?? 0,
-      trainingCompleted: body.trainingCompleted ?? 0,
-      badges: body.badges || [],
-    };
-    dataStore.updateBehaviorScore(score);
-    return NextResponse.json({ success: true, userId: score.userId }, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
-  }
+export async function POST() {
+  return NextResponse.json({ error: 'Legacy webhook retired' }, { status: 410 });
 }
 
 /**
@@ -61,12 +39,14 @@ export async function GET(request: NextRequest) {
     const employeeRequest = Boolean(requestedEmail);
 
     const res = await fetchFlaskBackend('/api/admin/leaderboard', { method: 'GET' });
+    if (!res.ok) return NextResponse.json({ error: 'Leaderboard unavailable' }, { status: res.status });
     if (res.ok) {
       const data = await res.json();
       const individual: LeaderboardUser[] = Array.isArray(data.individual) ? data.individual : [];
       const byDivisi: LeaderboardDivision[] = Array.isArray(data.by_divisi) ? data.by_divisi : [];
 
       const scores: BehaviorScore[] = individual.map((u, idx: number) => {
+        const updatedAt = u.updated_at?.replace(' ', 'T') || '';
         const totalPoints = u.points || 0;
         const scoreVal = Math.max(0, Math.min(100, Math.round(totalPoints / 2.0)));
         const riskLevel = totalPoints >= 130 ? 'low' : totalPoints >= 60 ? 'medium' : 'high';
@@ -80,14 +60,14 @@ export async function GET(request: NextRequest) {
         if ((u.daily_streak ?? 0) >= 5) badgesList.push('Quiz Champion');
 
         return {
-          userId: `USR-${idx + 1}`,
+          userId: u.email || `USR-${idx + 1}`,
           userName,
           email: u.email || '',
           division: u.divisi || 'General',
           score: scoreVal,
           risk: riskLevel,
           reason: scoreVal >= 70 ? 'Konsisten menjaga kepatuhan' : scoreVal >= 40 ? 'Perlu meningkatkan kepatuhan' : 'Sering terjebak phishing simulasi',
-          lastUpdated: new Date().toISOString(),
+          lastUpdated: updatedAt && !/(Z|[+-]\d{2}:\d{2})$/.test(updatedAt) ? updatedAt + 'Z' : updatedAt,
           streak: u.streak_weeks || 0,
           dailyStreak: u.daily_streak || 0,
           rank: u.rank || idx + 1,
@@ -108,11 +88,8 @@ export async function GET(request: NextRequest) {
         by_divisi: formattedByDivisi,
       });
     }
-  } catch (err) {
-    console.warn('Flask leaderboard fetch warning, using fallback store:', err);
+  } catch {
+    return NextResponse.json({ error: 'Leaderboard unavailable; last snapshot retained' }, { status: 503 });
   }
-
-  // Fallback to local in-memory store
-  seedIfEmpty();
-  return NextResponse.json({ scores: dataStore.getBehaviorScores() });
+  return NextResponse.json({ error: 'Leaderboard unavailable' }, { status: 503 });
 }

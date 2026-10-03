@@ -6,13 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "node scripts/validate-runtime-env.mjs && next start",
-    "lint": "eslint"
+    "lint": "eslint . --max-warnings=0",
+    "test": "node scripts/test-security-report-bff.cjs && node scripts/test-proxy-decision-ui.cjs && node scripts/test-file-scan-ui.cjs"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.3.0",
     "@tailwindcss/postcss": "^4.0.0",
     "lucide-react": "^1.23.0",
-    "next": "^16.3.5",
+    "next": "16.3.8",
     "postcss": "^8.5.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -24,7 +25,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "^16.3.5",
+    "eslint-config-next": "16.3.8",
     "typescript": "^5"
   }
 }

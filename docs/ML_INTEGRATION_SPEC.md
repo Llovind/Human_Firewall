@@ -2,6 +2,16 @@
 
 Dokumen ini ditujukan untuk developer / rekan tim yang bertugas membangun modul **Machine Learning (ML)** untuk penentuan verdict domain/URL (apakah aman atau berbahaya) pada platform AFFERENT.
 
+**Update 2 Oktober 2026:** live proxy mengirim **domain saja**, dengan
+`inputScope: "domain"`, bukan path/konten HTTPS. Default memakai model lokal
+`backend/models/domain_v3` bila `ML_SCANNER_URL` kosong dan `ML_LOCAL_ENABLED=true`.
+Request ditahan sampai hasil tersedia; timeout/error ditolak sementara, sedangkan
+hasil Unknown yang benar-benar selesai tetap boleh untuk review SOC. Allowed
+HTTPS di-splice; selective TLS termination hanya untuk halaman penolakan.
+Lihat [evaluasi domain](DOMAIN_ML_EVALUATION.md) dan
+[runbook](SELECTIVE_TLS_DEMO.md). Threshold model lokal berasal dari validasi,
+bukan angka 0.85 yang digunakan sebagai guard integrasi eksternal di bawah.
+
 ---
 
 ## 1. Arsitektur & Cara Kerja Integrasi
@@ -39,6 +49,7 @@ Jika ML dibangun sebagai REST service yang siap menerima query URL real-time dar
   "eventId": "c7a8b9c0-1234-5678-90ab-cdef12345678",
   "requestId": "c7a8b9c0-1234-5678-90ab-cdef12345678",
   "domain": "contoh-phishing.com",
+  "inputScope": "domain",
   "observedAt": "2026-09-19T11:20:00.000Z"
 }
 ```
@@ -129,7 +140,8 @@ from fastapi import FastAPI, Header, HTTPException, Request
 import hmac, hashlib
 
 app = FastAPI(title="AFFERENT ML URL Scanner")
-SHARED_SECRET = "Rq8Zx3Lm7Pn2Vy6Ks9Hd4WcF"  # Samakan dengan ML_WEBHOOK_SECRET di .env.proxy.local
+import os
+SHARED_SECRET = os.environ["ML_WEBHOOK_SECRET"]
 
 @app.post("/scan")
 async def scan_domain(request: Request, x_afferent_signature: str = Header(None)):

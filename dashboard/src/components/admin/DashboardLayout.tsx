@@ -5,11 +5,12 @@ import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import Logo from '@/components/Logo';
 import ThemeToggle from '@/components/ThemeToggle';
+import AccountMenu from '@/components/AccountMenu';
 import type { AdminRole } from '@/components/admin/types';
 import { ROLE_ROUTES } from '@/components/admin/types';
 import {
   LayoutDashboard, ShieldAlert, Trophy, FileWarning, Fish,
-  Mail, Users, Brain, BarChart3, Eye, FileCheck, Shield, ExternalLink
+  Mail, Users, Brain, BarChart3, Eye, FileCheck, Shield
 } from 'lucide-react';
 import '@/app/dashboard.css';
 
@@ -19,40 +20,40 @@ const ADMIN_ROLES: AdminRole[] = ['phishing_admin', 'soc', 'grc', 'ciso'];
 
 const ROLE_TABS: Record<AdminRole, TabDef[]> = {
   phishing_admin: [
-    { id: 'gophish', label: 'Simulations', icon: <Fish size={20} /> },
-    { id: 'employees', label: 'Employees', icon: <Users size={20} /> },
-    { id: 'webmail', label: 'Webmail', icon: <Mail size={20} /> },
+    { id: 'gophish', label: 'Phishing simulations', icon: <Fish size={20} /> },
+    { id: 'employees', label: 'Accounts & divisions', icon: <Users size={20} /> },
     { id: 'leaderboard', label: 'Leaderboard', icon: <Trophy size={20} /> },
   ],
   soc: [
     { id: 'overview', label: 'Overview', icon: <LayoutDashboard size={20} /> },
-    { id: 'threats', label: 'Threats', icon: <ShieldAlert size={20} /> },
-    { id: 'policy', label: 'Policy', icon: <FileWarning size={20} /> },
-    { id: 'ai', label: 'AI Heatmap', icon: <Brain size={20} /> },
+    { id: 'inbox', label: 'Security inbox', icon: <Mail size={20} /> },
+    { id: 'threats', label: 'Traffic & policies', icon: <ShieldAlert size={20} /> },
+    { id: 'ai', label: 'Risk analysis', icon: <Brain size={20} /> },
   ],
   grc: [
     { id: 'overview', label: 'Overview', icon: <LayoutDashboard size={20} /> },
+    { id: 'inbox', label: 'Security inbox', icon: <Mail size={20} /> },
     { id: 'leaderboard', label: 'Leaderboard', icon: <Trophy size={20} /> },
     { id: 'compliance', label: 'Compliance', icon: <FileCheck size={20} /> },
-    { id: 'ai', label: 'AI Heatmap', icon: <Brain size={20} /> },
-    { id: 'employees', label: 'Employees', icon: <Users size={20} /> },
+    { id: 'ai', label: 'Risk analysis', icon: <Brain size={20} /> },
+    { id: 'employees', label: 'Accounts & divisions', icon: <Users size={20} /> },
   ],
   ciso: [
     { id: 'overview', label: 'Overview', icon: <LayoutDashboard size={20} /> },
-    { id: 'threats', label: 'Threats', icon: <ShieldAlert size={20} /> },
+    { id: 'threats', label: 'Traffic & policies', icon: <ShieldAlert size={20} /> },
     { id: 'leaderboard', label: 'Leaderboard', icon: <Trophy size={20} /> },
-    { id: 'policy', label: 'Policy', icon: <FileWarning size={20} /> },
-    { id: 'gophish', label: 'Simulations', icon: <Fish size={20} /> },
-    { id: 'employees', label: 'Employees', icon: <Users size={20} /> },
-    { id: 'ai', label: 'AI Heatmap', icon: <Brain size={20} /> },
+    { id: 'policy', label: 'Policies', icon: <FileWarning size={20} /> },
+    { id: 'gophish', label: 'Phishing simulations', icon: <Fish size={20} /> },
+    { id: 'employees', label: 'Accounts & divisions', icon: <Users size={20} /> },
+    { id: 'ai', label: 'Risk analysis', icon: <Brain size={20} /> },
   ],
 };
 
 const ROLE_LABELS: Record<AdminRole, { label: string; icon: ReactNode }> = {
-  phishing_admin: { label: 'Phishing Admin', icon: <Shield size={16} /> },
+  phishing_admin: { label: 'Administrator', icon: <Shield size={16} /> },
   soc: { label: 'SOC Analyst', icon: <Eye size={16} /> },
   grc: { label: 'GRC Specialist', icon: <FileCheck size={16} /> },
-  ciso: { label: 'CISO Executive', icon: <BarChart3 size={16} /> },
+  ciso: { label: 'CISO', icon: <BarChart3 size={16} /> },
 };
 
 interface DashboardLayoutProps {
@@ -63,12 +64,12 @@ interface DashboardLayoutProps {
 }
 
 export default function DashboardLayout({ role, activeTab, onTabChange, children }: DashboardLayoutProps) {
-  const { user, isAuthenticated, isLoading: authLoading, logout } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const [clock, setClock] = useState('');
 
   useEffect(() => {
-    const tick = () => setClock(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    const tick = () => setClock(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
@@ -93,7 +94,7 @@ export default function DashboardLayout({ role, activeTab, onTabChange, children
     return (
       <div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <Logo size={52} variant="mark" logoAnimation="loading" />
-        <p className="font-body">Loading Command Center...</p>
+        <p className="font-body">Loading dashboard…</p>
       </div>
     );
   }
@@ -114,7 +115,6 @@ export default function DashboardLayout({ role, activeTab, onTabChange, children
     <div className="app-shell font-body">
       {/* ── Sidebar ─────────────────────────────────────── */}
       <aside className="sidebar-nav">
-        <div className="radar-sweep-bg" />
 
         {/* Logo + Wordmark */}
         <div className="sidebar-nav-logo">
@@ -123,7 +123,7 @@ export default function DashboardLayout({ role, activeTab, onTabChange, children
         </div>
 
         {/* Tab Navigation */}
-        <nav className="sidebar-menu" aria-label="Main navigation" style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+        <nav className="sidebar-menu" aria-label="Main navigation">
           {tabs.map(tab => (
             <button
               key={tab.id}
@@ -133,7 +133,6 @@ export default function DashboardLayout({ role, activeTab, onTabChange, children
             >
               {tab.icon}
               <span>{tab.label}</span>
-              {tab.id === 'webmail' && <ExternalLink size={12} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
             </button>
           ))}
         </nav>
@@ -156,50 +155,18 @@ export default function DashboardLayout({ role, activeTab, onTabChange, children
       {/* ── Main Content ────────────────────────────────── */}
       <div className="app-shell-main">
         {/* Topbar */}
-        <header className="topbar-slim" style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          background: 'var(--bg-surface)',
-          borderRadius: '16px',
-          border: '1px solid var(--border)',
-          boxShadow: 'var(--shadow-md)',
-          padding: '16px 24px',
-          marginBottom: '24px'
-        }}>
-          <div>
-            <h1 className="font-heading" style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.2px' }}>
-              {role === 'ciso' ? 'Executive Overview: Read-Only' : 'Security Culture & Threat Triage Platform'}
-            </h1>
+        <header className="topbar-slim">
+          <div className="workspace-heading">
+            <small>{roleInfo.label}</small>
+            <h1>{tabs.find(tab => tab.id === activeTab)?.label || 'Dashboard'}</h1>
           </div>
           <div className="topbar-right" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div className="live-indicator">
-              <span className="live-dot" />
-              <span>Live</span>
-            </div>
             <span className="clock font-mono-data">{clock}</span>
             <ThemeToggle />
             {role === 'ciso' && (
-              <span style={{
-                fontSize: '11px', fontWeight: 700, color: 'var(--text-warning)',
-                background: 'var(--bg-warning)', border: '1px solid var(--border-warning)',
-                padding: '4px 10px', borderRadius: '6px', letterSpacing: '0.5px',
-              }}>
-                READ-ONLY
-              </span>
+              <span className="workspace-readonly">Read-only</span>
             )}
-            <div
-              className="user-badge"
-              onClick={logout}
-              title="Click to log out"
-              style={{
-                border: '1px solid var(--border-danger)', background: 'var(--bg-danger)',
-                cursor: 'pointer', padding: '6px 14px', borderRadius: '8px',
-                display: 'flex', alignItems: 'center', gap: '8px',
-              }}
-            >
-              <span className="user-name font-body" style={{ color: 'var(--text-danger)', fontSize: '13px', fontWeight: 700 }}>Logout</span>
-            </div>
+            <AccountMenu />
           </div>
         </header>
 

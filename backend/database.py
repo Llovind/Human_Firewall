@@ -48,7 +48,7 @@ def get_connection():
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
         os.makedirs(db_dir, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=15)
     conn.row_factory = sqlite3.Row  # supaya hasil query bisa diakses
                                       # seperti dict (row["kolom"])
     return conn
@@ -72,6 +72,85 @@ def init_db():
     cursor = conn.cursor()
 
     try:
+        cursor.execute('''CREATE TABLE IF NOT EXISTS employee_url_reports (
+            id TEXT PRIMARY KEY, account_id INTEGER NOT NULL, email TEXT NOT NULL,
+            url TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+            verdict TEXT NOT NULL, analysis_json TEXT NOT NULL, soc_alert_id TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(account_id, url)
+        )''')
+        for definition in ("report_type TEXT NOT NULL DEFAULT 'url'", 'file_name TEXT',
+                           'file_sha256 TEXT', 'file_size INTEGER'):
+            if not _column_exists(cursor, 'employee_url_reports', definition.split()[0]):
+                cursor.execute(f'ALTER TABLE employee_url_reports ADD COLUMN {definition}')
+        # Bounded PDF quarantine: never served or rendered; removed after VT
+        # submission/completion or expiry. The worker survives browser disconnects.
+        cursor.execute('''CREATE TABLE IF NOT EXISTS pdf_analysis_jobs (
+            report_id TEXT PRIMARY KEY, payload BLOB, analysis_id TEXT,
+            attempts INTEGER NOT NULL DEFAULT 0, available_at INTEGER NOT NULL DEFAULT 0,
+            lease_until INTEGER NOT NULL DEFAULT 0, expires_at INTEGER NOT NULL,
+            done INTEGER NOT NULL DEFAULT 0, request_id TEXT NOT NULL,
+            consent_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )''')
+        # File checks are private employee scans, not SOC reports. Keep the
+        # legacy report metadata, but move its queued bytes into this pipeline.
+        cursor.execute('''CREATE TABLE IF NOT EXISTS employee_file_scans (
+            id TEXT PRIMARY KEY, account_id INTEGER NOT NULL,
+            file_name TEXT NOT NULL, file_sha256 TEXT NOT NULL, file_size INTEGER NOT NULL,
+            verdict TEXT NOT NULL, analysis_json TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(account_id, file_sha256)
+        )''')
+        cursor.execute('''CREATE TABLE IF NOT EXISTS file_analysis_jobs (
+            scan_id TEXT PRIMARY KEY, payload BLOB, analysis_id TEXT,
+            attempts INTEGER NOT NULL DEFAULT 0, available_at INTEGER NOT NULL DEFAULT 0,
+            lease_until INTEGER NOT NULL DEFAULT 0, expires_at INTEGER NOT NULL,
+            done INTEGER NOT NULL DEFAULT 0, request_id TEXT NOT NULL,
+            consent_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )''')
+        cursor.execute('''INSERT OR IGNORE INTO employee_file_scans
+            (id,account_id,file_name,file_sha256,file_size,verdict,analysis_json,created_at)
+            SELECT id,account_id,file_name,file_sha256,file_size,verdict,analysis_json,created_at
+            FROM employee_url_reports WHERE report_type='pdf'
+                AND file_name IS NOT NULL AND file_sha256 IS NOT NULL AND file_size IS NOT NULL''')
+        cursor.execute('''INSERT OR IGNORE INTO file_analysis_jobs
+            (scan_id,payload,analysis_id,attempts,available_at,lease_until,expires_at,done,request_id,consent_at)
+            SELECT report_id,payload,analysis_id,attempts,available_at,lease_until,expires_at,done,request_id,consent_at
+            FROM pdf_analysis_jobs WHERE report_id IN (SELECT id FROM employee_file_scans)''')
+        cursor.execute('''UPDATE pdf_analysis_jobs SET payload=NULL,done=1
+            WHERE report_id IN (SELECT id FROM employee_file_scans)''')
+        cursor.execute('''CREATE TABLE IF NOT EXISTS provider_request_budget (
+            provider TEXT NOT NULL, minute INTEGER NOT NULL, requests INTEGER NOT NULL,
+            PRIMARY KEY(provider, minute)
+        )''')
+        cursor.execute('''CREATE TABLE IF NOT EXISTS local_llm_reviews (
+            id TEXT PRIMARY KEY, domain TEXT NOT NULL, model TEXT NOT NULL,
+            actor_email TEXT NOT NULL, request_id TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'queued', result_json TEXT,
+            lease_until INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )''')
+        cursor.execute('''CREATE TABLE IF NOT EXISTS education_deliveries (
+            email TEXT PRIMARY KEY, sent_at TEXT, lease_until TEXT
+        )''')
+        cursor.execute('''CREATE TABLE IF NOT EXISTS notification_outbox (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, dedupe_key TEXT NOT NULL UNIQUE,
+            recipient TEXT NOT NULL, subject TEXT NOT NULL, text_body TEXT NOT NULL,
+            attempts INTEGER NOT NULL DEFAULT 0, sent_at TEXT, last_error TEXT,
+            available_at INTEGER NOT NULL DEFAULT 0, lease_until INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )''')
+        cursor.execute('''CREATE TABLE IF NOT EXISTS notification_audit (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, actor_email TEXT NOT NULL,
+            actor_role TEXT NOT NULL, recipient TEXT NOT NULL, score INTEGER NOT NULL,
+            reason TEXT NOT NULL, request_id TEXT NOT NULL UNIQUE,
+            outbox_id INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )''')
+        cursor.execute('''CREATE TRIGGER IF NOT EXISTS notification_audit_no_update
+            BEFORE UPDATE ON notification_audit BEGIN SELECT RAISE(ABORT, 'append-only audit'); END''')
+        cursor.execute('''CREATE TRIGGER IF NOT EXISTS notification_audit_no_delete
+            BEFORE DELETE ON notification_audit BEGIN SELECT RAISE(ABORT, 'append-only audit'); END''')
         # Tabel user_history — dipakai Flow A (simulasi GoPhish) untuk
         # menentukan tier (first-timer / repeat / chronic clicker).
         # Satu baris per kombinasi email+divisi dummy.
@@ -456,6 +535,9 @@ def init_db():
             )
         ''')
 
+        cursor.execute('''CREATE TABLE IF NOT EXISTS gophish_event_receipts (
+            receipt TEXT PRIMARY KEY, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )''')
         # Tabel simulation_campaigns — pelacakan kampanye simulasi phishing
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS simulation_campaigns (
@@ -752,14 +834,14 @@ def classify_badge(points: int) -> str:
         return "Vulnerable"
 
 
-def adjust_points(email: str, divisi: str, delta: int) -> dict:
+def adjust_points(email: str, divisi: str, delta: int, *, connection=None) -> dict:
     """Ubah poin user sebanyak delta (boleh negatif), clamp ke rentang
     valid, lalu re-klasifikasi badge. Upsert user_history kalau baris
     belum ada (pola sama seperti INSERT OR IGNORE di record_event),
     supaya fungsi ini aman dipanggil independen dari record_event.
     Return dict berisi points & badge terbaru, supaya caller (route
     handler) bisa langsung kirim balik ke response tanpa query ulang."""
-    conn = get_connection()
+    conn = connection or get_connection()
     cursor = conn.cursor()
     try:
         cursor.execute('''
@@ -780,13 +862,15 @@ def adjust_points(email: str, divisi: str, delta: int) -> dict:
             WHERE email = ?
         ''', (new_points, new_badge, email))
 
-        conn.commit()
+        if connection is None:
+            conn.commit()
         return {"email": email, "points": new_points, "badge": new_badge}
     except Exception:
         conn.rollback()
         raise
     finally:
-        conn.close()
+        if connection is None:
+            conn.close()
 
 
 def is_target_already_reported(email: str, target: str) -> bool:
@@ -855,7 +939,7 @@ def get_daily_threat_reward_count(email: str, wib_date: str = None) -> int:
         conn.close()
 
 
-def award_threat_reward(email: str, target: str, verdict: str, points: int = POINTS_THREAT_SCAN_REWARD) -> dict:
+def award_threat_reward(email: str, target: str, verdict: str, points: int = POINTS_THREAT_SCAN_REWARD, *, connection=None) -> dict:
     """Beri reward poin reputasi untuk scan/laporan ancaman dengan aturan:
     1. Hanya diberikan jika verdict adalah 'suspicious' atau 'malicious'.
     2. Dedupe per (email, target) — target yang sama tidak bisa di-farm berulang kali.
@@ -873,19 +957,17 @@ def award_threat_reward(email: str, target: str, verdict: str, points: int = POI
             "daily_cap": DAILY_REWARD_CAP,
         }
 
-    # Dedupe check (sudah dilaporkan di threat_reports atau sudah direward di threat_rewards)
-    if is_target_already_reported(email, target) or is_target_already_rewarded(email, target):
-        return {
-            "awarded": False,
-            "points": 0,
-            "reason": "Target ancaman ini sudah pernah dilaporkan/diklaim sebelumnya",
-            "daily_cap": DAILY_REWARD_CAP,
-        }
-
     wib_date = get_current_wib_date()
-    conn = get_connection()
+    conn = connection or get_connection()
     cursor = conn.cursor()
     try:
+        if connection is None:
+            conn.execute("BEGIN IMMEDIATE")
+        duplicate = conn.execute('''SELECT 1 FROM threat_rewards WHERE email=? AND target=?
+            UNION ALL SELECT 1 FROM threat_reports WHERE email=? AND target=?
+            AND verdict IN ('malicious', 'suspicious') LIMIT 1''', (email, target, email, target)).fetchone()
+        if duplicate:
+            return {"awarded": False, "points": 0, "reason": "Target sudah pernah direward", "daily_cap": DAILY_REWARD_CAP}
         cursor.execute('''
             SELECT COUNT(*) as cnt FROM threat_rewards
             WHERE email = ? AND wib_date = ?
@@ -913,10 +995,10 @@ def award_threat_reward(email: str, target: str, verdict: str, points: int = POI
             VALUES (?, ?, ?, ?, ?)
         ''', (email, target, verdict_norm, points, wib_date))
 
-        conn.commit()
-
         # Adjust user reputation points and re-classify badge
-        updated = adjust_points(email, divisi, points)
+        updated = adjust_points(email, divisi, points, connection=conn)
+        if connection is None:
+            conn.commit()
 
         return {
             "awarded": True,
@@ -931,7 +1013,8 @@ def award_threat_reward(email: str, target: str, verdict: str, points: int = POI
         conn.rollback()
         raise
     finally:
-        conn.close()
+        if connection is None:
+            conn.close()
 
 
 def award_points_for_report(telegram_chat_id: str, target: str = None, points: int = POINTS_CONFIRMED_REPORT):
@@ -994,13 +1077,13 @@ def get_leaderboard():
         rows = conn.execute('''
             SELECT email, divisi, points, badge, click_count,
                    viewed_training_count, skipped_training_count,
-                   reports_count_malicious, daily_streak, last_clicked,
+                   reports_count_malicious, daily_streak, last_clicked, updated_at,
                    (SELECT count(*) FROM events 
                     WHERE events.email = user_history.email 
                       AND events.event_type = 'spot_the_fake_correct') as spot_fake_wins
             FROM user_history
             WHERE divisi IS NOT NULL
-            ORDER BY points DESC, viewed_training_count DESC
+            ORDER BY points DESC, viewed_training_count DESC, email ASC
         ''').fetchall()
 
         leaderboard = [dict(row) for row in rows]
@@ -1039,8 +1122,7 @@ def get_leaderboard():
                 {"divisi": d, "avg_points": round(sum(pts) / len(pts), 1), "member_count": len(pts)}
                 for d, pts in divisi_totals.items()
             ],
-            key=lambda x: x["avg_points"],
-            reverse=True
+            key=lambda x: (-x["avg_points"], x["divisi"])
         )
 
         return {"individual": leaderboard, "by_divisi": divisi_rankings}
@@ -1054,7 +1136,7 @@ def get_leaderboard():
 
 def create_threat_report(email: str, telegram_user_id: str, type_: str, target: str,
                          verdict: str, severity_tier: str, source_engine: str,
-                         raw_scores: dict = None, submitted_at: str = None) -> dict:
+                         raw_scores: dict = None, submitted_at: str = None, *, connection=None) -> dict:
     """
     Simpan laporan threat dari Flow B, handle dedupe, increment counter,
     dan evaluasi badge. Return dict berisi report_id, counted status,
@@ -1071,7 +1153,7 @@ def create_threat_report(email: str, telegram_user_id: str, type_: str, target: 
     if source_engine not in ("vt", "urlscan", "both"):
         raise ValueError(f"source_engine tidak valid: {source_engine}")
     
-    conn = get_connection()
+    conn = connection or get_connection()
     cursor = conn.cursor()
     
     try:
@@ -1084,7 +1166,9 @@ def create_threat_report(email: str, telegram_user_id: str, type_: str, target: 
         
         # 2. Cek dedupe: apakah (email, target) sudah pernah dilaporkan dengan verdict malicious/suspicious?
         #    (pakai helper yang sama dengan award_points_for_report, biar dua-duanya selalu sinkron)
-        is_duplicate = is_target_already_reported(email, target)
+        if connection is None:
+            conn.execute("BEGIN IMMEDIATE")
+        is_duplicate = conn.execute("SELECT 1 FROM threat_reports WHERE email=? AND target=? AND verdict IN ('malicious','suspicious') LIMIT 1", (email, target)).fetchone() is not None
         report_id = f"rpt_{uuid.uuid4().hex[:6]}"
         submitted_at_val = submitted_at or datetime.utcnow().isoformat()
         raw_scores_json = json.dumps(raw_scores) if raw_scores else None
@@ -1124,7 +1208,8 @@ def create_threat_report(email: str, telegram_user_id: str, type_: str, target: 
                 WHERE email = ?
             ''', (email,))
         
-        conn.commit()
+        if connection is None:
+            conn.commit()
         
         # 6. Fetch employee stats terbaru buat return
         emp_final = cursor.execute(
@@ -1165,7 +1250,8 @@ def create_threat_report(email: str, telegram_user_id: str, type_: str, target: 
         conn.rollback()
         raise
     finally:
-        conn.close()
+        if connection is None:
+            conn.close()
 
 
 def get_reports_summary(email: str) -> dict:
@@ -1408,7 +1494,7 @@ def classify_tier(click_count: int) -> str:
 
 
 def record_event(email: str, divisi: str, event_type: str,
-                  tier_assigned: str = None, campaign_id: str = None):
+                  tier_assigned: str = None, campaign_id: str = None, source_receipt: str = None):
     """Simpan event mentah ke tabel events, DAN update agregat di
     user_history. Dua tabel ini di-update dalam satu transaksi supaya
     konsisten — kalau salah satu gagal, keduanya di-rollback.
@@ -1420,6 +1506,10 @@ def record_event(email: str, divisi: str, event_type: str,
     cursor = conn.cursor()
 
     try:
+        if source_receipt:
+            cursor.execute('INSERT OR IGNORE INTO gophish_event_receipts (receipt) VALUES (?)', (source_receipt,))
+            if cursor.rowcount == 0:
+                return False
         cursor.execute('''
             INSERT INTO events (email, divisi, event_type, tier_assigned, campaign_id)
             VALUES (?, ?, ?, ?, ?)
@@ -2580,7 +2670,7 @@ def save_threat_cache(
                 else 0
             ),
             json.dumps(analysis, default=str),
-            expires_at.isoformat()
+            expires_at
         ))
         conn.commit()
     finally:
@@ -2616,9 +2706,11 @@ def get_unified_threat_feed(indicator_type: str = None, action: str = None, limi
             sev = (row.get("severity") or "medium").lower()
             
             # Map action
-            if verdict == "malicious" or sev in ("high", "critical"):
+            if row.get('source') == 'SOC Manual Block':
                 act = "block"
-            elif verdict == "suspicious" or sev == "medium":
+            elif row.get('source') == 'SOC Whitelist':
+                act = "allow"
+            elif verdict in {'malicious', 'suspicious', 'unknown'}:
                 act = "warning"
             else:
                 act = "allow"
@@ -2660,7 +2752,7 @@ def get_unified_threat_feed(indicator_type: str = None, action: str = None, limi
                 row = dict(r)
                 verd = (row.get("verdict") or "suspicious").lower()
                 sev = (row.get("severity_tier") or "medium").lower()
-                act = "block" if verd == "malicious" else "warning" if verd == "suspicious" else "allow"
+                act = 'warning' if verd in {'malicious', 'suspicious', 'unknown'} else 'allow'
                 ttype = (row.get("type") or "PHISHING_REPORT").upper()
                 feed_items.append({
                     "id": f"TR-{row.get('id')}",
@@ -2668,7 +2760,7 @@ def get_unified_threat_feed(indicator_type: str = None, action: str = None, limi
                     "indicator": row.get("target"),
                     "threatType": ttype,
                     "score": 85 if verd == "malicious" else 55 if verd == "suspicious" else 15,
-                    "source": f"User Report ({row.get('email')})" if row.get("email") else "Telegram Report",
+                    "source": f"User Report ({row.get('email')})" if row.get("email") else "Historical Report",
                     "action": act,
                     "verdict": verd,
                     "severity": sev,
@@ -2907,8 +2999,7 @@ def get_policy_decisions(limit: int = 50):
 
 def get_ai_threat_summaries(limit: int = 5):
     """
-    Synthesizes real-time AI Threat Intelligence summaries from SQLite state:
-    Aggregates indicators (threat_cache), incident tickets (incidents), and user risk trends (user_history).
+    Deterministic SQLite telemetry snapshot, not an LLM or enforcement claim.
     """
     conn = get_connection()
     try:
@@ -2940,28 +3031,35 @@ def get_ai_threat_summaries(limit: int = 5):
             WHERE is_active = 1
         """).fetchall()
         user_list = [dict(u) for u in users]
-        vulnerable_users = [u for u in user_list if (u.get("badge") or "").lower() == "vulnerable"]
+        threshold = int(os.environ.get('EDUCATION_SCORE_THRESHOLD', '60'))
+        eligible = conn.execute("""SELECT count(*) FROM employee_accounts a
+            JOIN user_history u ON lower(u.email)=lower(a.email)
+            WHERE a.is_active=1 AND a.role='employee' AND u.points < ?""", (threshold,)).fetchone()[0]
 
         summaries = []
-        now_iso = datetime.utcnow().isoformat()
+        # Timestamp describes source changes, never the time of a polling request.
+        stamp = conn.execute("""SELECT MAX(datetime(ts)) FROM (
+            SELECT MAX(updated_at) ts FROM user_history UNION ALL
+            SELECT MAX(created_at) FROM threat_cache UNION ALL
+            SELECT MAX(created_at) FROM incidents UNION ALL
+            SELECT MAX(closed_at) FROM incidents UNION ALL
+            SELECT MAX(updated_at) FROM employee_accounts)""").fetchone()[0]
+        now_iso = str(stamp or '1970-01-01 00:00:00').replace(' ', 'T').rstrip('Z') + 'Z'
 
         # Synthesis 1: Active Threat Vectors & IOC Intelligence
         related_tickets = [i.get("ticket_id") for i in open_inc[:5] if i.get("ticket_id")]
         malicious_count = len(malicious_threats)
-        ioc_sample = malicious_threats[0]["indicator"] if malicious_threats else "credential-harvesting vectors"
 
         summaries.append({
             "id": "SUM-001",
             "timestamp": now_iso,
-            "title": "Threat Vector Synthesis & IOC Intelligence Surge",
-            "summary": f"Afferent Threat Intelligence identified {len(threat_list)} active indicators across external gateways and user reports. {malicious_count} indicators flagged with high-confidence malicious verdicts, including active phishing and credential harvesting campaigns targeting {ioc_sample}.",
+            "title": "Reported Indicator Snapshot",
+            "summary": f"Dari {len(threat_list)} indikator terbaru di cache laporan, {malicious_count} berlabel malicious. Label provider/model adalah bukti untuk ditinjau, bukan bukti kompromi atau tindakan blocking SOC.",
             "threatLevel": "critical" if malicious_count >= 3 or len(high_sev) >= 3 else "high" if malicious_count > 0 else "medium",
             "recommendations": [
-                "Enforce immediate DNS sinkholing and IP blacklist synchronization across edge firewalls.",
-                "Review open high-severity tickets in Incident Triage and notify affected division leads.",
-                "Trigger automated GoPhish micro-simulations on newly observed phishing lures."
+                "Tinjau bukti dan keputusan SOC di inbox serta Live Security Alerts."
             ],
-            "relatedIncidents": related_tickets if related_tickets else ["INC-001", "INC-003"]
+            "relatedIncidents": related_tickets
         })
 
         # Synthesis 2: Human Risk & Division Exposure Analysis
@@ -2970,19 +3068,17 @@ def get_ai_threat_summaries(limit: int = 5):
             d = u.get("divisi") or "General"
             div_clicks[d] = div_clicks.get(d, 0) + (u.get("click_count") or 0)
         
-        top_at_risk_div = max(div_clicks.items(), key=lambda x: x[1])[0] if div_clicks else "Operations"
-        vuln_count = len(vulnerable_users)
+        top_at_risk_div = sorted(div_clicks, key=lambda d: (-div_clicks[d], d))[0] if div_clicks else "Belum ada data"
+        vuln_count = eligible
 
         summaries.append({
             "id": "SUM-002",
             "timestamp": now_iso,
-            "title": "Human Firewall Risk Profile & Departmental Exposure",
-            "summary": f"Behavioral correlation detected {vuln_count} employees in the Vulnerable risk tier across the organization. The '{top_at_risk_div}' division exhibits elevated phishing susceptibility and skipped training telemetry.",
+            "title": "Employee Learning Baseline",
+            "summary": f"{vuln_count} akun employee aktif berada di bawah baseline {threshold}/200 poin. Klik simulasi tersimpan terbanyak: {top_at_risk_div} ({div_clicks.get(top_at_risk_div, 0)} klik). Angka ini bukan prediksi kompromi.",
             "threatLevel": "high" if vuln_count > 5 else "medium",
             "recommendations": [
-                f"Schedule targeted interactive training revival modules for {top_at_risk_div} personnel.",
-                "Deploy step-up 2FA and adaptive policy mandates for all employees with Vulnerable badge.",
-                "Reward top Sentinel tier performers to drive gamified security culture."
+                "SOC/GRC dapat meninjau penerima dan mengirim warning edukasi dari inbox."
             ],
             "relatedIncidents": [i.get("ticket_id") for i in inc_list if i.get("divisi") == top_at_risk_div][:3]
         })
@@ -2991,13 +3087,11 @@ def get_ai_threat_summaries(limit: int = 5):
         summaries.append({
             "id": "SUM-003",
             "timestamp": now_iso,
-            "title": "2D Adaptive Policy Convergence & Gateway Health",
-            "summary": "Adaptive Policy Decision Engine has converged threat severity with user risk profiles. Automated block actions successfully mitigated high-risk outbound sessions, preventing credential exfiltration.",
+            "title": "Incident Review Snapshot",
+            "summary": f"Dari {len(inc_list)} tiket terbaru, {len(open_inc)} belum ditutup dan {len(inc_list) - len(open_inc)} sudah ditutup. Ringkasan ini tidak menyatakan sesi proxy telah diblokir; periksa audit keputusan untuk bukti enforcement.",
             "threatLevel": "low",
             "recommendations": [
-                "Audit threshold compliance weekly with GRC officers.",
-                "Ensure SOC analysts monitor policy escalation overrides.",
-                "Maintain real-time synchronization between Threat Cache and DLP proxies."
+                "Validasi hasil uji proxy dan audit Block/Allow, bukan hanya label indikator."
             ],
             "relatedIncidents": []
         })
@@ -3181,6 +3275,25 @@ def revive_quiz_streak(email: str) -> dict:
         raise
     finally:
         conn.close()
+
+
+def sync_gophish_events(campaign):
+    """Trusted API telemetry; one scoring event per recipient/type/campaign, atomic dedupe."""
+    event_types = {'Email Sent': 'email_sent', 'Email Opened': 'email_opened',
+                   'Clicked Link': 'clicked_link', 'Submitted Data': 'submitted_data'}
+    conn = get_connection()
+    try:
+        employees = {r['email'].lower(): dict(r) for r in conn.execute('SELECT email,divisi FROM user_history')}
+    finally:
+        conn.close()
+    for event in campaign.get('timeline') or []:
+        kind = event_types.get(event.get('message'))
+        email = str(event.get('email', '')).lower()
+        if kind and email in employees:
+            campaign_ref = f"gophish:{campaign['id']}"
+            receipt = f'{campaign_ref}:{email}:{kind}'
+            record_event(employees[email]['email'], employees[email]['divisi'], kind,
+                         campaign_id=campaign_ref, source_receipt=receipt)
 
 
 def create_simulation_campaign(name: str, template_name: str = "Corporate Alert", page_name: str = "Login Portal", url: str = None, target_emails: list = None, subject: str = None, html_content: str = None):

@@ -29,7 +29,7 @@ export default function EmployeeRosterSection({
       {/* Top Horizontal Filter Bar */}
       <div className="glass-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderRadius: '12px', width: '100%', gap: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
-          <Sliders size={16} /> Directory Filters
+          <Sliders size={16} /> Account filters
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
           <select 
@@ -38,7 +38,7 @@ export default function EmployeeRosterSection({
             onChange={(e) => setEmployeeDivisionFilter(e.target.value)}
             style={{ padding: '6px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', outline: 'none', fontSize: '12px' }}
           >
-            <option value="ALL">ALL DIVISIONS</option>
+            <option value="ALL">All divisions</option>
             {divisions.map((div) => (
               <option key={div.name} value={div.name}>{div.name.toUpperCase()}</option>
             ))}
@@ -50,26 +50,26 @@ export default function EmployeeRosterSection({
       <div className="panel glass-card" style={{ marginBottom: 0 }}>
         <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h2 className="panel-title font-heading"><Users size={20} style={{ marginRight: '8px', verticalAlign: 'text-bottom' }} /> Employee Directory</h2>
+            <h2 className="panel-title font-heading"><Users size={20} style={{ marginRight: '8px', verticalAlign: 'text-bottom' }} /> Employee accounts</h2>
             <p className="panel-desc" style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '4px' }}>
-              Add, modify, and manage organizational employee security rosters.
+              Manage team access and divisions.
             </p>
           </div>
           {!readOnly && (
             <div style={{ display: 'flex', gap: '12px' }}>
               <button
-                className="btn-action font-body"
+                className="btn font-body"
                 onClick={onOpenAddDivision}
                 style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', color: 'var(--text-primary)', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}
               >
-                <Plus size={16} /> Add Division
+                <Plus size={16} /> Add division
               </button>
               <button
-                className="btn-action font-body"
+                className="btn font-body"
                 onClick={() => onOpenAddEmployee()}
                 style={{ background: 'var(--accent)', border: 'none', color: 'white', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}
               >
-                <Plus size={16} /> Add Employee
+                <Plus size={16} /> Add account
               </button>
             </div>
           )}
@@ -80,8 +80,8 @@ export default function EmployeeRosterSection({
             <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
             <input
               type="search"
-              aria-label="Search employee directory"
-              placeholder="Search by email or access role..."
+              aria-label="Search employee accounts"
+              placeholder="Search email or role…"
               value={employeeSearchText}
               onChange={(e) => setEmployeeSearchText(e.target.value)}
               className="font-body"
@@ -96,7 +96,7 @@ export default function EmployeeRosterSection({
               <tr>
                 <th>Email</th>
                 <th>Division</th>
-                <th>Access Role</th>
+                <th>Role</th>
                 <th style={{ textAlign: 'center' }}>Login</th>
                 <th style={{ textAlign: 'center' }}>Points</th>
                 <th style={{ textAlign: 'center' }}>Status</th>
@@ -115,7 +115,7 @@ export default function EmployeeRosterSection({
                   return (
                     <tr>
                       <td colSpan={readOnly ? 6 : 7} style={{ textAlign: 'center', padding: '34px', color: 'var(--text-muted)' }}>
-                        No employees found matching the query.
+                        No matching accounts.
                       </td>
                     </tr>
                   );
@@ -131,7 +131,7 @@ export default function EmployeeRosterSection({
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       <span className={`badge ${emp.has_account ? 'badge-allow' : 'badge-warning'} font-body`}>
-                        {emp.has_account ? 'READY' : 'NO ACCOUNT'}
+                        {emp.has_account ? 'Ready' : 'No account'}
                       </span>
                     </td>
                     <td className="font-mono-data" style={{ textAlign: 'center', fontWeight: 'bold', color: emp.points >= 130 ? 'var(--text-success)' : emp.points >= 60 ? 'var(--accent)' : 'var(--text-danger)' }}>
@@ -139,7 +139,7 @@ export default function EmployeeRosterSection({
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       <span className={`badge ${emp.is_active === 1 ? 'badge-allow' : 'badge-danger'} font-body`}>
-                        {emp.is_active === 1 ? 'ACTIVE' : 'DISABLED'}
+                        {emp.is_active === 1 ? 'Active' : 'Inactive'}
                       </span>
                     </td>
                     {!readOnly && (

@@ -65,14 +65,14 @@ export default function AuthPage() {
         body: JSON.stringify({ email: email.trim(), password }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Sign in failed');
+      if (!response.ok) throw new Error(data.error || 'Could not sign in. Check your email and password.');
       setChallengeId(data.challengeId);
       setExpiresIn(Number(data.expiresIn || 300));
       setResendIn(Number(data.resendCooldown || 60));
       setPassword('');
       setStep('otp');
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Sign in failed');
+      setError(caught instanceof Error ? caught.message : 'Could not sign in. Check your email and password.');
     } finally {
       setIsSubmitting(false);
     }
@@ -81,7 +81,7 @@ export default function AuthPage() {
   async function handleOtp(event: FormEvent) {
     event.preventDefault();
     if (otp.length !== 6) {
-      setError('Enter a six-digit verification code.');
+      setError('Enter the 6-digit code.');
       return;
     }
     setError('');
@@ -93,7 +93,7 @@ export default function AuthPage() {
         body: JSON.stringify({ challengeId, otp }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'OTP verification failed');
+      if (!response.ok) throw new Error(data.error || 'Invalid code. Please try again.');
       setStep('success');
       const authenticatedUser = await refreshSession();
       window.setTimeout(() => {
@@ -101,7 +101,7 @@ export default function AuthPage() {
       }, 700);
     } catch (caught) {
       setOtp('');
-      setError(caught instanceof Error ? caught.message : 'OTP verification failed');
+      setError(caught instanceof Error ? caught.message : 'Invalid code. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -118,12 +118,12 @@ export default function AuthPage() {
         body: JSON.stringify({ challengeId }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to resend OTP');
+      if (!response.ok) throw new Error(data.error || 'Could not resend the code.');
       setExpiresIn(Number(data.expiresIn || 300));
       setResendIn(Number(data.resendCooldown || 60));
       setOtp('');
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Failed to resend OTP');
+      setError(caught instanceof Error ? caught.message : 'Could not resend the code.');
     } finally {
       setIsSubmitting(false);
     }
@@ -137,21 +137,21 @@ export default function AuthPage() {
           <Logo variant="mark" size={48} />
           <div>
             <span>AFFERENT</span>
-            <small>Human-Centric Telemetry Security</small>
+            <small>Team security, in one place</small>
           </div>
         </div>
 
         <div className="login-story-copy">
           <div className="login-eyebrow-wrap">
-            <span className="login-eyebrow"><Radar size={15} /> Security awareness, made observable</span>
+            <span className="login-eyebrow"><Radar size={15} /> Know the risk. Take action.</span>
           </div>
-          <h1>Build security decisions from real human behavior.</h1>
+          <h1>Security starts with your team.</h1>
           <p>
-            One workspace for phishing simulation, employee telemetry, and SOC response, built for teams that need context, not just alerts.
+            Build awareness, monitor traffic, and respond to threats.
           </p>
           <div className="login-signal-row">
-            <div><ShieldCheck size={18} /><span><strong>Protected</strong><small>OTP & session controls</small></span></div>
-            <div><Radar size={18} /><span><strong>Observable</strong><small>Human-risk telemetry</small></span></div>
+            <div><ShieldCheck size={18} /><span><strong>Verified access</strong><small>Email verification</small></span></div>
+            <div><Radar size={18} /><span><strong>Risk visibility</strong><small>Training & SOC response</small></span></div>
           </div>
         </div>
       </section>
@@ -163,24 +163,24 @@ export default function AuthPage() {
           <div className="login-progress" aria-label="Authentication steps">
             <div className={`login-step ${step === 'credentials' ? 'active' : 'completed'}`}>
               <span className={`login-step-circle ${step === 'credentials' ? 'active' : 'completed'}`}>1</span>
-              <span className="login-step-label">Credentials</span>
+              <span className="login-step-label">Account</span>
             </div>
             <i className={`login-step-connector ${step !== 'credentials' ? 'active' : ''}`} />
             <div className={`login-step ${step === 'otp' ? 'active' : step === 'success' ? 'completed' : 'inactive'}`}>
               <span className={`login-step-circle ${step === 'otp' ? 'active' : step === 'success' ? 'completed' : ''}`}>2</span>
-              <span className="login-step-label">OTP Verification</span>
+              <span className="login-step-label">Email verification</span>
             </div>
           </div>
 
           {step === 'credentials' && (
             <>
               <div className="login-heading">
-                <span className="login-kicker">Secure workspace</span>
+                <span className="login-kicker">Welcome back</span>
                 <h2>Sign in to AFFERENT</h2>
-                <p>Use the account created by your Phishing Administrator.</p>
+                <p>Use the account provided by your administrator.</p>
               </div>
               <form onSubmit={handleCredentials} className="login-form">
-                <label htmlFor="email">Organization email</label>
+                <label htmlFor="email">Work email</label>
                 <div className="login-input-wrap">
                   <Mail size={18} />
                   <input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@organization.id" autoComplete="username" required autoFocus />
@@ -197,7 +197,7 @@ export default function AuthPage() {
 
                 {error && <div className="login-error" role="alert">{error}</div>}
                 <button className="login-primary" disabled={isSubmitting}>
-                  {isSubmitting ? <span className="login-spinner" /> : <><span>Continue with OTP</span><ArrowRight size={18} /></>}
+                  {isSubmitting ? <span className="login-spinner" /> : <><span>Continue</span><ArrowRight size={18} /></>}
                 </button>
               </form>
             </>
@@ -208,7 +208,7 @@ export default function AuthPage() {
               <div className="login-heading">
                 <span className="otp-icon"><KeyRound size={22} /></span>
                 <h2>Check your email</h2>
-                <p>We sent a six-digit verification code to <strong>{maskedEmail}</strong>.</p>
+                <p>A 6-digit code was sent to <strong>{maskedEmail}</strong>.</p>
               </div>
               <form onSubmit={handleOtp} className="login-form">
                 <label htmlFor="otp">Verification code</label>
@@ -227,15 +227,15 @@ export default function AuthPage() {
                 <div className="otp-meta">
                   <span className={expiresIn < 60 ? 'urgent' : ''}>Expires in {formatCountdown(expiresIn)}</span>
                   <button type="button" disabled={resendIn > 0 || isSubmitting} onClick={handleResend}>
-                    {resendIn > 0 ? `Resend in ${resendIn}s` : 'Resend OTP'}
+                    {resendIn > 0 ? `Resend code (${resendIn}s)` : 'Resend code'}
                   </button>
                 </div>
                 {error && <div className="login-error" role="alert">{error}</div>}
                 <button className="login-primary" disabled={isSubmitting || expiresIn === 0}>
-                  {isSubmitting ? <span className="login-spinner" /> : <><span>Verify and sign in</span><ArrowRight size={18} /></>}
+                  {isSubmitting ? <span className="login-spinner" /> : <><span>Verify & sign in</span><ArrowRight size={18} /></>}
                 </button>
                 <button type="button" className="login-secondary" onClick={() => { setStep('credentials'); setOtp(''); setError(''); }}>
-                  Use a different account
+                  Use another account
                 </button>
               </form>
             </>
@@ -244,13 +244,13 @@ export default function AuthPage() {
           {step === 'success' && (
             <div className="login-success" role="status">
               <CheckCircle2 size={52} />
-              <h2>Identity verified</h2>
-              <p>Preparing workspace for your role…</p>
+              <h2>You’re signed in</h2>
+              <p>Opening your dashboard…</p>
               <span className="login-spinner dark" />
             </div>
           )}
 
-          <div className="login-trust"><ShieldCheck size={14} /> Session stored in an HTTP-only cookie</div>
+          <div className="login-trust"><ShieldCheck size={14} /> Protected with email verification</div>
         </div>
       </section>
     </main>

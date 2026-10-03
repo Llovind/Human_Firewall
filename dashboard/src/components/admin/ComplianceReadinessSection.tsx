@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ShieldCheck, ShieldAlert, AlertTriangle, Lock, RefreshCw, Info, Edit2, Check, Save, FileText } from 'lucide-react';
 
 export interface ClauseEvidence {
@@ -57,9 +57,7 @@ export const ComplianceReadinessSection: React.FC<ComplianceReadinessSectionProp
   const [saveStatus, setSaveStatus] = useState<Record<string, string>>({});
   const [expandedEvidence, setExpandedEvidence] = useState<Record<string, boolean>>({});
 
-  const fetchReadinessData = async () => {
-    setIsLoading(true);
-    setFetchError(null);
+  const fetchReadinessData = useCallback(async () => {
     try {
       const [resSummary, resThresholds] = await Promise.all([
         fetch('/api/admin/compliance-summary'),
@@ -83,17 +81,19 @@ export const ComplianceReadinessSection: React.FC<ComplianceReadinessSectionProp
         });
         setEditingValues(initEdits);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to fetch readiness data:', err);
       setFetchError('Connection error while reaching backend server');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchReadinessData();
-  }, []);
+    // This fetch initializes server-owned readiness data, not derived render state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchReadinessData();
+  }, [fetchReadinessData]);
 
   const handleSaveThreshold = async (clauseId: string) => {
     const rawVal = editingValues[clauseId];
@@ -351,7 +351,7 @@ export const ComplianceReadinessSection: React.FC<ComplianceReadinessSectionProp
           </div>
 
           <button
-            onClick={fetchReadinessData}
+            onClick={() => { setIsLoading(true); setFetchError(null); void fetchReadinessData(); }}
             disabled={isLoading}
             className="font-body"
             style={{

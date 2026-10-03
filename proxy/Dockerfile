@@ -7,7 +7,11 @@ RUN apt-get update \
 
 COPY squid.conf /etc/squid/squid.conf
 COPY afferent_acl_helper.py /usr/local/bin/afferent_acl_helper.py
-COPY ERR_AFFERENT_BLOCK /usr/share/squid/errors/en/ERR_AFFERENT_BLOCK
+COPY tunnel_control.py /usr/local/bin/tunnel_control.py
+COPY ERR_AFFERENT_BLOCK /usr/local/share/afferent/ERR_AFFERENT_BLOCK.template
+COPY assets /usr/local/share/afferent/assets
+COPY render_error_page.py /usr/local/bin/render_error_page.py
+RUN python3 /usr/local/bin/render_error_page.py
 COPY ERR_AFFERENT_PROBE /usr/share/squid/errors/en/ERR_AFFERENT_PROBE
 
 # Initialise the SSL certificate database at build time.
@@ -23,4 +27,4 @@ RUN chmod 0755 /usr/local/bin/afferent_acl_helper.py \
     && chmod 700 /var/lib/squid/ssl_db
 
 EXPOSE 3128
-CMD ["sh", "-c", "rm -f /run/squid.pid && exec squid -NYCd 1"]
+CMD ["python3", "/usr/local/bin/tunnel_control.py"]

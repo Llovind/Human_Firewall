@@ -8,13 +8,16 @@ RUN addgroup -S nextuser && adduser -S nextuser -G nextuser
 
 # Install dependencies
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
 # Copy source code
 COPY . .
 
 # Build the Next.js app
 RUN npm run build
+
+# Keep build-time lint tooling out of the running demo image.
+RUN npm prune --omit=dev --ignore-scripts --no-audit --no-fund
 
 # Next may write incremental cache files at runtime.
 RUN chown -R nextuser:nextuser /app/.next

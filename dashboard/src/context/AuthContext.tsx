@@ -80,6 +80,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await fetch('/api/auth/logout', { method: 'POST' });
     } finally {
       setUser(null);
+      // Full navigation intentionally discards all previous-role client state.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.assign('/auth');
     }
   }, []);

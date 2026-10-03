@@ -8,6 +8,7 @@ import ipaddress
 import json
 import os
 import re
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -267,6 +268,15 @@ def _cache_ttl(verdict: dict[str, Any]) -> int:
     )
 
 
+def current_model_policy(verdict):
+    if verdict.get('source') not in {'ml', 'ml_unknown'}:
+        return True
+    if os.environ.get('ML_SCANNER_URL', '').strip() or os.environ.get('ML_LOCAL_ENABLED', 'true').lower() not in {'true', '1', 'yes'}:
+        return True
+    from services.domain_scanner import model_version
+    return bool(model_version()) and verdict.get('model_version') == model_version()
+
+
 def _effective_verdict(domain: str) -> dict[str, Any] | None:
     matches: list[tuple[int, dict[str, Any]]] = []
     for specificity, candidate in enumerate(_domain_candidates(domain)):
@@ -276,15 +286,23 @@ def _effective_verdict(domain: str) -> dict[str, Any] | None:
             if row:
                 verdict = _serialize(row)
                 proxy_store.cache_verdict(candidate, verdict, _cache_ttl(verdict))
-        if verdict:
+        if verdict and current_model_policy(verdict):
             matches.append((specificity, verdict))
     if not matches:
         return None
-    source_priority = {"soc": 0, "ml": 1, "employee_report": 2, "ml_unknown": 3}
     return min(
         matches,
-        key=lambda item: (source_priority.get(str(item[1].get("source")), 9), item[0]),
+        key=_policy_priority,
     )[1]
+
+
+def _policy_priority(item):
+    specificity, verdict = item
+    source = verdict.get("source")
+    priorities = {"soc": 0, "ml": 1, "employee_report": 2, "ml_unknown": 3}
+    # A SOC block must not be bypassed by an older/narrower SOC whitelist.
+    block_first = 0 if source == "soc" and verdict.get("decision") == "block" else 1
+    return priorities.get(source, 9), block_first, specificity
 
 
 def _ml_signature(raw_body: bytes) -> str:
@@ -302,9 +320,12 @@ def verify_ml_signature(raw_body: bytes, supplied: str) -> bool:
     return bool(supplied) and hmac.compare_digest(expected, supplied.strip())
 
 
-def _call_ml(domain: str, request_id: str) -> dict[str, Any]:
+def _call_ml(domain: str, request_id: str, target: str | None = None) -> dict[str, Any]:
     endpoint = os.environ.get("ML_SCANNER_URL", "").strip()
     if not endpoint:
+        if os.environ.get("ML_LOCAL_ENABLED", "true").lower() in {"true", "1", "yes"}:
+            from services.ml_service import proxy_verdict
+            return proxy_verdict(domain)
         return {
             "verdict": "unknown",
             "confidence": None,
@@ -316,6 +337,7 @@ def _call_ml(domain: str, request_id: str) -> dict[str, Any]:
         "eventId": str(uuid.uuid4()),
         "requestId": request_id,
         "domain": domain,
+        "inputScope": "domain",
         "observedAt": _utcnow().isoformat(),
     }
     raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
@@ -425,7 +447,7 @@ def decide(
         source = cached["source"]
         reason = cached["reason"]
     else:
-        action, source, reason = _decide_unknown(domain, device, request_id)
+        action, source, reason = _decide_unknown(domain, device, request_id, target)
 
     event = {
         "event_id": event_id,
@@ -459,22 +481,42 @@ def decide(
 
 
 def _decide_unknown(
-    domain: str, device: dict[str, Any] | None, request_id: str
+    domain: str, device: dict[str, Any] | None, request_id: str, target: str | None = None
 ) -> tuple[str, str, str]:
     if not proxy_store.acquire_scan_lock(domain):
-        return "allow", "ml_pending", "Analisis domain sedang diproses; diizinkan sementara"
+        # Another request is scanning this domain. Wait for its result instead
+        # of allowing an unclassified request to leak through the first gate.
+        deadline = time.monotonic() + _env_float("ML_SCANNER_TIMEOUT_SECONDS", 1.5)
+        while time.monotonic() < deadline:
+            effective = _effective_verdict(domain)
+            if effective:
+                return effective["decision"], effective["source"], effective["reason"]
+            time.sleep(0.025)
+        return "block", "ml_pending", "Pemeriksaan domain belum selesai; coba lagi"
     try:
         try:
-            result = _call_ml(domain, request_id)
+            result = _call_ml(domain, request_id, target)
         except Exception as exc:
             result = {
                 "verdict": "unknown",
                 "confidence": None,
                 "reason": f"Model ML tidak tersedia: {type(exc).__name__}",
                 "modelVersion": None,
+                "status": "unavailable",
             }
+        effective = _effective_verdict(domain)
+        if effective and effective.get("source") == "soc":
+            return effective["decision"], "soc", effective["reason"]
+        if result.get("status") in {"pending", "unavailable"}:
+            # A timeout is not a safe/Unknown model prediction, nor a durable
+            # blacklist entry. Deny this request only; retry can obtain a verdict.
+            return "block", "ml_unavailable", "Pemeriksaan domain belum selesai atau model tidak tersedia; coba lagi"
         persisted = _persist_ml_verdict(domain, result)
         if persisted:
+            # A concurrent SOC override always takes priority over in-flight ML.
+            effective = _effective_verdict(domain)
+            if effective and effective.get("source") == "soc":
+                return effective["decision"], "soc", effective["reason"]
             if persisted["decision"] == "block":
                 _alert_for_result(domain=domain, device=device, result=result, request_id=request_id)
                 return "block", "ml", persisted["reason"]
@@ -483,7 +525,7 @@ def _decide_unknown(
         # An absent integration is an operational state, not a threat. Keep the
         # traffic and short unknown cache, but do not flood the SOC queue until
         # an actual ML endpoint is configured and returns an unknown verdict.
-        if os.environ.get("ML_SCANNER_URL", "").strip():
+        if os.environ.get("ML_SCANNER_URL", "").strip() or os.environ.get("ML_LOCAL_ENABLED", "true").lower() in {"true", "1", "yes"}:
             _alert_for_result(domain=domain, device=device, result=result, request_id=request_id)
         proxy_store.cache_verdict(
             domain,
@@ -493,6 +535,7 @@ def _decide_unknown(
                 "source": "ml_unknown",
                 "reason": "Belum ada verdict konklusif; diizinkan sementara",
                 "verdict": "unknown",
+                "model_version": result.get('modelVersion'),
             },
             _env_int("PROXY_UNKNOWN_RETRY_SECONDS", 60),
         )
@@ -508,9 +551,9 @@ def accept_ml_callback(payload: dict[str, Any]) -> dict[str, Any]:
     domain = normalize_domain(str(payload.get("domain", "")))
     if not event_id:
         raise ProxyError("INVALID_EVENT_ID", "eventId wajib diisi")
+    result = _validated_ml_result(payload)
     if not proxy_store.record_ml_event(event_id, domain, payload):
         return {"accepted": True, "duplicate": True, "domain": domain}
-    result = _validated_ml_result(payload)
     persisted = _persist_ml_verdict(domain, result)
     if not persisted:
         _alert_for_result(domain=domain, device=None, result=result, request_id=event_id)
@@ -562,11 +605,32 @@ def manual_decision(
 
 
 def list_alerts(limit: int = 200) -> list[dict[str, Any]]:
-    return _serialize(proxy_store.list_alerts(limit))
+    alerts = proxy_store.list_alerts(limit)
+    # Old model observations remain historical, not current enforcement proof.
+    rows = proxy_store.enforcement_verdicts(list({row['domain'] for row in alerts if row['source'] == 'ml'})) if alerts else {}
+    for alert in alerts:
+        if alert['source'] == 'ml' and alert['verdict'] == 'malicious':
+            row = rows.get(alert['domain'])
+            alert['stalePrediction'] = not row or row.get('source') != 'ml' or not current_model_policy(row) or row.get('reason') != alert['reason']
+    return _serialize(alerts)
+
+
+def enforcement_decisions(values: list[str]) -> dict[str, str]:
+    if not isinstance(values, list) or not 1 <= len(values) <= 200 or any(not isinstance(v, str) for v in values):
+        raise ProxyError("INVALID_DOMAINS", "domains harus berupa list 1..200 domain")
+    domains = list(dict.fromkeys(normalize_domain(v) for v in values))
+    candidates = {domain: _domain_candidates(domain) for domain in domains}
+    rows = proxy_store.enforcement_verdicts(list({c for items in candidates.values() for c in items}))
+    actions = {}
+    for domain, items in candidates.items():
+        matches = [(i, rows[c]) for i, c in enumerate(items) if c in rows and current_model_policy(rows[c])]
+        best = min(matches, key=_policy_priority)[1] if matches else None
+        actions[domain] = best["decision"] if best else "allow"
+    return actions
 
 
 def list_verdicts(limit: int = 200) -> list[dict[str, Any]]:
-    return _serialize(proxy_store.list_verdicts(limit))
+    return _serialize([row for row in proxy_store.list_verdicts(limit) if current_model_policy(row)])
 
 
 def list_traffic(limit: int = 200, account_id: int | None = None) -> list[dict[str, Any]]:

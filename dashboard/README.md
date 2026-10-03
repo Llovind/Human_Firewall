@@ -1,36 +1,30 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AFFERENT dashboard
 
-## Getting Started
+Next.js 16 / React 19, TypeScript, Poppins, shared workspace theme. The dashboard
+is a same-origin BFF; Flask owns authentication, RBAC and durable application data.
+Opaque sessions use HTTP-only cookies. Never put credentials or session tokens
+in browser storage or `NEXT_PUBLIC_*` variables.
 
-First, run the development server:
+## Run and verify
 
-```bash
+The recommended demo starts from the root [setup guide](../README_SETUP.md).
+For frontend development, provide local ignored `.env.local` with `API_URL`,
+`SERVICE_API_KEY`, `APP_ENV=development` and `DEV_BYPASS_AUTH=false`; use the
+matching server configuration. `SERVICE_API_KEY` is server-only.
+
+```sh
+npm ci
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run lint
+npm test
+npm run build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+SOC live telemetry uses SSE. Employee reports/scans use authenticated BFF routes;
+file upload checks include actual size, consent and same-origin validation.
+Backend failures remain visible rather than replaced with fake incidents/policy.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The source lives in `src/app`, `src/components`, `src/context`, `src/hooks` and
+`src/lib`; runnable contract checks are in `scripts`. See
+[submission readiness](../docs/FINAL_SUBMISSION.md) for the current verification
+record and [pitch deck handoff](../docs/PITCH_DECK_HANDOFF.md) for presentation scope.

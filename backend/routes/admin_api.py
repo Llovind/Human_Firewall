@@ -1,10 +1,83 @@
 from flask import Blueprint, request, jsonify
 import database
 import gophish_client
+import logging
+import os
+import uuid
+from urllib.parse import urlsplit, urlunsplit
 from security import current_identity, require_roles
 from services import auth_service
 
 admin_api_bp = Blueprint('admin_api', __name__)
+logger = logging.getLogger(__name__)
+
+
+@admin_api_bp.errorhandler(gophish_client.GoPhishError)
+def gophish_error(exc):
+    return jsonify({'error': str(exc)}), exc.status
+
+
+def simulation_targets(values=None):
+    conn = database.get_connection()
+    try:
+        rows = conn.execute("""SELECT u.email FROM user_history u LEFT JOIN employee_accounts a
+            ON lower(a.email)=lower(u.email) WHERE u.is_active=1
+            AND (a.id IS NULL OR (a.is_active=1 AND a.role='employee'))""").fetchall()
+    finally:
+        conn.close()
+    allowed = {r['email'].lower(): r['email'] for r in rows}
+    if values is None:
+        return list(allowed.values())
+    if not isinstance(values, list) or not values or any(not isinstance(e, str) for e in values):
+        raise ValueError('Pilih minimal satu karyawan sebagai penerima simulasi.')
+    emails = list(dict.fromkeys(e.strip().lower() for e in values))
+    if any(e not in allowed for e in emails):
+        raise ValueError('Penerima harus karyawan aktif; SOC/admin tidak menjadi target.')
+    return [allowed[e] for e in emails]
+
+
+def safe_campaign(campaign, source):
+    result = dict(campaign)
+    result['source'] = source
+    if 'smtp' in result:
+        result['smtp'] = {k: result['smtp'].get(k) for k in ('id', 'name', 'host', 'from_address')}
+    result['timeline'] = [{k: event.get(k) for k in ('email', 'time', 'message')} for event in result.get('timeline', [])]
+    return result
+
+
+def campaign_source(campaign_id):
+    source = request.args.get('source', 'gophish')
+    if source not in ('local', 'gophish'):
+        raise ValueError('Source campaign tidak valid.')
+    campaign = next((c for c in database.list_simulation_campaigns() if c['id'] == campaign_id), None) if source == 'local' else gophish_client.get_campaign(campaign_id)
+    return source, campaign
+
+
+@admin_api_bp.route('/api/admin/security-inbox', methods=['GET'])
+@require_roles('soc', 'grc')
+def security_inbox():
+    from services.notification_service import security_inbox as inbox
+    try:
+        return jsonify(inbox())
+    except Exception:
+        return jsonify({'error': 'Inbox belum tersedia; coba kembali'}), 503
+
+
+@admin_api_bp.route('/api/admin/security-inbox/warnings', methods=['POST'])
+@require_roles('soc', 'grc')
+def manual_warning():
+    import uuid
+    from services.notification_service import queue_manual_warning
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({'error': 'JSON object wajib diisi'}), 400
+    try:
+        return jsonify(queue_manual_warning(current_identity(), body.get('accountId'),
+            body.get('reason'), request.headers.get('X-Request-ID') or str(uuid.uuid4()))), 202
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    except Exception:
+        return jsonify({'error': 'Warning belum diterima; periksa inbox sebelum mencoba lagi'}), 503
 
 def sanitize_gophish_html(html):
     if not html:
@@ -56,14 +129,14 @@ def leaderboard():
 
 @admin_api_bp.route('/api/login-history', methods=['GET'])
 @admin_api_bp.route('/api/admin/login-history', methods=['GET'])
-@require_roles('phishing_admin', 'ciso')
+@require_roles('phishing_admin', 'soc', 'ciso')
 def login_history():
     """Audit log riwayat login admin/user."""
     try:
         logs = auth_service.list_login_audit(request.args.get('limit', 100, type=int))
         return jsonify({"logs": logs}), 200
     except Exception:
-        return jsonify({"logs": []}), 200
+        return jsonify({'error': 'Login audit unavailable'}), 503
 
 
 @admin_api_bp.route('/api/compliance-summary', methods=['GET'])
@@ -166,7 +239,7 @@ def gophish_campaigns():
     # 1. Fetch local campaigns
     try:
         local_camps = database.list_simulation_campaigns()
-        combined.extend(local_camps)
+        combined.extend(safe_campaign(c, 'local') for c in local_camps)
     except Exception as e:
         logger.warning(f"Error fetching local simulation campaigns: {e}")
 
@@ -175,12 +248,11 @@ def gophish_campaigns():
         gp_camps = gophish_client.get_campaigns()
         if isinstance(gp_camps, list):
             enriched_gp = [_enrich_campaign_stats(c) for c in gp_camps]
-            existing_names = {c.get("name") for c in combined}
             for gp_c in enriched_gp:
-                if gp_c.get("name") not in existing_names:
-                    combined.append(gp_c)
-    except Exception:
-        pass
+                database.sync_gophish_events(gp_c)
+                combined.append(safe_campaign(gp_c, 'gophish'))
+    except gophish_client.GoPhishError as exc:
+        return jsonify({'error': str(exc), 'campaigns': combined}), exc.status
 
     return jsonify(combined), 200
 
@@ -188,39 +260,43 @@ def gophish_campaigns():
 @admin_api_bp.route('/api/admin/gophish/resources', methods=['GET'])
 @require_roles('phishing_admin', 'ciso')
 def gophish_resources():
-    templates = []
-    pages = []
-    profiles = []
-
+    from services.campaign_materials import education_url
     try:
-        templates = gophish_client.get_templates() or []
-        pages = gophish_client.get_pages() or []
-        profiles = gophish_client.get_sending_profiles() or []
-    except Exception:
-        pass
-
-    # Provide default resources so forms always have usable options
-    if not templates:
-        templates = [
-            {"id": 1, "name": "Urgent Security Verification", "subject": "[URGENT] Security Alert: Corporate Account Re-Authentication", "html": "<p>Halo {{.FirstName}},</p><p>Sistem keamanan mendeteksi aktivitas login mencurigakan. Verifikasi akun: <a href=\"{{.URL}}\">Klik di sini</a></p>"},
-            {"id": 2, "name": "HR Payroll & Benefit Update", "subject": "Pemberitahuan Penyesuaian Benefit & Bonus Q3 2026", "html": "<p>Yth. {{.FirstName}},</p><p>Lampiran penyesuaian gaji dan benefit terbaru dapat diakses di portal HR: <a href=\"{{.URL}}\">Buka Dokumen</a></p>"}
-        ]
-    if not pages:
-        pages = [
-            {"id": 1, "name": "Corporate SSO Login Portal", "capture_credentials": True, "capture_passwords": False},
-            {"id": 2, "name": "Microsoft 365 Verification Page", "capture_credentials": True, "capture_passwords": True}
-        ]
-    if not profiles:
-        profiles = [
-            {"id": 1, "name": "IT Security Notification Gateway (SMTP)"},
-            {"id": 2, "name": "HR Automated System Mailer"}
-        ]
-
+        education = education_url()
+    except gophish_client.GoPhishError:
+        education = ''
+    templates = gophish_client.get_templates() or []
+    pages = gophish_client.get_pages() or []
+    profiles = [{k: p.get(k) for k in ('id', 'name', 'host', 'from_address')}
+                for p in gophish_client.get_sending_profiles() or []]
+    base = os.environ.get('GOPHISH_PHISH_PUBLIC_URL', '').strip()
+    if not base:
+        parts = urlsplit(os.environ.get('SERVER_BASE_URL') or os.environ.get('SIMULATION_BASE_URL') or '')
+        if parts.hostname:
+            host = f'[{parts.hostname}]' if ':' in parts.hostname else parts.hostname
+            base = urlunsplit(('http', f'{host}:8080', '', '', ''))
     return jsonify({
         "templates": templates,
         "pages": pages,
-        "profiles": profiles
+        "profiles": profiles,
+        "connected": True,
+        "phishUrl": base,
+        "educationUrl": education,
+        "adminUrl": os.environ.get('GOPHISH_ADMIN_PUBLIC_URL', 'https://localhost:3333'),
+        "mailpitUrl": os.environ.get('MAILPIT_PUBLIC_URL', 'http://127.0.0.1:8025'),
     }), 200
+
+
+@admin_api_bp.route('/api/admin/gophish/resources/setup', methods=['POST'])
+@require_roles('phishing_admin')
+def gophish_setup():
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict) or data.get('preset') not in (None, 'password-reset'):
+        return jsonify({'error': 'Preset tidak valid.'}), 400
+    if data.get('preset') == 'password-reset':
+        from services.campaign_materials import prepare_password_reset
+        return jsonify(prepare_password_reset()), 200
+    return jsonify(gophish_client.ensure_demo_resources()), 200
 
 
 @admin_api_bp.route('/api/admin/gophish/sync', methods=['POST'])
@@ -228,143 +304,91 @@ def gophish_resources():
 def gophish_sync():
     try:
         data = request.get_json(silent=True) or {}
-        emails = data.get('emails')
-        
-        # If emails are not specified or empty, sync active employees from user_history
-        if not emails or not isinstance(emails, list) or len(emails) == 0:
-            conn = database.get_connection()
-            try:
-                rows = conn.execute("SELECT email FROM user_history WHERE is_active = 1").fetchall()
-                emails = [r["email"] for r in rows]
-            finally:
-                conn.close()
-
-        result = None
-        try:
-            result = gophish_client.sync_group('HFL_Target_Group', emails)
-        except Exception as gp_err:
-            logger.warning(f"GoPhish sync group offline/skipped: {gp_err}")
+        emails = simulation_targets(data.get('emails'))
+        if not emails:
+            return jsonify({'error': 'Tidak ada karyawan aktif.'}), 400
+        result = gophish_client.sync_group('HFL_Target_Group', emails)
             
         return jsonify({"message": f"Berhasil menyinkronkan {len(emails)} karyawan ke target group.", "result": result}), 200
-    except Exception as e:
-        return jsonify({"error": "Failed to sync group", "detail": str(e)}), 500
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
 
 
 @admin_api_bp.route('/api/admin/gophish/launch', methods=['POST'])
 @require_roles('phishing_admin')
 def gophish_launch():
     data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify({'error': 'JSON object wajib diisi.'}), 400
     name = data.get('name')
-    if not name:
-        return jsonify({"error": "Field 'name' is required"}), 400
-
-    template_id = data.get('template_id', 1)
-    page_id = data.get('page_id', 1)
-    smtp_id = data.get('smtp_id', 1)
-    url = data.get('url', 'http://phish.afferent.local/login')
-    group_name = data.get('group_name', 'HFL_Target_Group')
-    target_emails = data.get('target_emails')
-
-    # Resolve target emails if not passed
-    if not target_emails or not isinstance(target_emails, list) or len(target_emails) == 0:
-        conn = database.get_connection()
-        try:
-            rows = conn.execute("SELECT email FROM user_history WHERE is_active = 1").fetchall()
-            target_emails = [r["email"] for r in rows]
-        finally:
-            conn.close()
-
-    # Resolve template subject & html
-    template_name = "Corporate Security Notice"
-    subject = None
-    html_content = None
+    url = data.get('url')
+    if not isinstance(name, str) or not name.strip() or len(name) > 150:
+        return jsonify({'error': 'Nama campaign wajib diisi, maksimal 150 karakter.'}), 400
     try:
-        templates = gophish_client.get_templates()
-        if templates and isinstance(templates, list):
-            match = next((t for t in templates if str(t.get("id")) == str(template_id) or t.get("name") == str(template_id)), None)
-            if match:
-                template_name = match.get("name", template_name)
-                subject = match.get("subject")
-                html_content = match.get("html")
-    except Exception:
-        pass
-
-    # 1. Create local simulation campaign and DISPATCH to Mock Webmail Inbox for all target employees!
-    try:
-        local_id = database.create_simulation_campaign(
-            name=name,
-            template_name=template_name,
-            page_name=str(page_id),
-            url=url,
-            target_emails=target_emails,
-            subject=subject,
-            html_content=html_content
-        )
-    except Exception as e:
-        logger.error(f"Failed to create local simulation campaign: {e}")
-        return jsonify({"error": "Failed to create campaign", "detail": str(e)}), 500
-
-    # 2. Try to launch in GoPhish if service is available
-    gp_result = None
-    try:
-        gp_result = gophish_client.launch_campaign(
-            name=name,
-            template_id=template_id,
-            url=url,
-            page_id=page_id,
-            smtp_id=smtp_id,
-            group_name=group_name
-        )
-    except Exception as gp_err:
-        logger.warning(f"GoPhish launch offline/skipped (fallback to local mock webmail delivery): {gp_err}")
-
-    return jsonify({
-        "message": f"Simulasi phishing '{name}' berhasil diluncurkan! {len(target_emails)} email telah dikirimkan ke Mock Webmail Inbox.",
-        "campaign_id": local_id,
-        "gophish_result": gp_result,
-        "target_count": len(target_emails)
-    }), 201
+        parsed = urlsplit(url) if isinstance(url, str) else None
+        if not parsed or parsed.scheme not in ('http', 'https') or not parsed.hostname or parsed.username or '{{' in url:
+            raise ValueError('URL harus alamat HTTP/HTTPS GoPhish lab yang dapat diakses penerima (port 8080), bukan /redirect-handler.')
+        if parsed.path not in ('', '/'):
+            raise ValueError('Gunakan base URL GoPhish tanpa path, misalnya http://IP-SERVER:8080.')
+        targets = simulation_targets(data.get('target_emails', []))
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    template = gophish_client.resolve_resource(gophish_client.get_templates(), data.get('template_id'), 'Template')
+    page = gophish_client.resolve_resource(gophish_client.get_pages(), data.get('page_id'), 'Landing page')
+    profile = gophish_client.resolve_resource(gophish_client.get_sending_profiles(), data.get('smtp_id'), 'Sending profile')
+    if profile.get('host') != 'mailpit:1025':
+        return jsonify({'error': 'Demo ini hanya mendukung sending profile Mailpit (mailpit:1025).'}), 400
+    group_name = f'AFFERENT-{uuid.uuid4().hex}'
+    gophish_client.sync_group(group_name, targets)
+    result = gophish_client.launch_campaign(name.strip(), template['name'], url, page['name'], profile['name'], group_name)
+    return jsonify({'message': f'Campaign diterima GoPhish untuk {len(targets)} penerima. Pantau status pengiriman di campaign dan Mailpit.',
+        'campaign_id': result['id'], 'source': 'gophish', 'target_count': len(targets)}), 201
 
 
 @admin_api_bp.route('/api/admin/gophish/campaigns/<int:campaign_id>', methods=['DELETE'])
 @require_roles('phishing_admin')
 def gophish_delete_campaign(campaign_id):
     try:
-        database.delete_simulation_campaign(campaign_id)
-        try:
+        source, campaign = campaign_source(campaign_id)
+        if not campaign:
+            return jsonify({'error': 'Campaign tidak ditemukan.'}), 404
+        if source == 'local':
+            database.delete_simulation_campaign(campaign_id)
+        else:
             gophish_client.delete_campaign(campaign_id)
-        except Exception:
-            pass
         return jsonify({"message": "Campaign deleted successfully"}), 200
-    except Exception as e:
-        return jsonify({"error": "Failed to delete campaign", "detail": str(e)}), 500
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
 
 
 @admin_api_bp.route('/api/admin/gophish/campaigns/<int:campaign_id>', methods=['GET'])
 @require_roles('phishing_admin', 'ciso')
 def gophish_get_campaign(campaign_id):
     try:
-        result = gophish_client.get_campaign(campaign_id)
+        source, result = campaign_source(campaign_id)
         if not result:
             return jsonify({"error": "Campaign not found"}), 404
-        return jsonify(_enrich_campaign_stats(result)), 200
-    except Exception as e:
-        return jsonify({"error": "Failed to fetch campaign details", "detail": str(e)}), 500
+        if source == 'gophish':
+            database.sync_gophish_events(result)
+        return jsonify(safe_campaign(_enrich_campaign_stats(result) if source == 'gophish' else result, source)), 200
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
 
 
 @admin_api_bp.route('/api/admin/gophish/campaigns/<int:campaign_id>/complete', methods=['POST'])
 @require_roles('phishing_admin')
 def gophish_complete_campaign(campaign_id):
     try:
-        database.complete_simulation_campaign(campaign_id)
-        try:
+        source, campaign = campaign_source(campaign_id)
+        if not campaign:
+            return jsonify({'error': 'Campaign tidak ditemukan.'}), 404
+        if source == 'local':
+            database.complete_simulation_campaign(campaign_id)
+        else:
             gophish_client.complete_campaign(campaign_id)
-        except Exception:
-            pass
         return jsonify({"message": "Campaign completed successfully"}), 200
-    except Exception as e:
-        logger.error(f"[admin_api] Error completing campaign {campaign_id}: {e}")
-        return jsonify({"error": "Failed to complete campaign", "detail": str(e)}), 500
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
 
 
 @admin_api_bp.route('/api/admin/gophish/templates', methods=['POST'])
@@ -430,7 +454,7 @@ def gophish_delete_template(template_id):
 @require_roles('phishing_admin')
 def gophish_create_page():
     data = request.get_json(silent=True)
-    if not data:
+    if not isinstance(data, dict):
         return jsonify({"error": "JSON body is required"}), 400
 
     required_fields = ['name', 'html']
@@ -439,14 +463,18 @@ def gophish_create_page():
             return jsonify({"error": f"Field '{field}' is required"}), 400
 
     try:
+        from services.campaign_materials import simulation_page_html, education_url
+        redirect = education_url(data.get('redirect_url'))
         result = gophish_client.create_page(
             name=data['name'],
-            html=sanitize_gophish_html(data['html']),
-            capture_credentials=data.get('capture_credentials', True),
-            capture_passwords=data.get('capture_passwords', True),
-            redirect_url=data.get('redirect_url', ''),
+            html=simulation_page_html(sanitize_gophish_html(data['html']), redirect),
+            capture_credentials=False,
+            capture_passwords=False,
+            redirect_url=redirect,
         )
         return jsonify({"message": "Landing page created successfully", "result": result}), 201
+    except gophish_client.GoPhishError:
+        raise
     except Exception as e:
         return jsonify({"error": "Failed to create landing page", "detail": str(e)}), 500
 
@@ -455,7 +483,7 @@ def gophish_create_page():
 @require_roles('phishing_admin')
 def gophish_update_page(page_id):
     data = request.get_json(silent=True)
-    if not data:
+    if not isinstance(data, dict):
         return jsonify({"error": "JSON body is required"}), 400
 
     required_fields = ['name', 'html']
@@ -464,15 +492,19 @@ def gophish_update_page(page_id):
             return jsonify({"error": f"Field '{field}' is required"}), 400
 
     try:
+        from services.campaign_materials import simulation_page_html, education_url
+        redirect = education_url(data.get('redirect_url'))
         result = gophish_client.update_page(
             page_id=page_id,
             name=data['name'],
-            html=sanitize_gophish_html(data['html']),
-            capture_credentials=data.get('capture_credentials', True),
-            capture_passwords=data.get('capture_passwords', True),
-            redirect_url=data.get('redirect_url', ''),
+            html=simulation_page_html(sanitize_gophish_html(data['html']), redirect),
+            capture_credentials=False,
+            capture_passwords=False,
+            redirect_url=redirect,
         )
         return jsonify({"message": "Landing page updated successfully", "result": result}), 200
+    except gophish_client.GoPhishError:
+        raise
     except Exception as e:
         return jsonify({"error": "Failed to update landing page", "detail": str(e)}), 500
 
@@ -494,17 +526,11 @@ def gophish_import_site():
     TIDAK langsung bikin page di GoPhish — cuma return HTML mentahnya
     biar admin bisa review/edit dulu di builder sebelum di-save."""
     data = request.get_json(silent=True)
-    if not data or not data.get('url'):
+    if not isinstance(data, dict) or not data.get('url'):
         return jsonify({"error": "Field 'url' is required"}), 400
 
-    try:
-        result = gophish_client.import_site(
-            url=data['url'],
-            include_resources=data.get('include_resources', False),
-        )
-        return jsonify(result), 200
-    except Exception as e:
-        return jsonify({"error": "Failed to clone site", "detail": str(e)}), 500
+    from services.campaign_materials import clone_with_firecrawl
+    return jsonify(clone_with_firecrawl(data['url'], data.get('authorized'))), 200
 
 
 @admin_api_bp.route('/api/admin/employees', methods=['GET'])
@@ -536,11 +562,17 @@ def get_threats_feed():
 @admin_api_bp.route('/api/threats/action', methods=['POST'])
 @require_roles('soc')
 def execute_threat_action():
+    from services.proxy_service import ProxyError
     try:
         data = request.get_json(silent=True) or {}
+        if not isinstance(data, dict):
+            return jsonify({'error': 'JSON object wajib diisi'}), 400
         indicator = data.get('indicator') or data.get('url')
         action = data.get('action')
-        reason = (data.get('reason') or 'Manual SOC decision from threat feed').strip()
+        reason = data.get('reason') or 'Manual SOC decision from threat feed'
+        if not isinstance(reason, str) or len(reason) > 1000 or action not in {'block', 'allow', 'purge'}:
+            return jsonify({'error': 'Action/reason tidak valid'}), 400
+        reason = reason.strip()
         if not indicator or not action:
             return jsonify({"error": "indicator and action are required"}), 400
         
@@ -556,6 +588,8 @@ def execute_threat_action():
             )
         result = database.take_threat_action(indicator, action, reason)
         return jsonify(result), 200
+    except ProxyError as exc:
+        return jsonify({'error': str(exc), 'code': exc.code}), exc.status
     except Exception as e:
         return jsonify({"error": "Failed to execute threat action", "detail": str(e)}), 500
 

@@ -100,7 +100,7 @@ class AfferentLocalTestSuite(unittest.TestCase):
             "severity_tier": "high",
             "submitted_at": "2026-08-15T21:00:00Z",
         }
-        response = self.client.post("/api/reports", json=payload, headers=self.service_headers)
+        response = self.client.post("/api/internal/reports", json=payload, headers=self.service_headers)
         self.assertIn(response.status_code, (200, 201))
         conn = database.get_connection()
         try:

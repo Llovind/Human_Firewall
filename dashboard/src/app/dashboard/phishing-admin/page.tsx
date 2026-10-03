@@ -1,17 +1,16 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/admin/DashboardLayout';
 import GophishCampaignSection from '@/components/admin/GophishCampaignSection';
 import EmployeeRosterSection from '@/components/admin/EmployeeRosterSection';
-import MockWebmailSection from '@/components/admin/MockWebmailSection';
 import LeaderboardSection from '@/components/admin/LeaderboardSection';
 import AIIntelligenceSection from '@/components/admin/AIIntelligenceSection';
 import { usePolling } from '@/hooks/usePolling';
-import type { Division, EmployeeAccount, GoPhishCampaign, GoPhishResource, MockEmail, LeaderboardResponse } from '@/components/admin/types';
+import type { Division, EmployeeAccount, GoPhishCampaign, GoPhishResource, LeaderboardResponse } from '@/components/admin/types';
 import { X, Play, Mail, Globe, Users, Building, Download, Edit3, Send, Target } from 'lucide-react';
 
-type EmailsPayload = MockEmail[] | { emails?: MockEmail[] };
 type EditableGoPhishResource = {
   id: number;
   name: string;
@@ -24,27 +23,28 @@ type EditableGoPhishResource = {
 };
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Terjadi kesalahan yang tidak diketahui';
+  return error instanceof Error ? error.message : 'An unexpected error occurred';
 }
 
 export default function PhishingAdminDashboard() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState('gophish');
   const [campaigns, setCampaigns] = useState<GoPhishCampaign[]>([]);
   const [resources, setResources] = useState<GoPhishResource | null>(null);
   const [employees, setEmployees] = useState<EmployeeAccount[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
   const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
-  const [selectedEmail, setSelectedEmail] = useState<MockEmail | null>(null);
+  const [campaignError, setCampaignError] = useState('');
+  const [resourceError, setResourceError] = useState('');
+  const [campaignNotice, setCampaignNotice] = useState('');
+  const [setupBusy, setSetupBusy] = useState(false);
+  const [launchError, setLaunchError] = useState('');
 
   // Leaderboard filters
   const [divisiFilter, setDivisiFilter] = useState('ALL');
   const [badgeFilter, setBadgeFilter] = useState('ALL');
 
   // Polling
-  const { data: emailsData } = usePolling<EmailsPayload>('/api/admin/emails', 2500);
-  const emails: MockEmail[] = Array.isArray(emailsData) 
-    ? emailsData 
-    : (Array.isArray(emailsData?.emails) ? emailsData.emails : []);
   const { data: leaderboardData } = usePolling<LeaderboardResponse>('/api/admin/leaderboard', 3000);
 
   // ─── Modal States ──────────────────────────────────────────────────────────
@@ -54,8 +54,12 @@ export default function PhishingAdminDashboard() {
   const [launchTemplate, setLaunchTemplate] = useState('');
   const [launchProfile, setLaunchProfile] = useState('');
   const [launchPage, setLaunchPage] = useState('');
-  const [launchUrl, setLaunchUrl] = useState('http://localhost:5000/redirect-handler');
+  const [launchUrl, setLaunchUrl] = useState('');
   const [isLaunching, setIsLaunching] = useState(false);
+  const launchDialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (isLaunchModalOpen && !launchDialog.current?.open) launchDialog.current?.showModal();
+  }, [isLaunchModalOpen]);
 
   // 2. Template Builder Modal
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
@@ -73,10 +77,11 @@ export default function PhishingAdminDashboard() {
   const [landingId, setLandingId] = useState<number | null>(null);
   const [landingName, setLandingName] = useState('');
   const [landingHtml, setLandingHtml] = useState('');
-  const [landingCaptureCreds, setLandingCaptureCreds] = useState(true);
-  const [landingCapturePasswords, setLandingCapturePasswords] = useState(false);
   const [landingRedirectUrl, setLandingRedirectUrl] = useState('');
   const [importSiteUrl, setImportSiteUrl] = useState('');
+  const [cloneAuthorized, setCloneAuthorized] = useState(false);
+  const [cloneNotice, setCloneNotice] = useState('');
+  const [cloneError, setCloneError] = useState('');
   const [isImportingSite, setIsImportingSite] = useState(false);
   const [isSavingLanding, setIsSavingLanding] = useState(false);
 
@@ -101,27 +106,30 @@ export default function PhishingAdminDashboard() {
   const loadCampaigns = async () => {
     try {
       const res = await fetch('/api/admin/gophish/campaigns');
-      if (res.ok) {
-        const data = await res.json();
-        setCampaigns(Array.isArray(data) ? data : data?.campaigns || []);
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not load campaigns.');
+      setCampaigns(Array.isArray(data) ? data : data?.campaigns || []);
+      setCampaignError('');
     } catch (err) {
-      console.error('Error loading campaigns:', err);
+      setCampaignError(errorMessage(err));
     }
   };
 
   const loadResources = async () => {
     try {
       const res = await fetch('/api/admin/gophish/resources');
-      if (res.ok) {
-        const data = await res.json();
-        setResources(data);
-        if (data.templates?.length && !launchTemplate) setLaunchTemplate(data.templates[0].id.toString());
-        if (data.profiles?.length && !launchProfile) setLaunchProfile(data.profiles[0].id.toString());
-        if (data.pages?.length && !launchPage) setLaunchPage(data.pages[0].id.toString());
-      }
+      const data: GoPhishResource & { error?: string } = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not load GoPhish resources.');
+      setResources(data);
+      setResourceError('');
+      setLaunchTemplate(previous => data.templates.some(t => String(t.id) === previous) ? previous : String(data.templates[0]?.id ?? ''));
+      const profiles = data.profiles.filter(p => p.host === 'mailpit:1025');
+      setLaunchProfile(previous => profiles.some(p => String(p.id) === previous) ? previous : String(profiles[0]?.id ?? ''));
+      setLaunchPage(previous => data.pages.some(p => String(p.id) === previous) ? previous : String(data.pages[0]?.id ?? ''));
+      setLaunchUrl(previous => previous || data.phishUrl || '');
     } catch (err) {
-      console.error('Error loading resources:', err);
+      setResources(null);
+      setResourceError(errorMessage(err));
     }
   };
 
@@ -156,9 +164,9 @@ export default function PhishingAdminDashboard() {
       void loadEmployees();
       void loadDivisions();
     }, 0);
-    return () => window.clearTimeout(initialLoad);
+    const refresh = window.setInterval(() => void loadCampaigns(), 10000);
+    return () => { window.clearTimeout(initialLoad); window.clearInterval(refresh); };
     // Loaders intentionally use the initial filter/resource selections.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── Actions & Handlers ───────────────────────────────────────────────────
@@ -166,25 +174,32 @@ export default function PhishingAdminDashboard() {
     try {
       const res = await fetch('/api/admin/gophish/sync', { method: 'POST' });
       const data = await res.json();
-      if (res.ok) alert(data.message || 'Roster karyawan berhasil disinkronkan ke GoPhish!');
-      else alert(`Gagal menyinkronkan: ${data.error || 'Terjadi kesalahan'}`);
+      if (res.ok) alert(data.message || 'Employee roster synced to GoPhish.');
+      else alert(`Could not sync: ${data.error || 'Unexpected error'}`);
     } catch {
-      alert('Gagal menghubungi server.');
+      alert('Could not reach the server.');
     }
   };
 
-  const handleDeleteCampaign = async (id: number) => {
-    if (!confirm('Yakin ingin menghapus kampanye ini?')) return;
+  const handleDeleteCampaign = async (id: number, source: 'local' | 'gophish' = 'gophish') => {
+    const res = await fetch(`/api/admin/gophish/campaigns/${id}?source=${source}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Could not delete the campaign.');
+    setCampaigns(c => c.filter(item => !(item.id === id && (item.source || 'gophish') === source)));
+  };
+
+  const handleSetupResources = async (preset?: 'password-reset') => {
+    setSetupBusy(true); setResourceError(''); setCampaignNotice('');
     try {
-      const res = await fetch(`/api/admin/gophish/campaigns/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setCampaigns(c => c.filter(item => item.id !== id));
-      } else {
-        alert('Gagal menghapus kampanye.');
-      }
-    } catch {
-      alert('Gagal menghubungi server.');
-    }
+      const res = await fetch('/api/admin/gophish/resources/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ preset }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not set up campaign resources.');
+      await loadResources();
+      if (data.template_id) setLaunchTemplate(String(data.template_id));
+      if (data.page_id) setLaunchPage(String(data.page_id));
+      setCampaignNotice(data.message);
+    } catch (err) { setResourceError(errorMessage(err)); }
+    finally { setSetupBusy(false); }
   };
 
   const handleCompleteCampaign = async () => {
@@ -194,14 +209,11 @@ export default function PhishingAdminDashboard() {
   // Launch Modal Submit
   const handleLaunchCampaign = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!launchName.trim()) {
-      alert('Nama kampanye wajib diisi');
+    setLaunchError('');
+    if (!launchName.trim() || !launchTemplate || !launchProfile || !launchPage || !launchUrl || !selectedEmails.length) {
+      setLaunchError('Pilih penerima, template, landing page, Mailpit, dan isi URL server GoPhish.');
       return;
     }
-
-    const templateVal = launchTemplate || (resources?.templates?.[0]?.id ? String(resources.templates[0].id) : '1');
-    const profileVal = launchProfile || (resources?.profiles?.[0]?.id ? String(resources.profiles[0].id) : '1');
-    const pageVal = launchPage || (resources?.pages?.[0]?.id ? String(resources.pages[0].id) : '1');
 
     setIsLaunching(true);
     try {
@@ -210,26 +222,25 @@ export default function PhishingAdminDashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: launchName.trim(),
-          template_id: !isNaN(Number(templateVal)) ? Number(templateVal) : templateVal,
-          smtp_id: !isNaN(Number(profileVal)) ? Number(profileVal) : profileVal,
-          page_id: !isNaN(Number(pageVal)) ? Number(pageVal) : pageVal,
-          url: launchUrl || 'http://localhost:5000/redirect-handler',
-          group_name: 'HFL_Target_Group',
-          target_emails: selectedEmails.length > 0 ? selectedEmails : undefined,
+          template_id: Number(launchTemplate),
+          smtp_id: Number(launchProfile),
+          page_id: Number(launchPage),
+          url: launchUrl.trim(),
+          target_emails: selectedEmails,
         }),
       });
 
       const data = await res.json();
       if (res.ok) {
-        alert(data.message || 'Simulasi Phishing berhasil diluncurkan! Email telah dikirim ke Mock Webmail Inbox.');
+        setCampaignNotice(data.message || 'Campaign diterima GoPhish. Pantau status pengiriman dan Mailpit.');
         setIsLaunchModalOpen(false);
         setLaunchName('');
         await loadCampaigns();
       } else {
-        alert(`Gagal meluncurkan: ${data.error || data.detail || 'Terjadi kesalahan'}`);
+        setLaunchError(data.error || 'Could not create the campaign.');
       }
     } catch (err: unknown) {
-      alert(`Koneksi backend gagal: ${errorMessage(err)}`);
+      setLaunchError(`Connection failed: ${errorMessage(err)}. Check the campaign list before retrying.`);
     } finally {
       setIsLaunching(false);
     }
@@ -249,26 +260,23 @@ export default function PhishingAdminDashboard() {
         setTemplateId(null);
         setTemplateName('');
         setTemplateSubject('');
-        setTemplateHtml('<p>Halo {{.FirstName}},</p><p>Mohon verifikasi kredensial Anda segera: <a href="{{.URL}}">Klik di sini</a></p>');
-        setTemplateText('Halo {{.FirstName}},\nMohon verifikasi kredensial Anda: {{.URL}}');
+        setTemplateHtml('<p>Hello {{.FirstName}},</p><p>Please verify your account: <a href="{{.URL}}">Continue verification</a></p>');
+        setTemplateText('Hello {{.FirstName}},\nPlease verify your account: {{.URL}}');
       }
       setIsTemplateModalOpen(true);
     } else {
       setLandingModalMode(mode);
+      setCloneAuthorized(false); setCloneError(''); setCloneNotice(''); setImportSiteUrl('');
       if (mode === 'edit' && item) {
         setLandingId(item.id);
         setLandingName(item.name || '');
         setLandingHtml(item.html || '');
-        setLandingCaptureCreds(Boolean(item.capture_credentials));
-        setLandingCapturePasswords(Boolean(item.capture_passwords));
         setLandingRedirectUrl(item.redirect_url || '');
       } else {
         setLandingId(null);
         setLandingName('');
-        setLandingHtml('<!DOCTYPE html><html><head><title>Login</title></head><body><h2>Sign In</h2><form method="POST"><input name="username" placeholder="Username"/><input type="password" name="password"/><button type="submit">Login</button></form></body></html>');
-        setLandingCaptureCreds(true);
-        setLandingCapturePasswords(false);
-        setLandingRedirectUrl('');
+        setLandingHtml('<!DOCTYPE html><html><head><title>Lab account verification</title></head><body><form method="POST"><input type="email" placeholder="Demo email" required/><input type="password" placeholder="Dummy password" required/><button type="submit">Verify</button></form></body></html>');
+        setLandingRedirectUrl(resources?.educationUrl || '');
       }
       setIsLandingModalOpen(true);
     }
@@ -277,7 +285,7 @@ export default function PhishingAdminDashboard() {
   const handleSaveTemplate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!templateName.trim() || !templateSubject.trim()) {
-      alert('Nama template dan subject wajib diisi');
+      alert('Template name and subject are required');
       return;
     }
 
@@ -300,15 +308,15 @@ export default function PhishingAdminDashboard() {
       });
 
       if (res.ok) {
-        alert(`Template email berhasil ${templateModalMode === 'edit' ? 'diperbarui' : 'dibuat'}!`);
+        alert(`Email template ${templateModalMode === 'edit' ? 'updated' : 'created'}.`);
         setIsTemplateModalOpen(false);
         await loadResources();
       } else {
         const data = await res.json();
-        alert(`Gagal menyimpan template: ${data.error || 'Terjadi kesalahan'}`);
+        alert(`Could not save template: ${data.error || 'Unexpected error'}`);
       }
     } catch (err: unknown) {
-      alert(`Koneksi backend gagal: ${errorMessage(err)}`);
+      alert(`Backend connection failed: ${errorMessage(err)}`);
     } finally {
       setIsSavingTemplate(false);
     }
@@ -321,17 +329,18 @@ export default function PhishingAdminDashboard() {
       if (res.ok) {
         await loadResources();
       } else {
-        alert('Gagal menghapus template.');
+        alert('Could not delete the template.');
       }
     } catch {
-      alert('Gagal menghubungi backend.');
+      alert('Could not reach the backend.');
     }
   };
 
   // Landing Page Modal Handlers
   const handleImportSite = async () => {
-    if (!importSiteUrl.trim()) {
-      alert('Masukkan URL website yang ingin di-clone');
+    setCloneError(''); setCloneNotice('');
+    if (!importSiteUrl.trim() || !cloneAuthorized) {
+      setCloneError('Enter a public URL and confirm permission to use the page.');
       return;
     }
     setIsImportingSite(true);
@@ -339,17 +348,18 @@ export default function PhishingAdminDashboard() {
       const res = await fetch('/api/admin/gophish/import-site', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: importSiteUrl }),
+        body: JSON.stringify({ url: importSiteUrl.trim(), authorized: cloneAuthorized }),
       });
       const data = await res.json();
       if (res.ok && data.html) {
         setLandingHtml(data.html);
-        alert('Website berhasil di-clone ke editor!');
+        setLandingRedirectUrl(data.redirect_url);
+        setCloneNotice(data.message);
       } else {
-        alert(`Gagal mengimpor website: ${data.error || 'Pastikan URL valid dan dapat diakses'}`);
+        setCloneError(data.error || 'Check that the URL is valid and reachable');
       }
     } catch (err: unknown) {
-      alert(`Koneksi gagal: ${errorMessage(err)}`);
+      setCloneError(`Connection failed: ${errorMessage(err)}`);
     } finally {
       setIsImportingSite(false);
     }
@@ -358,7 +368,7 @@ export default function PhishingAdminDashboard() {
   const handleSaveLandingPage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!landingName.trim() || !landingHtml.trim()) {
-      alert('Nama landing page dan HTML content wajib diisi');
+      alert('Landing page name and HTML are required');
       return;
     }
 
@@ -375,22 +385,22 @@ export default function PhishingAdminDashboard() {
         body: JSON.stringify({
           name: landingName,
           html: landingHtml,
-          capture_credentials: landingCaptureCreds,
-          capture_passwords: landingCapturePasswords,
+          capture_credentials: false,
+          capture_passwords: false,
           redirect_url: landingRedirectUrl,
         }),
       });
 
       if (res.ok) {
-        alert(`Landing page berhasil ${landingModalMode === 'edit' ? 'diperbarui' : 'dibuat'}!`);
+        alert(`Landing page ${landingModalMode === 'edit' ? 'updated' : 'created'}.`);
         setIsLandingModalOpen(false);
         await loadResources();
       } else {
         const data = await res.json();
-        alert(`Gagal menyimpan landing page: ${data.error || 'Terjadi kesalahan'}`);
+        alert(`Could not save landing page: ${data.error || 'Unexpected error'}`);
       }
     } catch (err: unknown) {
-      alert(`Koneksi backend gagal: ${errorMessage(err)}`);
+      alert(`Backend connection failed: ${errorMessage(err)}`);
     } finally {
       setIsSavingLanding(false);
     }
@@ -403,10 +413,10 @@ export default function PhishingAdminDashboard() {
       if (res.ok) {
         await loadResources();
       } else {
-        alert('Gagal menghapus landing page.');
+        alert('Could not delete the landing page.');
       }
     } catch {
-      alert('Gagal menghubungi backend.');
+      alert('Could not reach the backend.');
     }
   };
 
@@ -433,18 +443,18 @@ export default function PhishingAdminDashboard() {
   };
 
   const requireFreshAdminLogin = async () => {
-    setEmpFormError('Session Phishing Administrator sudah berakhir atau diganti oleh akun lain. Mengarahkan ke login ulang…');
+    setEmpFormError('Administrator session expired or changed. Redirecting to sign-in…');
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
     } finally {
-      window.setTimeout(() => window.location.assign('/auth'), 900);
+      window.setTimeout(() => router.push('/auth'), 900);
     }
   };
 
   const handleAddEmployeeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!empEmail.trim() || !empPassword) {
-      setEmpFormError('Email dan password awal wajib diisi.');
+      setEmpFormError('Email and initial password are required.');
       return;
     }
 
@@ -470,10 +480,10 @@ export default function PhishingAdminDashboard() {
       } else if (res.status === 401 || res.status === 403) {
         await requireFreshAdminLogin();
       } else {
-        setEmpFormError(data.error || 'Gagal menambah akun employee.');
+        setEmpFormError(data.error || 'Could not create the employee account.');
       }
     } catch (err: unknown) {
-      setEmpFormError(`Koneksi gagal: ${errorMessage(err)}`);
+      setEmpFormError(`Connection failed: ${errorMessage(err)}`);
     } finally {
       setIsSavingEmp(false);
     }
@@ -482,7 +492,7 @@ export default function PhishingAdminDashboard() {
   const handleEditEmployeeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!empEmail.trim()) {
-      alert('Email wajib diisi');
+      alert('Email is required');
       return;
     }
 
@@ -509,10 +519,10 @@ export default function PhishingAdminDashboard() {
       } else if (res.status === 401 || res.status === 403) {
         await requireFreshAdminLogin();
       } else {
-        setEmpFormError(data.error || 'Gagal memperbarui akun employee.');
+        setEmpFormError(data.error || 'Could not update the employee account.');
       }
     } catch (err: unknown) {
-      setEmpFormError(`Koneksi gagal: ${errorMessage(err)}`);
+      setEmpFormError(`Connection failed: ${errorMessage(err)}`);
     } finally {
       setIsSavingEmp(false);
     }
@@ -527,7 +537,7 @@ export default function PhishingAdminDashboard() {
   const handleAddDivisionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newDivisionName.trim()) {
-      alert('Nama divisi wajib diisi');
+      alert('Division name is required');
       return;
     }
 
@@ -541,14 +551,14 @@ export default function PhishingAdminDashboard() {
 
       const data = await res.json();
       if (res.ok) {
-        alert('Divisi baru berhasil ditambahkan!');
+        alert('Division added.');
         setIsAddDivisionModalOpen(false);
         await loadDivisions();
       } else {
-        alert(`Gagal menambah divisi: ${data.error || 'Terjadi kesalahan'}`);
+        alert(`Could not add division: ${data.error || 'Unexpected error'}`);
       }
     } catch (err: unknown) {
-      alert(`Koneksi gagal: ${errorMessage(err)}`);
+      alert(`Connection failed: ${errorMessage(err)}`);
     } finally {
       setIsSavingDivision(false);
     }
@@ -567,6 +577,7 @@ export default function PhishingAdminDashboard() {
           onSelectedEmailsChange={setSelectedEmails}
           onSyncUsers={handleSyncUsers}
           onOpenLaunchModal={() => {
+            setLaunchError('');
             setIsLaunchModalOpen(true);
             loadResources();
           }}
@@ -575,6 +586,11 @@ export default function PhishingAdminDashboard() {
           onOpenTemplateBuilder={handleOpenTemplateBuilder}
           onDeleteTemplate={handleDeleteTemplate}
           onDeletePage={handleDeletePage}
+          onSetupResources={preset => void handleSetupResources(preset)}
+          onRefresh={() => { void loadCampaigns(); void loadResources(); }}
+          busy={setupBusy || isLaunching}
+          error={resourceError || campaignError}
+          notice={campaignNotice}
         />
       )}
 
@@ -586,15 +602,6 @@ export default function PhishingAdminDashboard() {
           onOpenAddEmployee={handleOpenAddEmployee}
           onOpenEditEmployee={handleOpenEditEmployee}
           onOpenAddDivision={handleOpenAddDivision}
-        />
-      )}
-
-      {activeTab === 'webmail' && (
-        <MockWebmailSection
-          readOnly={false}
-          emails={Array.isArray(emails) ? emails : []}
-          selectedEmail={selectedEmail}
-          onSelectEmail={setSelectedEmail}
         />
       )}
 
@@ -615,24 +622,27 @@ export default function PhishingAdminDashboard() {
 
       {/* ── MODAL 1: Launch Phishing Simulation ── */}
       {isLaunchModalOpen && (
-        <div className="dialog-overlay">
-          <div className="dialog-box fade-up font-body" style={{ maxWidth: '520px', width: '90%' }}>
+        <dialog ref={launchDialog} className="campaign-dialog campaign-launch" aria-labelledby="campaign-launch-title" onCancel={event => { if (isLaunching) event.preventDefault(); else setIsLaunchModalOpen(false); }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-primary)' }}>
-                <Play size={18} style={{ color: 'var(--accent)' }} /> Launch Phishing Simulation
+              <h3 id="campaign-launch-title" style={{ fontSize: '16px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-primary)' }}>
+                <Play size={18} style={{ color: 'var(--accent)' }} /> Create lab campaign
               </h3>
-              <button onClick={() => setIsLaunchModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <button disabled={isLaunching} aria-label="Close" onClick={() => setIsLaunchModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleLaunchCampaign} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <form onSubmit={handleLaunchCampaign} className="debt-form">
+              <p className="debt-help">Emails are captured in Mailpit only. Use a server URL that recipients can reach.</p>
+              {launchError && <p className="debt-error" role="alert">{launchError}</p>}
               <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                <label htmlFor="launch-name" style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
                   Campaign Name *
                 </label>
                 <input
                   type="text"
+                  id="launch-name"
+                  required maxLength={150}
                   placeholder="e.g. Q3 Urgent Security Verification"
                   value={launchName}
                   onChange={(e) => setLaunchName(e.target.value)}
@@ -641,10 +651,12 @@ export default function PhishingAdminDashboard() {
               </div>
 
               <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                <label htmlFor="launch-template" style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
                   Email Pretext Template *
                 </label>
                 <select
+                  id="launch-template"
+                  required
                   value={launchTemplate}
                   onChange={(e) => setLaunchTemplate(e.target.value)}
                   style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
@@ -656,25 +668,29 @@ export default function PhishingAdminDashboard() {
               </div>
 
               <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                <label htmlFor="launch-profile" style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
                   Sending Profile (SMTP) *
                 </label>
                 <select
+                  id="launch-profile"
+                  required
                   value={launchProfile}
                   onChange={(e) => setLaunchProfile(e.target.value)}
                   style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
                 >
-                  {(resources?.profiles || []).map(p => (
+                  {(resources?.profiles || []).filter(p => p.host === 'mailpit:1025').map(p => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                <label htmlFor="launch-page" style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
                   Landing Page Portal *
                 </label>
                 <select
+                  id="launch-page"
+                  required
                   value={launchPage}
                   onChange={(e) => setLaunchPage(e.target.value)}
                   style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
@@ -686,11 +702,12 @@ export default function PhishingAdminDashboard() {
               </div>
 
               <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  Simulation Target URL (Payload Endpoint) *
+                <label htmlFor="launch-url" style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                  URL server GoPhish untuk penerima *
                 </label>
                 <input
-                  type="text"
+                  type="url" required placeholder="http://IP-SERVER:8080"
+                  id="launch-url"
                   value={launchUrl}
                   onChange={(e) => setLaunchUrl(e.target.value)}
                   style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
@@ -706,6 +723,7 @@ export default function PhishingAdminDashboard() {
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
                 <button
                   type="button"
+                  disabled={isLaunching}
                   onClick={() => setIsLaunchModalOpen(false)}
                   style={{ padding: '8px 16px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-secondary)', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}
                 >
@@ -717,12 +735,11 @@ export default function PhishingAdminDashboard() {
                   className="btn btn-primary"
                   style={{ padding: '8px 18px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                 >
-                  {isLaunching ? 'Launching...' : <><Send size={14} /> Launch Now</>}
+                  {isLaunching ? 'Creating campaign…' : <><Send size={14} /> Send to Mailpit</>}
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </dialog>
       )}
 
       {/* ── MODAL 2: Template Builder (Create / Edit) ── */}
@@ -815,12 +832,12 @@ export default function PhishingAdminDashboard() {
             {/* Import / Clone Site Helper */}
             <div style={{ padding: '12px 14px', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', marginBottom: '16px' }}>
               <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                Clone External Site (Auto-Import HTML)
+                Clone login page · Firecrawl
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <input
                   type="text"
-                  placeholder="https://login.microsoftonline.com"
+                  placeholder="https://domain-milik-anda.com/login"
                   value={importSiteUrl}
                   onChange={(e) => setImportSiteUrl(e.target.value)}
                   style={{ flex: 1, padding: '8px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '12px', outline: 'none' }}
@@ -828,12 +845,16 @@ export default function PhishingAdminDashboard() {
                 <button
                   type="button"
                   onClick={handleImportSite}
-                  disabled={isImportingSite}
+                  disabled={isImportingSite || !cloneAuthorized || !importSiteUrl.trim()}
                   style={{ padding: '8px 14px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}
                 >
-                  <Download size={13} /> {isImportingSite ? 'Cloning...' : 'Clone Site'}
+                  <Download size={13} /> {isImportingSite ? 'Fetching HTML…' : 'Clone Firecrawl'}
                 </button>
               </div>
+              <label className="campaign-clone-consent"><input type="checkbox" checked={cloneAuthorized} onChange={e => setCloneAuthorized(e.target.checked)} />I own this page or have permission to use it for simulation.</label>
+              <p className="debt-help">Clones static visuals only. Source scripts and forms are removed; SPA/OAuth pages may not be supported.</p>
+              {cloneError && <p className="debt-error" role="alert">{cloneError}</p>}
+              {cloneNotice && <p className="debt-notice" role="status">{cloneNotice}</p>}
             </div>
 
             <form onSubmit={handleSaveLandingPage} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -843,7 +864,7 @@ export default function PhishingAdminDashboard() {
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Microsoft 365 Login Portal"
+                  placeholder="e.g. Demo Password Verification"
                   value={landingName}
                   onChange={(e) => setLandingName(e.target.value)}
                   style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
@@ -862,26 +883,7 @@ export default function PhishingAdminDashboard() {
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={landingCaptureCreds}
-                    onChange={(e) => setLandingCaptureCreds(e.target.checked)}
-                    style={{ accentColor: 'var(--accent)' }}
-                  />
-                  Capture Submitted Data / Form Post
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={landingCapturePasswords}
-                    onChange={(e) => setLandingCapturePasswords(e.target.checked)}
-                    style={{ accentColor: 'var(--danger)' }}
-                  />
-                  Capture Passwords (Hash)
-                </label>
-              </div>
+              <p className="debt-notice">Only submission events are recorded. Saved pages use a demo form that does not send credentials. Never use real passwords.</p>
 
               <div>
                 <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
@@ -889,7 +891,7 @@ export default function PhishingAdminDashboard() {
                 </label>
                 <input
                   type="text"
-                  placeholder="https://company.portal/login-success"
+                  placeholder={resources?.educationUrl || 'AFFERENT education page URL'}
                   value={landingRedirectUrl}
                   onChange={(e) => setLandingRedirectUrl(e.target.value)}
                   style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
@@ -955,7 +957,7 @@ export default function PhishingAdminDashboard() {
                   style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
                 >
                   <option value="employee">Employee</option>
-                  <option value="phishing_admin">Phishing Administrator</option>
+                  <option value="phishing_admin">Administrator</option>
                   <option value="soc">SOC Analyst</option>
                   <option value="grc">GRC Specialist</option>
                   <option value="ciso">CISO Executive</option>
@@ -1062,7 +1064,7 @@ export default function PhishingAdminDashboard() {
                   style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
                 >
                   <option value="employee">Employee</option>
-                  <option value="phishing_admin">Phishing Administrator</option>
+                  <option value="phishing_admin">Administrator</option>
                   <option value="soc">SOC Analyst</option>
                   <option value="grc">GRC Specialist</option>
                   <option value="ciso">CISO Executive</option>

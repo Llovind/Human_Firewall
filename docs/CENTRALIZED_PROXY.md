@@ -9,18 +9,18 @@ audit records.
 
 Decision precedence is deterministic:
 
-1. Active manual SOC block
-2. Active manual SOC allow
-3. ML evidence (visible to SOC, never an automatic block)
-4. Unknown domain allowed and recorded as `Unknown`
+1. Active manual SOC block (including parent-domain policy)
+2. Active manual SOC allow (trusted domain, audited whitelist)
+3. Conclusive calibrated domain ML verdict: Block/Allow
+4. Completed but inconclusive prediction: Allow/Unknown for SOC review
+5. Pending, timeout, or unavailable prediction: temporary denial, no blacklist
 
-A conclusive ML result is evidence for SOC review. Only a manual SOC `block`
-is enforced by Squid. Timeout, unavailable model, low-confidence result, or
-`unknown` fail open and remain visible in the live traffic feed. The
-`PROXY_FAIL_MODE` setting applies only when the whole Decision API is
-unreachable; its demo default is `open` so a backend restart does not remove
-Internet access. Set it to `closed` explicitly when fail-closed behavior is
-required and the Decision API is operated redundantly.
+A request is not forwarded while inference is pending. A model timeout is not
+the same as a completed Unknown prediction: the former is denied temporarily,
+the latter remains allowed for review under the agreed demo policy. SOC Block
+always overrides ML and older/narrower SOC Allow entries. No `.com`/TLD bypass
+is installed. The Decision API outage default is now `PROXY_FAIL_MODE=closed`.
+An explicit `open` setting sacrifices the first-request enforcement guarantee.
 
 Non-conclusive results are cached only for `PROXY_UNKNOWN_RETRY_SECONDS` to
 avoid an ML request/alert storm while still retrying classification soon.
@@ -28,12 +28,15 @@ avoid an ML request/alert storm while still retrying classification soon.
 ## Data path
 
 ```text
-Employee device -> Squid:3128 -> Flask Decision API
+Employee device -> opaque TCP relay:3128 -> Squid (internal) -> Flask Decision API
                                     |-> Redis verdict/device lookup
                                     |-> PostgreSQL fallback/source of truth
-                                    |-> External ML (only cache miss)
+                                    |-> Local domain ML / external HMAC ML (cache miss)
                                     |-> Redis Stream -> PostgreSQL traffic
                                     `-> Redis Pub/Sub -> SOC dashboard SSE
+
+Relay controller -> internal enforcement/check -> committed PostgreSQL policy
+               `-> close only live, previously allowed sockets now blocked
 ```
 
 SQLite remains the source for the existing login, phishing simulation,
@@ -76,6 +79,7 @@ Response:
 
 Confidence is a number from 0 to 1. The integration is domain-only: do not
 expect HTTP path, page content, cookies, credentials, or decrypted HTTPS.
+The request includes `inputScope: "domain"`; no fabricated full URL is sent.
 
 ## ML asynchronous callback
 
@@ -104,6 +108,8 @@ second verdict operation.
   device authorization window (8 hours by default)
 - `GET /api/proxy/device/status` — employee session; registration/traffic status
 - `POST /api/proxy/decision` — internal service bearer; Squid decision + telemetry
+- `POST /api/proxy/enforcement/check` — internal service only, 1..200 domains;
+  read committed decisions without new scans/traffic events; not exposed by BFF
 - `GET /api/proxy/alerts/stream` — SOC/CISO session; SSE update stream
 - `POST /api/proxy/alerts/{id}/decision` — SOC session; audited Block/Allow
 - `POST /api/proxy/manual-decision` — SOC session; audited manual domain override
@@ -170,25 +176,56 @@ SOC/CISO can retrieve the append-only decision trail from
 against the audit table; manual decisions record actor, role, timestamp,
 reason, before/after state, request ID, domain, and source alert.
 
-## HTTPS limitation
+## Selective HTTPS denial and active revocation
 
-No AFFERENT CA certificate is required for the current domain-only design.
-Squid creates a raw HTTPS `CONNECT` tunnel and the browser validates the
-website's original certificate directly.
+The trusted AFFERENT CA is required **only to render an HTTPS denial page**.
+Install the public certificate from `/api/proxy/ca.crt` in the employee test
+browser/device; never distribute the CA private key. Use consenting managed
+lab devices, not personal browsing without informed consent.
 
-Without TLS inspection, Squid can block an HTTPS CONNECT by hostname, but it
-cannot see the full URL path. HTTP requests receive the branded AFFERENT block
-page. Some browsers display a generic tunnel/proxy error for denied HTTPS
-CONNECT requests; a fully branded HTTPS page would require TLS interception,
-a managed CA on every device, and explicit institutional approval. That is
-intentionally outside this demo.
+Allowed HTTPS is spliced: the browser receives the website's original
+certificate and its payload stays encrypted end-to-end. Only a denied
+connection is bumped locally to return `BLOCKED BY AFFERENT`. It is permanently
+marked for denial and can never forward subsequent HTTP requests to the origin,
+even if policy changes during that handshake. This is limited TLS interception
+for the denial page, **not** a claim of zero TLS termination everywhere.
+
+The relay reads the plaintext CONNECT authority, not TLS/application content.
+The first-request ML gate uses that domain; HTTPS paths, search terms, passwords,
+and cookies are neither model inputs nor persisted proxy telemetry. The block
+template no longer prints raw request headers/cookies. Certificate-pinned
+clients may reject the denial certificate and show a connection error instead.
 
 Manual SOC policies are canonicalized by removing a leading `www.` and apply
 to the canonical domain plus its subdomains. Typos remain distinct domains:
 `yotube.com` does not and must not silently become `youtube.com`. A new HTTP
-request or HTTPS CONNECT is evaluated without a Squid ACL cache. An HTTPS
-tunnel that was established before a policy change cannot be interrupted by a
-domain-only proxy; reload or open a new tab to establish a fresh CONNECT.
+request or HTTPS CONNECT is evaluated without a Squid ACL cache. An opaque TCP
+relay polls committed policy every `PROXY_REVOCATION_INTERVAL_SECONDS` (0.5 s
+default), closing only previously allowed tunnels whose domain is now blocked.
+The real bound includes API/network response time; it is not zero latency. A
+denied handshake is not armed for revocation, so its page remains displayable.
+
+After revocation, fresh navigation gets the blocking page when CA trust is
+correct. A background search/video request can show an in-app/network error;
+it cannot reliably replace the whole browser page with HTML. Already buffered
+or cached content cannot be withdrawn. Domains sharing a CDN IP are not killed
+together. Internal Squid ports 3129/3130 bind to container loopback only. The
+PROXY protocol preserves client addresses; no NET_ADMIN, privileged container,
+host networking, or Docker socket is required.
+
+## Local domain model and evaluation
+
+`ML_SCANNER_URL` empty + `ML_LOCAL_ENABLED=true` selects
+`backend/models/domain_v3`, including the generated-hostname abstention guard.
+Original Char-BiLSTM remains an offline experiment; employee URL checks now use
+VT/urlscan and do not enforce proxy policy. URL-trained thresholds are not reused
+on hostnames. VirusTotal/urlscan remain outside the proxy ML path. See
+[evaluation notes](DOMAIN_ML_EVALUATION.md) and
+[manifest](../backend/models/domain_v3/manifest.json).
+
+High blocking precision is not high overall accuracy/recall. This is a
+conservative demo baseline, not a pornography classifier or a guarantee
+against every malicious website.
 
 The proxy is device-wide. When SOC and employee sessions use two browsers on
 the same Windows computer, external traffic from both browsers and background

@@ -72,8 +72,8 @@ export default function ProxyConnectionCard() {
       throw new Error(await responseError(
         statusResponse,
         statusResponse.status === 401
-          ? 'Sesi SSO tidak terbaca oleh layanan proxy. Muat ulang dashboard.'
-          : 'Status proxy tidak dapat dibaca',
+          ? 'Proxy session unavailable. Reload your dashboard.'
+          : 'Proxy status unavailable',
       ));
     }
     const statusPayload = await statusResponse.json();
@@ -85,7 +85,7 @@ export default function ProxyConnectionCard() {
         body: JSON.stringify({ label: 'Perangkat utama' }),
       });
       if (!registration.ok) {
-        throw new Error(await responseError(registration, 'Aktivasi perangkat gagal'));
+        throw new Error(await responseError(registration, 'Could not activate this device'));
       }
       currentStatus = (await registration.json()).status;
     }
@@ -96,7 +96,7 @@ export default function ProxyConnectionCard() {
     const timer = window.setTimeout(() => {
       void loadStatus()
         .then(() => setError(''))
-        .catch((err) => setError(err instanceof Error ? err.message : 'Layanan proxy belum siap.'))
+        .catch((err) => setError(err instanceof Error ? err.message : 'Proxy service unavailable.'))
         .finally(() => setLoading(false));
     }, 0);
     return () => window.clearTimeout(timer);
@@ -109,6 +109,8 @@ export default function ProxyConnectionCard() {
       const connected = await probeSystemProxy(proxyProbeUrl);
       if (active) setProbeState(connected ? 'connected' : 'disconnected');
     };
+    // Preserve the verified ON/OFF probe; reset when its network target changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setProbeState('checking');
     void probe();
     const timer = window.setInterval(() => void probe(), 5_000);
@@ -127,10 +129,10 @@ export default function ProxyConnectionCard() {
           setStatus((await response.json()).status);
           setError('');
         } else {
-          setError(await responseError(response, 'Heartbeat proxy gagal'));
+          setError(await responseError(response, 'Proxy heartbeat failed'));
         }
       } catch {
-        setError('Koneksi ke layanan proxy terputus');
+        setError('Connection to the proxy service lost');
       }
     };
     const timer = window.setInterval(() => void heartbeat(), 10_000);
@@ -147,10 +149,10 @@ export default function ProxyConnectionCard() {
         body: JSON.stringify({ label: 'Perangkat utama' }),
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || 'Aktivasi gagal');
+      if (!response.ok) throw new Error(payload.error || 'Activation failed');
       setStatus(payload.status);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Aktivasi gagal');
+      setError(err instanceof Error ? err.message : 'Activation failed');
     } finally {
       setLoading(false);
     }
@@ -167,12 +169,12 @@ export default function ProxyConnectionCard() {
   const stateColor = proxyConnected ? '#22c55e' : proxyFailed ? '#ef4444' : status.registered ? '#f59e0b' : '#94a3b8';
   const StateIcon = proxyConnected ? ShieldCheck : proxyFailed ? WifiOff : status.registered ? Network : WifiOff;
   const title = proxyConnected
-    ? 'Terhubung ke AFFERENT Proxy'
+    ? 'Connected to AFFERENT Proxy'
     : proxyFailed
-      ? 'Gagal terhubung ke AFFERENT Proxy'
+      ? 'Failed to connect to AFFERENT Proxy'
     : status.registered
-      ? 'Perangkat terdaftar — menunggu traffic proxy'
-      : 'Menyiapkan perlindungan traffic';
+      ? 'Device registered — checking proxy'
+      : 'Set up proxy protection';
 
   return (
     <section className="glass-card proxy-connect-card" aria-live="polite">
@@ -181,41 +183,40 @@ export default function ProxyConnectionCard() {
           <StateIcon size={24} />
         </div>
         <div>
-          <div className="proxy-eyebrow"><span style={{ background: stateColor }} /> LIVE DEVICE SECURITY</div>
+          <div className="proxy-eyebrow"><span style={{ background: stateColor }} /> DEVICE SECURITY</div>
           <h2>{title}</h2>
           <p>
             {proxyConnected
-              ? 'Traffic domain Anda sedang dimonitor. Domain berbahaya diblokir otomatis dan dicatat untuk SOC.'
+              ? 'Domain traffic is monitored and follows AFFERENT policies.'
               : proxyFailed
-                ? 'Proxy sistem tidak aktif atau tidak dapat dijangkau. Aktifkan kembali proxy perangkat untuk melanjutkan monitoring.'
+                ? 'Proxy is off or unreachable. Check your device proxy settings.'
               : status.registered
-                ? 'Atur proxy perangkat ke alamat di samping, lalu buka situs apa pun untuk menyelesaikan koneksi.'
-                : 'Daftarkan perangkat ini setelah login, lalu gunakan alamat proxy pada pengaturan jaringan sistem operasi.'}
+                ? 'Set your device proxy to this address, then open a website.'
+                : 'Activate this device, then add the proxy in your system settings.'}
           </p>
           {error && <div className="proxy-error">{error}</div>}
         </div>
       </div>
       <div className="proxy-connect-action">
         <span>HTTP / HTTPS proxy</span>
-        <button type="button" className="proxy-address" onClick={copyProxy} title="Salin alamat proxy">
+        <button type="button" className="proxy-address" onClick={copyProxy} title="Copy proxy address">
           <Globe2 size={15} /> {proxyUrl} {copied ? <Check size={14} /> : <Copy size={14} />}
         </button>
         {!status.registered && (
           <button type="button" className="btn btn-primary proxy-activate" onClick={activate} disabled={loading}>
             {loading ? <Loader2 size={16} className="spin" /> : <ShieldCheck size={16} />}
-            Aktifkan perangkat
+            Activate device
           </button>
         )}
         <a
           href="/api/proxy/ca.crt"
           download="afferent-proxy-ca.crt"
-          className="btn btn-secondary"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '6px 12px', marginTop: '6px', textDecoration: 'none' }}
-          title="Download CA Certificate untuk HTTPS inspection"
+          className="btn btn-secondary proxy-ca-download"
+          title="Lab certificate for HTTPS block pages"
         >
-          <Download size={13} /> Download CA Cert
+          <Download size={13} /> Download CA certificate
         </a>
-        {status.registered && <small>IP binding: {status.sourceIpHint || 'tersimpan aman'}</small>}
+        {status.registered && <small>IP binding: {status.sourceIpHint || 'stored securely'}</small>}
       </div>
     </section>
   );

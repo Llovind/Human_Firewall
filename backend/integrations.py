@@ -1,12 +1,105 @@
 import os
 import base64
 import requests
+import uuid
+import re
+import time
+from contextlib import closing
 
 VT_API_KEY = os.getenv("VT_API_KEY")
 URLSCAN_API_KEY = os.getenv("URLSCAN_API_KEY")
 
 VT_BASE_URL = "https://www.virustotal.com/api/v3/urls"
 URLSCAN_SEARCH_URL = "https://urlscan.io/api/v1/search/"
+
+
+def _vt_budget():
+    import database
+    # Shared across gunicorn and the durable worker; default matches a small
+    # public-key lab. It is a minute cap, not a promise of provider entitlement.
+    cap = max(1, min(1000, int(os.environ.get('VT_REQUESTS_PER_MINUTE', '4'))))
+    minute = int(time.time()) // 60
+    with closing(database.get_connection()) as conn, conn:
+        conn.execute('BEGIN IMMEDIATE')
+        conn.execute('DELETE FROM provider_request_budget WHERE minute < ?', (minute - 2,))
+        conn.execute("INSERT INTO provider_request_budget VALUES ('virustotal',?,1) ON CONFLICT(provider,minute) DO UPDATE SET requests=requests+1", (minute,))
+        count = conn.execute("SELECT requests FROM provider_request_budget WHERE provider='virustotal' AND minute=?", (minute,)).fetchone()[0]
+    return count <= cap
+
+
+def _vt_throttled():
+    return {'success': False, 'provider': 'virustotal', 'status_code': 429,
+            'error': 'Local VirusTotal request budget reached', 'data': None}
+
+
+def vt_file_request(method, path, **kwargs):
+    """Fixed-origin VT v3 only; never follow redirects carrying an API key."""
+    if not VT_API_KEY:
+        return {'success': False, 'provider': 'virustotal', 'status_code': 503,
+                'error': 'VT_API_KEY not configured', 'data': None}
+    if not _vt_budget():
+        return _vt_throttled()
+    try:
+        response = requests.request(method, 'https://www.virustotal.com/api/v3/' + path,
+            headers={'x-apikey': VT_API_KEY}, timeout=(4, 12), allow_redirects=False, **kwargs)
+        return _provider_response(response, 'virustotal')
+    except requests.exceptions.RequestException:
+        return {'success': False, 'provider': 'virustotal', 'status_code': 502,
+                'error': 'VirusTotal unavailable', 'data': None}
+
+
+def scan_vt_file_hash(digest):
+    if not re.fullmatch(r'[0-9a-f]{64}', digest):
+        raise ValueError('Invalid SHA-256')
+    return vt_file_request('GET', 'files/' + digest)
+
+
+def upload_vt_file(payload):
+    # Do not share the employee's original filename with the provider.
+    return vt_file_request('POST', 'files', files={'file': ('sample.bin', payload, 'application/octet-stream')})
+
+
+def poll_vt_analysis(analysis_id):
+    if not re.fullmatch(r'[A-Za-z0-9_=-]{1,512}', analysis_id):
+        raise ValueError('Invalid VT analysis ID')
+    return vt_file_request('GET', 'analyses/' + analysis_id)
+
+
+def normalize_vt_file(result):
+    if not result.get('success'):
+        return None
+    attributes = ((result.get('data') or {}).get('data') or {}).get('attributes') or {}
+    if attributes.get('status') and attributes['status'] != 'completed':
+        return None
+    stats = attributes.get('last_analysis_stats', attributes.get('stats', {}))
+    normalized = normalize_virustotal({'success': True, 'data': {'data': {'attributes': {'last_analysis_stats': stats}}}})
+    # File engines use undetected, not harmless. No detections is evidence,
+    # not a guarantee that a file is safe to open.
+    if normalized['verdict'] == 'unknown' and isinstance(stats, dict) and stats.get('undetected', 0) > 0:
+        normalized.update(verdict='clean', severity='low', confidence=0)
+    return normalized
+
+
+def _provider_response(response, provider):
+    if response.status_code != 200:
+        return {'success': False, 'provider': provider, 'status_code': response.status_code,
+                'error': f'HTTP {response.status_code}', 'data': None}
+    try:
+        data = response.json()
+        if not isinstance(data, dict):
+            raise ValueError('Invalid provider object')
+    except ValueError:
+        return {'success': False, 'provider': provider, 'status_code': 502,
+                'error': 'Provider returned invalid JSON', 'data': None}
+    return {'success': True, 'provider': provider, 'status_code': 200, 'data': data}
+
+
+def provider_status(result):
+    code = result.get('status_code', 502)
+    state = ('not_configured' if 'not configured' in result.get('error', '') else
+             'rate_limited' if code == 429 else 'no_record' if code == 404 else
+             'ready' if result.get('success') else 'unavailable')
+    return {'state': result.get('state', state), 'statusCode': code}
 
 
 # Domain reputation — lazy import to avoid circular dependency
@@ -40,6 +133,8 @@ def scan_virustotal(url: str):
             "data": None
         }
 
+    if not _vt_budget():
+        return _vt_throttled()
     headers = {
         "x-apikey": VT_API_KEY
     }
@@ -78,30 +173,29 @@ def scan_virustotal(url: str):
             "data": None
         }
 
-    return {
-        "success": True,
-        "provider": "virustotal",
-        "status_code": 200,
-        "data": response.json()
-    }
+    return _provider_response(response, 'virustotal')
 
 
 def normalize_virustotal(result):
 
-    if not result["success"]:
+    if not isinstance(result, dict) or not result.get("success"):
         return None
 
-    data = result["data"]["data"]["attributes"]
-
-    stats = data["last_analysis_stats"]
+    data = (result.get('data') or {}).get('data') or {}
+    stats = (data.get('attributes') or {}).get('last_analysis_stats') or {}
+    if not isinstance(stats, dict):
+        stats = {}
+    stats = {key: value for key, value in stats.items() if isinstance(value, int) and not isinstance(value, bool) and value >= 0}
 
     malicious = stats.get("malicious", 0)
     suspicious = stats.get("suspicious", 0)
     harmless = stats.get("harmless", 0)
 
-    total = malicious + suspicious + harmless
+    total = sum(stats.values())
 
-    if malicious > 0:
+    if total == 0:
+        verdict, severity = 'unknown', 'medium'
+    elif malicious > 0:
         verdict = "malicious"
         severity = "high"
 
@@ -109,15 +203,17 @@ def normalize_virustotal(result):
         verdict = "suspicious"
         severity = "medium"
 
-    else:
+    elif harmless > 0:
         verdict = "clean"
         severity = "low"
+    else:
+        verdict, severity = 'unknown', 'medium'
 
     confidence = 0
 
     if total > 0:
         confidence = round(
-            (harmless / total) * 100
+            ((malicious + suspicious if malicious or suspicious else harmless) / total) * 100
         )
 
     return {
@@ -157,10 +253,11 @@ def scan_urlscan(url):
         response = requests.get(
             URLSCAN_SEARCH_URL,
             params={
-                "q": f'page.url:"{url}"'
+                "q": 'page.url:"' + url.replace('\\', '\\\\').replace('"', '\\"') + '"',
+                "size": 1,
             },
             headers=headers,
-            timeout=8
+            timeout=4
         )
     except requests.exceptions.Timeout:
         return {
@@ -188,17 +285,31 @@ def scan_urlscan(url):
             "data": None
         }
 
-    return {
-
-        "success": True,
-
-        "provider": "urlscan",
-
-        "status_code": 200,
-
-        "data": response.json()
-
-    }
+    result = _provider_response(response, 'urlscan')
+    if not result['success']:
+        return result
+    items = result['data'].get('results') or []
+    if not isinstance(items, list) or not items:
+        result['state'] = 'no_record'
+        return result
+    try:
+        first = items[0]
+        scan_id = str(uuid.UUID(first.get('_id') or (first.get('task') or {}).get('uuid', '')))
+    except (ValueError, TypeError, AttributeError):
+        result['state'] = 'no_verdict'
+        return result
+    try:
+        # Do not follow an arbitrary result URL supplied by the search response.
+        full = _provider_response(requests.get(f'https://urlscan.io/api/v1/result/{scan_id}/',
+            headers=headers, timeout=4, allow_redirects=False), 'urlscan')
+    except requests.exceptions.RequestException:
+        result['state'] = 'result_unavailable'
+        return result
+    if not full['success']:
+        result['state'] = 'result_unavailable'
+        result['status_code'] = full['status_code']
+        return result
+    return full
 # ==========================================================
 # Threat Decision Engine
 # ==========================================================
@@ -257,50 +368,25 @@ def build_threat_decision(vt_result):
 # ==========================================================
 
 def normalize_urlscan(result):
-
-    if result is None:
+    if not isinstance(result, dict) or not result.get('success'):
         return None
-
-    if not result["success"]:
-        return None
-
-    data = result["data"]
-
-    total = data.get("total", 0)
-
-    if total == 0:
-
-        return {
-
-            "provider": "urlscan",
-
-            "verdict": "clean",
-
-            "severity": "low",
-
-            "confidence": 100,
-
-            "urlscan_score": 0,
-
-            "raw": data
-
-        }
-
-    return {
-
-        "provider": "urlscan",
-
-        "verdict": "suspicious",
-
-        "severity": "medium",
-
-        "confidence": 80,
-
-        "urlscan_score": total,
-
-        "raw": data
-
-    }
+    data = result.get('data') or {}
+    verdicts = data.get('verdicts') or {}
+    details = verdicts.get('overall') or verdicts.get('urlscan') or {}
+    score = details.get('score', 0)
+    if not isinstance(score, (int, float)) or isinstance(score, bool) or not -100 <= score <= 100:
+        score = 0
+    if details.get('malicious') is True:
+        verdict, severity = 'malicious', 'high'
+    elif score > 0:
+        verdict, severity = 'suspicious', 'medium'
+    elif score < 0 and details.get('malicious') is False:
+        verdict, severity = 'clean', 'low'
+    else:
+        verdict, severity = 'unknown', 'medium'
+    return {'provider': 'urlscan', 'verdict': verdict, 'severity': severity,
+            'confidence': abs(score) if verdict != 'unknown' else 0,
+            'urlscan_score': score, 'raw': data}
 
 
 # ==========================================================

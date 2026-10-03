@@ -29,8 +29,7 @@ const typeIcon: Record<string, React.ReactNode> = {
 export default function IncidentTriageSection({
   readOnly,
   incidents,
-  onSelectIncident,
-  onResolveIncident
+  onSelectIncident
 }: IncidentTriageSectionProps) {
   const [incidentPage, setIncidentPage] = useState(1);
   const INCIDENTS_PER_PAGE = 8;

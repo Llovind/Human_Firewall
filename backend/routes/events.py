@@ -2,7 +2,6 @@ from flask import Blueprint, request, jsonify, render_template, session, redirec
 import database
 import os
 import json
-import requests
 import logging
 from datetime import datetime, timedelta
 from security import (
@@ -19,11 +18,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 events_bp = Blueprint('events', __name__)
-
-N8N_WEBHOOK_URL_FLOW_A = os.environ.get(
-    'N8N_WEBHOOK_URL_FLOW_A',
-    'http://n8n:5678/webhook/flask-event'
-)
 
 # Mapping domain email dummy -> nama divisi
 EMAIL_DOMAIN_TO_DIVISI = {
@@ -87,15 +81,6 @@ def build_history_note(click_count: int, viewed_training_count: int) -> str:
     )
     return narrative + badge
 
-def notify_n8n(payload: dict):
-    """Kirim event ke n8n secara fire-and-forget dengan timeout pendek & logging error."""
-    try:
-        response = requests.post(N8N_WEBHOOK_URL_FLOW_A, json=payload, timeout=2)
-        response.raise_for_status()
-    except requests.exceptions.RequestException as e:
-        logger.warning(f"notify_n8n: Webhook notification to n8n failed or timed out: {e}")
-
-
 @events_bp.route('/redirect-handler', methods=['GET'])
 def redirect_handler():
     email = request.args.get('email')
@@ -135,7 +120,6 @@ def redirect_handler():
     history = database.get_user_history(email)
     tier = database.classify_tier(history["click_count"])
     divisi = history.get("divisi") or derive_divisi_from_email(email)
-    telegram_chat_id = history.get("telegram_chat_id")
 
     try:
         database.record_event(
@@ -149,16 +133,6 @@ def redirect_handler():
         print(f"ERROR: Failed to record clicked_link event: {e}")
         import traceback
         traceback.print_exc()
-
-    notify_n8n({
-        "email": email,
-        "divisi": divisi,
-        "tier": tier,
-        "event_type": "clicked_link",
-        "click_count_after": history["click_count"] + 1,
-        "telegram_chat_id": telegram_chat_id,
-        "submitted_data": False
-    })
 
     if tier == "tier_1" or skip_fake_login:
         html = render_template('tier1.html')
@@ -212,16 +186,6 @@ def fake_login_submit():
         )
     except Exception as e:
         return jsonify({"error": "gagal menyimpan event", "detail": str(e)}), 500
-
-    notify_n8n({
-        "email": email,
-        "divisi": divisi,
-        "tier": database.classify_tier(history["click_count"]),
-        "event_type": "submitted_data",
-        "click_count_after": history["click_count"],
-        "telegram_chat_id": history.get("telegram_chat_id"),
-        "submitted_data": True
-    })
 
     return jsonify({"message": "Credential submission logged successfully"}), 200
 

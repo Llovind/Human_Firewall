@@ -9,10 +9,10 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Environment & Virtual Env
+# Environment & Virtual Env (the example is the only publishable ENV file)
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 venv/
 .venv/
 env/
@@ -33,19 +33,35 @@ dist/
 scratch/
 secrets/
 *.key
-proxy/ssl/*.key
+*.pfx
+*.p12
+*.pem
+proxy/ssl/
 
 # IDE files
 .vscode/
 .idea/
 
-.env
-.env.*
-!.env.example
+# Local agent/editor packages, not application dependencies.
+/Skill MD/
+/investor-materials/
+/investor-materials.zip
+/dashboard/replace.js
+/dashboard/replace-emp.js
+/malicious-pdf/
+*.tsbuildinfo
+coverage/
+docs/visual-checks/
 
 # Dataset files — tracked intentionally
 # dataset/raw/ and processed CSVs are included for reproducibility
 dataset/cache/
 dataset/.tld_cache/
+dataset/raw/tranco/.cache/
 .tranco_cache/
 .tranco/
+
+# Superseded experimental row-weighted candidate; demo uses domain_v3.
+backend/models/domain_v1/
+backend/models/domain_v2/
+ml/artifacts/

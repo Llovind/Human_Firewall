@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { fetchFlaskBackend } from '@/lib/backendClient';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const res = await fetchFlaskBackend('/api/threat/stats', {
       method: 'GET',

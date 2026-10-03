@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Copy, Check, Download, FileText, ShieldCheck, RefreshCw,
-  Search, Filter, ShieldAlert, Shield, Users, ChevronRight,
-  AlertTriangle, Zap, CheckCircle2, Info, Activity, UserCheck
+  Search, ShieldAlert, Shield, Users,
+  AlertTriangle, Zap, CheckCircle2, Info
 } from 'lucide-react';
 import { exportExecutivePdf } from '@/lib/ExecutivePdfExporter';
 
@@ -49,11 +49,25 @@ interface UserDeepDive {
   trend_assessment: string;
 }
 
+interface HeatmapData {
+  classifications: UserClassification[];
+  org_risk_summary?: OrgRiskSummary;
+  _warning?: string;
+  _source?: string;
+}
+
+async function loadHeatmap(role: string, refresh = false, signal?: AbortSignal): Promise<HeatmapData> {
+  const res = await fetch(`/api/ai/classify?role=${role}${refresh ? '&refresh=true' : ''}`, { signal });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Heatmap belum tersedia.');
+  if (!Array.isArray(data.classifications)) throw new Error('Format heatmap tidak valid.');
+  return data;
+}
+
 export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
   role = 'soc',
   markdownReport = '',
   isLoading = false,
-  onRefresh,
   onExportPdf,
   isPdfLoading = false,
 }) => {
@@ -62,7 +76,7 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
   // Heatmap State
   const [classifications, setClassifications] = useState<UserClassification[]>([]);
   const [orgSummary, setOrgSummary] = useState<OrgRiskSummary | null>(null);
-  const [isHeatmapLoading, setIsHeatmapLoading] = useState(false);
+  const [isHeatmapLoading, setIsHeatmapLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDivision, setSelectedDivision] = useState('ALL');
   const [selectedRiskFilter, setSelectedRiskFilter] = useState('ALL');
@@ -71,75 +85,80 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
   const [selectedUserEmail, setSelectedUserEmail] = useState<string | null>(null);
   const [userDeepDive, setUserDeepDive] = useState<UserDeepDive | null>(null);
   const [isDeepDiveLoading, setIsDeepDiveLoading] = useState(false);
+  const deepDiveRequest = useRef(0);
 
   // Markdown Report State
   const [internalReport, setInternalReport] = useState<string>('');
   const [isReportLoading, setIsReportLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState('');
+  const [sourceNotice, setSourceNotice] = useState('');
   const [pdfGenerating, setPdfGenerating] = useState(false);
 
   const activeReport = markdownReport || internalReport;
   const isReportBusy = isLoading || isReportLoading;
 
+  const applyHeatmap = useCallback((data: HeatmapData) => {
+    setClassifications(data.classifications);
+    setSourceNotice(data._warning || (data._source === 'llm' ? 'Analisis LLM berdasarkan telemetry.' : 'Baseline telemetry.'));
+    setOrgSummary(data.org_risk_summary || null);
+  }, []);
+
   // Fetch Heatmap Data
   const fetchHeatmapData = async (refresh = false) => {
     setIsHeatmapLoading(true);
+    setError('');
     try {
-      const res = await fetch(`/api/ai/classify?role=${role}${refresh ? '&refresh=true' : ''}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.classifications) setClassifications(data.classifications);
-        if (data.org_risk_summary) setOrgSummary(data.org_risk_summary);
-      }
+      applyHeatmap(await loadHeatmap(role, refresh));
     } catch (err) {
-      console.error('Failed to fetch AI heatmap classifications:', err);
+      setError(err instanceof Error ? err.message : 'Could not load the heatmap.');
     } finally {
       setIsHeatmapLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchHeatmapData();
-  }, [role]);
+    const controller = new AbortController();
+    loadHeatmap(role, false, controller.signal)
+      .then(data => { if (!controller.signal.aborted) applyHeatmap(data); })
+      .catch(err => { if (!controller.signal.aborted) setError(err instanceof Error ? err.message : 'Could not load the heatmap.'); })
+      .finally(() => { if (!controller.signal.aborted) setIsHeatmapLoading(false); });
+    return () => controller.abort();
+  }, [role, applyHeatmap]);
 
   // Fetch Individual User Deep Dive in-place
   const handleSelectUser = async (email: string) => {
+    const requestId = ++deepDiveRequest.current;
     setSelectedUserEmail(email);
     setIsDeepDiveLoading(true);
     setUserDeepDive(null);
+    setError('');
     try {
       const res = await fetch(`/api/ai/user/${encodeURIComponent(email)}?days=30`);
-      if (res.ok) {
         const data = await res.json();
-        setUserDeepDive(data);
-      }
+        if (!res.ok) throw new Error(data.error || 'Analisis employee belum tersedia.');
+        if (requestId === deepDiveRequest.current) setUserDeepDive(data);
     } catch (err) {
-      console.error('Failed to fetch user deep dive:', err);
+      if (requestId === deepDiveRequest.current) setError(err instanceof Error ? err.message : 'Analisis belum tersedia.');
     } finally {
-      setIsDeepDiveLoading(false);
+      if (requestId === deepDiveRequest.current) setIsDeepDiveLoading(false);
     }
   };
 
   const fetchReportData = async (refresh = false) => {
     setIsReportLoading(true);
+    setError('');
     try {
       const res = await fetch(`/api/ai/report?days=7${refresh ? '&refresh=true' : ''}`);
-      if (res.ok) {
         const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Laporan AI belum tersedia.');
         if (data.markdown_report) setInternalReport(data.markdown_report);
-      }
     } catch (err) {
-      console.error('Failed to fetch AI report:', err);
+      setError(err instanceof Error ? err.message : 'Laporan belum tersedia.');
     } finally {
       setIsReportLoading(false);
     }
   };
-
-  useEffect(() => {
-    if (activeSubTab === 'report' && !markdownReport && !internalReport) {
-      fetchReportData();
-    }
-  }, [activeSubTab, markdownReport]);
 
   const handleCopyMarkdown = () => {
     if (!activeReport) return;
@@ -166,12 +185,12 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
       onExportPdf();
       return;
     }
-    if (!markdownReport) return;
+    if (!activeReport) return;
     setPdfGenerating(true);
     try {
-      await exportExecutivePdf(role, markdownReport);
+      await exportExecutivePdf(role, activeReport);
     } catch (err) {
-      console.error('Failed to export vector PDF:', err);
+      setError(err instanceof Error ? err.message : 'PDF belum dapat diekspor.');
     } finally {
       setPdfGenerating(false);
     }
@@ -192,7 +211,7 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
     const riskRank = { DANGER: 0, VULNERABLE: 1, SAFE: 2 };
     const rankDiff = (riskRank[a.risk_level] ?? 1) - (riskRank[b.risk_level] ?? 1);
     if (rankDiff !== 0) return rankDiff;
-    return a.risk_score - b.risk_score;
+    return b.risk_score - a.risk_score;
   });
 
   // Selected Employee object from classification list (instant preview before deep-dive finishes)
@@ -319,7 +338,7 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <h2 className="font-heading" style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-                AI Risk Intelligence Command Center
+                Team risk analysis
               </h2>
               <span className="font-body" style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', padding: '2px 8px', borderRadius: '4px', background: 'rgba(33,150,243,0.12)', color: 'var(--accent)', border: '1px solid var(--border)' }}>
                 ROLE: {role}
@@ -327,10 +346,10 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
             </div>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--text-success)', fontWeight: 600 }}>
-                <ShieldCheck style={{ width: '14px', height: '14px', color: 'var(--text-success)' }} /> PII Masked (EMP-Tokens)
+                <ShieldCheck style={{ width: '14px', height: '14px', color: 'var(--text-success)' }} /> AFFERENT data
               </span>
               <span>•</span>
-              <span>Multi-LLM Failover Engine Active</span>
+              <span>{sourceNotice || 'Loading analysis sources…'}</span>
             </p>
           </div>
         </div>
@@ -357,10 +376,13 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
             }}
           >
             <Users style={{ width: '14px', height: '14px' }} />
-            User &amp; Division Risk Heatmap
+            Team risk
           </button>
           <button
-            onClick={() => setActiveSubTab('report')}
+            onClick={() => {
+              setActiveSubTab('report');
+              if (!markdownReport && !internalReport && !isReportBusy) void fetchReportData();
+            }}
             className="font-body"
             style={{
               display: 'inline-flex',
@@ -379,12 +401,13 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
             }}
           >
             <FileText style={{ width: '14px', height: '14px' }} />
-            Executive Narrative &amp; PDF Report
+            Reports & PDF
           </button>
         </div>
       </div>
 
       {/* SUB-TAB 1: HEATMAP & USER CLASSIFICATION — MASTER-DETAIL SPLIT CONSOLE */}
+      {error && <p role="alert" className="debt-error">{error}</p>}
       {activeSubTab === 'heatmap' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Org Metrics Overview Cards */}
@@ -392,7 +415,7 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
               <div className="stat-card glass-card font-body" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '14px' }}>
                 <div>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, fontWeight: 600 }}>Safe Employees</p>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, fontWeight: 600 }}>Safe scores</p>
                   <p className="font-mono-data" style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-success)', margin: '2px 0 0 0' }}>{orgSummary.safe_count}</p>
                 </div>
                 <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--bg-success)', border: '1px solid var(--border-success)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-success)' }}>
@@ -402,7 +425,7 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
 
               <div className="stat-card glass-card font-body" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '14px' }}>
                 <div>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, fontWeight: 600 }}>Vulnerable / Moderate</p>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, fontWeight: 600 }}>Needs attention</p>
                   <p className="font-mono-data" style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-warning)', margin: '2px 0 0 0' }}>{orgSummary.vulnerable_count}</p>
                 </div>
                 <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--bg-warning)', border: '1px solid var(--border-warning)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-warning)' }}>
@@ -412,7 +435,7 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
 
               <div className="stat-card glass-card font-body" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '14px' }}>
                 <div>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, fontWeight: 600 }}>Danger / High Risk</p>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, fontWeight: 600 }}>High risk</p>
                   <p className="font-mono-data" style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-danger)', margin: '2px 0 0 0' }}>{orgSummary.danger_count}</p>
                 </div>
                 <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--bg-danger)', border: '1px solid var(--border-danger)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-danger)' }}>
@@ -422,7 +445,7 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
 
               <div className="stat-card glass-card font-body" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '14px' }}>
                 <div>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, fontWeight: 600 }}>Most At Risk Division</p>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, fontWeight: 600 }}>Priority division</p>
                   <p style={{ fontSize: '14px', fontWeight: 800, color: 'var(--accent)', margin: '2px 0 0 0' }}>{orgSummary.most_at_risk_division || 'Network Operations'}</p>
                 </div>
                 <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(144,202,249,0.25)', border: '1px solid #90CAF9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0D47A1' }}>
@@ -773,7 +796,7 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
                     {/* Risk Score Meter */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '14px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '10px', padding: '8px 14px' }}>
                       <div>
-                        <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Security Score</span>
+                        <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Security score</span>
                         <div className="font-mono-data" style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>
                           {activeSelectedUser.risk_score} <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 400 }}>/ 100</span>
                         </div>
@@ -803,14 +826,14 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
                     <span style={{ fontWeight: 700, fontStyle: 'normal', color: 'var(--accent)', display: 'block', marginBottom: '2px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                       AI Executive Assessment
                     </span>
-                    "{activeSelectedUser.one_line_assessment}"
+                    &quot;{activeSelectedUser.one_line_assessment}&quot;
                   </div>
 
                   {/* Deep-Dive Analysis Content */}
                   {isDeepDiveLoading ? (
                     <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
                       <RefreshCw style={{ width: '28px', height: '28px', color: '#2196F3', animation: 'spin 1s linear infinite', margin: '0 auto 10px auto' }} />
-                      <p style={{ fontSize: '13px', margin: 0, fontWeight: 600 }}>Executing Deep-Dive AI Behavioral Telemetry Analysis...</p>
+                      <p style={{ fontSize: '13px', margin: 0, fontWeight: 600 }}>Loading employee analysis…</p>
                     </div>
                   ) : userDeepDive ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -983,7 +1006,7 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
               </button>
 
               <button
-                onClick={() => exportExecutivePdf(role, activeReport)}
+                onClick={() => void handleExportPdf()}
                 disabled={isPdfLoading || pdfGenerating || !activeReport}
                 className="font-body"
                 style={{
@@ -1011,11 +1034,11 @@ export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
           {isReportBusy ? (
             <div style={{ padding: '60px 0', textAlign: 'center' }}>
               <RefreshCw style={{ width: '32px', height: '32px', color: '#2196F3', animation: 'spin 1s linear infinite', margin: '0 auto 12px auto' }} />
-              <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0, fontWeight: 600 }}>Generating GFM Executive Report for role [{role}]...</p>
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0, fontWeight: 600 }}>Menyiapkan laporan…</p>
             </div>
           ) : !activeReport ? (
             <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
-              No report available yet. Click "Regenerate" to trigger AI analysis.
+              No report available yet. Click &quot;Regenerate&quot; to trigger AI analysis.
             </div>
           ) : (
             <div>

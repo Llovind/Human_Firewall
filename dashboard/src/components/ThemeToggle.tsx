@@ -9,6 +9,8 @@ export default function ThemeToggle() {
   useEffect(() => {
     const saved = localStorage.getItem('hfl_theme') as 'dark' | 'light' | null;
     const initial = saved || 'light';
+    // Browser-only preference is intentionally synchronized after hydration.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTheme(initial);
     document.documentElement.setAttribute('data-theme', initial);
   }, []);

@@ -7,6 +7,8 @@ malware, and Indonesian online gambling (judol) detection.
 import os
 import json
 import logging
+import hashlib
+import threading
 from pathlib import Path
 from typing import Dict, Any, Optional
 
@@ -17,6 +19,8 @@ _MODEL = None
 _CONFIG = None
 _CALIBRATORS = None
 _INIT_ATTEMPTED = False
+_INIT_LOCK = threading.Lock()
+_MODEL_VERSION = None
 
 
 def _find_artifact(filename: str, subpath: str = "") -> Optional[Path]:
@@ -46,7 +50,15 @@ def _find_artifact(filename: str, subpath: str = "") -> Optional[Path]:
 
 
 def _init_components():
-    global _MODEL, _CONFIG, _CALIBRATORS, _INIT_ATTEMPTED
+    # Flask can receive concurrent cold-start requests. Publish a ready model
+    # only once; another request must not mistake partial initialization for failure.
+    with _INIT_LOCK:
+        if not _INIT_ATTEMPTED:
+            _load_components()
+
+
+def _load_components():
+    global _MODEL, _CONFIG, _CALIBRATORS, _INIT_ATTEMPTED, _MODEL_VERSION
     if _INIT_ATTEMPTED:
         return
     _INIT_ATTEMPTED = True
@@ -69,6 +81,14 @@ def _init_components():
     try:
         with open(config_path, "r", encoding="utf-8") as f:
             _CONFIG = json.load(f)
+
+        torch.set_num_threads(max(1, int(os.environ.get("ML_CPU_THREADS", "2"))))
+        labels = _CONFIG["label_order"]
+        thresholds = _CONFIG["action_thresholds"]
+        if "benign" not in labels or not 0 <= thresholds["block_review"] < thresholds["block_auto"] <= 1:
+            raise ValueError("Invalid label order or calibrated action thresholds")
+        if not _CONFIG.get("char2idx") or max(_CONFIG["char2idx"].values()) >= _CONFIG["vocab_size"]:
+            raise ValueError("Invalid training vocabulary")
 
         vocab_size = _CONFIG.get("vocab_size", 87)
         n_cls = len(_CONFIG.get("label_order", ["benign", "phishing", "malware", "other"]))
@@ -120,10 +140,14 @@ def _init_components():
         encoder = CharEncoderBiLSTM(vocab=vocab_size)
         model = CharClassifier(encoder=encoder, n_cls=n_cls)
 
-        weights = torch.load(str(model_path), map_location="cpu")
+        weights = torch.load(str(model_path), map_location="cpu", weights_only=True)
         model.load_state_dict(weights)
         model.eval()
         _MODEL = model
+        digest = hashlib.sha256(model_path.read_bytes() + config_path.read_bytes())
+        if calibrators_path:
+            digest.update(calibrators_path.read_bytes())
+        _MODEL_VERSION = f"char-bilstm-v5-{digest.hexdigest()[:12]}"
         logger.info(f"[Char-BiLSTM] Successfully loaded weights from {model_path}")
 
     except Exception as e:
@@ -146,9 +170,15 @@ def _init_components():
 
 def is_scanner_available() -> bool:
     """Check if the Char-BiLSTM model is loaded and ready for inference."""
-    if not _INIT_ATTEMPTED:
-        _init_components()
+    _init_components()
     return _MODEL is not None and _CONFIG is not None
+
+
+def model_status() -> dict:
+    available = is_scanner_available()
+    return {"available": available, "calibrated": _CALIBRATORS is not None,
+            "modelVersion": _MODEL_VERSION,
+            "thresholds": (_CONFIG or {}).get("action_thresholds", {})}
 
 
 def scan_url_dl(url: str) -> Optional[Dict[str, Any]]:
@@ -185,7 +215,7 @@ def scan_url_dl(url: str) -> Optional[Dict[str, Any]]:
         ids += [0] * (max_len - len(ids))
 
         inp_tensor = torch.tensor([ids], dtype=torch.long)
-        with torch.no_grad():
+        with torch.inference_mode():
             logits = _MODEL(inp_tensor)
             probs = torch.softmax(logits, dim=-1).cpu().numpy()
 
@@ -193,6 +223,8 @@ def scan_url_dl(url: str) -> Optional[Dict[str, Any]]:
         if _CALIBRATORS is not None and len(_CALIBRATORS) == len(label_order):
             try:
                 p_cal = np.column_stack([cal.predict(probs[:, c]) for c, cal in enumerate(_CALIBRATORS)])
+                if not np.isfinite(p_cal).all() or p_cal.sum() <= 0:
+                    raise ValueError("Invalid calibrated probabilities")
                 p_cal = p_cal / p_cal.sum(axis=1, keepdims=True).clip(min=1e-9)
                 final_probs = p_cal[0]
                 calibrated = True
@@ -203,6 +235,9 @@ def scan_url_dl(url: str) -> Optional[Dict[str, Any]]:
         else:
             final_probs = probs[0]
             calibrated = False
+
+        if not np.isfinite(final_probs).all():
+            raise ValueError("Invalid inference probabilities")
 
         benign_idx = label_order.index("benign") if "benign" in label_order else 0
         p_malicious = float(1.0 - final_probs[benign_idx])
@@ -228,6 +263,11 @@ def scan_url_dl(url: str) -> Optional[Dict[str, Any]]:
             verdict = "clean"
             severity = "low"
 
+        # Thresholds were fitted on calibrated probabilities. Do not silently
+        # enforce an uncalibrated prediction when the calibration artifact fails.
+        if not calibrated:
+            action, verdict, severity = "REVIEW", "suspicious", "medium"
+
         # Special nuance for "other" class (Indonesian threat pattern: judol / scam)
         threat_display = threat_type
         if threat_type == "other" and verdict in ("malicious", "suspicious"):
@@ -241,6 +281,7 @@ def scan_url_dl(url: str) -> Optional[Dict[str, Any]]:
         return {
             "provider": "char_bilstm",
             "model_name": "Char-BiLSTM (Afferent v5 Production)",
+            "model_version": _MODEL_VERSION,
             "url": raw_url,
             "verdict": verdict,
             "severity": severity,
@@ -257,5 +298,5 @@ def scan_url_dl(url: str) -> Optional[Dict[str, Any]]:
         }
 
     except Exception as e:
-        logger.error(f"[Char-BiLSTM] Inference failed for '{url}': {e}", exc_info=True)
+        logger.error("[Char-BiLSTM] Inference failed: %s", type(e).__name__, exc_info=True)
         return None

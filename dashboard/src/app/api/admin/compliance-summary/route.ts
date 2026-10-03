@@ -1,22 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { fetchFlaskBackend } from '@/lib/backendClient';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    // Forward role and auth headers so Flask _verify_grc_ciso_access() passes in production
-    const role = request.headers.get('x-user-role')
-      || request.cookies.get('admin_role')?.value
-      || 'grc';
-    const token = request.headers.get('x-admin-token')
-      || request.cookies.get('admin_token')?.value
-      || '';
-
     const res = await fetchFlaskBackend('/api/admin/compliance-summary', {
       method: 'GET',
-      headers: {
-        'X-User-Role': role,
-        ...(token ? { 'x-admin-token': token } : {}),
-      },
     });
     const data = await res.json();
     if (!res.ok) {
@@ -26,9 +14,9 @@ export async function GET(request: NextRequest) {
       );
     }
     return NextResponse.json(data);
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: 'Failed to reach backend server', detail: error.message },
+      { error: 'Failed to reach backend server', detail: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

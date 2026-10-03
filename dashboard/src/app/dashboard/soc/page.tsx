@@ -6,11 +6,11 @@ import OverviewSection from '@/components/admin/OverviewSection';
 import IncidentTriageSection from '@/components/admin/IncidentTriageSection';
 import ThreatCacheSection from '@/components/admin/ThreatCacheSection';
 import LoginHistorySection from '@/components/admin/LoginHistorySection';
-import PolicySection from '@/components/admin/PolicySection';
 import { usePolling } from '@/hooks/usePolling';
-import type { Incident, Stats, ThreatCacheEntry, AISummary, BehaviorScore, PolicyDecision, ComplianceSummary, AdminLoginEvent } from '@/components/admin/types';
+import type { Incident, Stats, ThreatCacheEntry, AISummary, BehaviorScore, ComplianceSummary, AdminLoginEvent } from '@/components/admin/types';
 import AIIntelligenceSection from '@/components/admin/AIIntelligenceSection';
 import ProxyOperationsSection from '@/components/admin/ProxyOperationsSection';
+import SecurityInboxSection from '@/components/admin/SecurityInboxSection';
 
 export default function SOCDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -21,9 +21,8 @@ export default function SOCDashboard() {
   // Polling core data
   const { data: incidentData, hasUpdated: incidentUpdated } = usePolling<{ incidents: Incident[]; stats: Stats }>('/api/incident', 3000);
   const { data: cacheData, hasUpdated: cacheUpdated } = usePolling<{ cache: ThreatCacheEntry[] }>('/api/cache', 3000);
-  const { data: summaryData, hasUpdated: summaryUpdated } = usePolling<{ summaries: AISummary[] }>('/api/summary', 3000);
-  const { data: behaviorData, hasUpdated: behaviorUpdated } = usePolling<{ scores: BehaviorScore[] }>('/api/behavior', 3000);
-  const { data: policyData, hasUpdated: policyUpdated } = usePolling<{ decisions: PolicyDecision[] }>('/api/policy', 3000);
+  const { data: summaryData, hasUpdated: summaryUpdated, refresh: refreshSummary, error: summaryError } = usePolling<{ summaries: AISummary[] }>('/api/summary', 10000);
+  const { data: behaviorData, hasUpdated: behaviorUpdated, error: behaviorError } = usePolling<{ scores: BehaviorScore[] }>('/api/behavior', 10000);
   const { data: complianceData } = usePolling<ComplianceSummary>('/api/admin/compliance-summary', 3000);
 
   useEffect(() => {
@@ -40,9 +39,9 @@ export default function SOCDashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ticket_id: id, status: 'closed' }),
       });
-      if (!res.ok) alert('Gagal memperbarui status insiden.');
+      if (!res.ok) alert('Could not update incident status.');
     } catch {
-      alert('Gagal menghubungi server.');
+      alert('Could not reach the server.');
     }
   };
 
@@ -51,13 +50,14 @@ export default function SOCDashboard() {
   const cache = cacheData?.cache || [];
   const summaries = summaryData?.summaries || [];
   const scores = behaviorData?.scores || [];
-  const decisions = policyData?.decisions || [];
 
   return (
     <DashboardLayout role="soc" activeTab={activeTab} onTabChange={setActiveTab}>
       {activeTab === 'overview' && (
         <>
+          {(summaryError || behaviorError) && <p className="debt-error" role="alert">Telemetry belum dapat diperbarui. Snapshot terakhir ditampilkan, tanpa data contoh.</p>}
           <OverviewSection
+            onRefreshSummary={refreshSummary}
             readOnly={false}
             stats={incidentData?.stats}
             incidents={activeIncidents}
@@ -98,13 +98,10 @@ export default function SOCDashboard() {
         </>
       )}
 
-      {activeTab === 'policy' && (
-        <PolicySection readOnly={false} decisions={decisions} />
-      )}
-
       {activeTab === 'ai' && (
         <AIIntelligenceSection role="soc" readOnly={false} />
       )}
+      {activeTab === 'inbox' && <SecurityInboxSection />}
     </DashboardLayout>
   );
 }
