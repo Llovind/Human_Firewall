@@ -6,6 +6,22 @@ const { resolve } = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+// English strings come from the real message table so the test follows copy changes.
+const messageExports = {};
+vm.runInNewContext(ts.transpileModule(readFileSync(resolve(__dirname, '../src/i18n/messages.ts'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { exports: messageExports });
+const format = (template, vars = {}) => template.replace(/\{(\w+)\}/g, (match, name) => (name in vars ? String(vars[name]) : match));
+const stub = () => null;
+const shared = {
+  '@/i18n/I18nProvider': { useI18n: () => ({ lang: 'en', t: (key, vars) => format(messageExports.en[key], vars) }) },
+  '@/components/ui/Dialog': { default: function Dialog() { return null; } },
+  '@/components/ui/SeverityBadge': { default: stub },
+  '@/components/ui/StateMessage': { default: stub },
+  '@/components/ui/StatusChip': { default: stub },
+  '@/components/ui/Toast': { useToast: () => ({ show() {} }) },
+  '@/hooks/useNow': { useNow: () => Date.parse('2026-10-03T01:00:00Z') },
+  '@/lib/relativeTime': { formatAgo: () => 'ago' },
+};
+
 async function check(kind, action) {
   const states = [], effects = [], timers = [], writes = [];
   let cursor = 0, firstRender = true, accepts = false;
@@ -26,7 +42,7 @@ async function check(kind, action) {
   } }).outputText;
   const exports = {};
   vm.runInNewContext(compiled, {
-    exports, require: name => name === 'react' ? hooks : name === './DomainSecondOpinion' ? { default: () => null } : require(name),
+    exports, require: name => name === 'react' ? hooks : name === './DomainSecondOpinion' ? { default: () => null } : name in shared ? shared[name] : require(name),
     window: { setTimeout: callback => { timers.push(callback); }, clearTimeout() {} },
     EventSource: class { addEventListener() {} close() {} },
     fetch: async (url, options = {}) => {
@@ -52,10 +68,11 @@ async function check(kind, action) {
   }
   render(); effects.forEach(effect => effect()); timers.forEach(timer => timer());
   await new Promise(resolve => setImmediate(resolve));
-  const article = nodes(render()).find(node => node.type === 'article' && text(node).includes(`${kind}.example.test`));
-  const button = nodes(article).find(node => node.type === 'button' && text(node).trim().toLowerCase() === action);
+  const row = nodes(render()).find(node => node.type === 'tr' && text(node).includes(`${kind}.example.test`));
+  const button = nodes(row).find(node => node.type === 'button' && text(node).trim().toLowerCase() === action);
   assert.ok(button, 'decision button exists'); button.props.onClick();
-  const dialog = () => nodes(render()).find(node => node.type === 'dialog');
+  // The shared Dialog is open when its `open` prop is true; its content is only built then.
+  const dialog = () => nodes(render()).find(node => node.props && node.props.open === true && typeof node.props.title === 'string');
   assert.ok(dialog(), 'click opens confirmation'); assert.equal(writes.length, 0, 'opening is read-only');
   const textarea = () => nodes(dialog()).find(node => node.type === 'textarea');
   const submit = () => nodes(dialog()).find(node => node.type === 'form').props.onSubmit({ preventDefault() {} });
