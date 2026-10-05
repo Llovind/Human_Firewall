@@ -4,7 +4,7 @@ Deliberately separate from /api/reports: a request is not a threat report, so it
 earns no reward and creates no proxy alert. The employee gives a reason; SOC answers.
 
 SOC has exactly two outcomes, because the proxy only supports domain-wide rules:
-  * allow: the domain is allowed for everyone (recorded in the proxy audit trail), or
+  * allow: the domain is allowed for everyone for ALLOW_DAYS days (recorded in the proxy audit trail), or
   * deny: the block stays.
 """
 import uuid
@@ -16,6 +16,7 @@ from services.report_service import rate_limit
 
 OPEN, ALLOWED, DENIED = 'open', 'allowed', 'denied'
 MIN_TEXT, MAX_REASON, MAX_NOTE = 5, 1000, 1000
+ALLOW_DAYS = 30  # an allowed site is blocked-by-default again afterwards, so approvals do not pile up forever
 
 
 def _clean_text(value, label, maximum):
@@ -99,7 +100,7 @@ def decide(identity, access_request_id, decision, note, http_request_id):
     if decision == 'allow':
         # Policy first: if the proxy refuses (for example a domain that is too broad), the request stays open.
         proxy_service.manual_decision(domain_value=row['domain'], action='allow', reason=note,
-                                      identity=identity, request_id=http_request_id)
+                                      identity=identity, request_id=http_request_id, expires_in_days=ALLOW_DAYS)
     new_status = ALLOWED if decision == 'allow' else DENIED
     with closing(database.get_connection()) as conn, conn:
         conn.execute('BEGIN IMMEDIATE')

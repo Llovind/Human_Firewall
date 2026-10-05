@@ -604,13 +604,13 @@ export const en = {
   'acc.dialog.note': 'Your note to the employee',
   'acc.dialog.note.hint': 'Explain the decision in one or two sentences. The employee sees it.',
   'acc.dialog.note.short': 'Add a note of at least 5 characters.',
-  'acc.dialog.allow': 'Allow for everyone',
+  'acc.dialog.allow': 'Allow for everyone for 30 days',
   'acc.dialog.deny': 'Keep blocked',
   'acc.dialog.saving': 'Saving…',
   'acc.dialog.warn': 'Allowing opens {domain} (and its subdomains) for everyone in the company, not only for this person. It is recorded in the audit log.',
   'acc.dialog.readonly': 'Only SOC analysts can decide on access requests.',
   'acc.dialog.decided': 'Decided {time} by {who}',
-  'acc.toast.allowed': 'Domain allowed',
+  'acc.toast.allowed': 'Domain allowed for 30 days',
   'acc.toast.denied': 'Kept blocked',
   'acc.fail': 'The decision was not saved.'
 } as const;
@@ -1206,13 +1206,13 @@ export const id: Record<MessageKey, string> = {
   'acc.dialog.note': 'Catatan Anda untuk karyawan',
   'acc.dialog.note.hint': 'Jelaskan keputusan dalam satu atau dua kalimat. Karyawan akan melihatnya.',
   'acc.dialog.note.short': 'Tambahkan catatan minimal 5 karakter.',
-  'acc.dialog.allow': 'Izinkan untuk semua orang',
+  'acc.dialog.allow': 'Izinkan untuk semua orang selama 30 hari',
   'acc.dialog.deny': 'Tetap blokir',
   'acc.dialog.saving': 'Menyimpan…',
   'acc.dialog.warn': 'Mengizinkan membuka {domain} (dan subdomainnya) untuk semua orang di perusahaan, bukan hanya orang ini. Tindakan ini dicatat di log audit.',
   'acc.dialog.readonly': 'Hanya analis SOC yang dapat memutuskan permintaan akses.',
   'acc.dialog.decided': 'Diputuskan {time} oleh {who}',
-  'acc.toast.allowed': 'Domain diizinkan',
+  'acc.toast.allowed': 'Domain diizinkan selama 30 hari',
   'acc.toast.denied': 'Tetap diblokir',
   'acc.fail': 'Keputusan tidak tersimpan.'
 };

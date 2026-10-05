@@ -1,5 +1,6 @@
 """Incident handling is audited: who resolved, reopened or assigned, when, and why."""
 import unittest
+import unittest.mock
 import uuid
 
 import test_technical_debt  # noqa: F401  (sets the same safe test environment as the other suites)
@@ -93,6 +94,36 @@ class IncidentAudit(unittest.TestCase):
         self.assertEqual(self.events(headers=self.grc).status_code, 200)
         self.assertEqual(self.events(headers=self.ciso).status_code, 200)
         self.assertEqual(self.events(headers=self.employee).status_code, 403)
+
+
+class SevereIncidentEmail(unittest.TestCase):
+    def inbox_for(self, email):
+        return [m for m in database.list_inbox_emails() if m['to_email'] == email]
+
+    def test_high_severity_emails_active_soc_only(self):
+        soc_email, _ = make_account('soc')
+        employee_email, _ = make_account('employee')
+        ticket = 'INC-' + uuid.uuid4().hex[:8].upper()
+        database.create_incident(ticket_id=ticket, source_type='real_world_report', divisi='Finance <b>', severity='high', reported_url='http://x.example')
+        mails = self.inbox_for(soc_email)
+        self.assertEqual(len(mails), 1)
+        self.assertIn(ticket, mails[0]['subject'])
+        self.assertNotIn('<b>', mails[0]['body'].replace('<b>Ticket', '').replace('<b>Division', '').replace('<b>Reported', '').replace('</b>', ''))
+        self.assertEqual(self.inbox_for(employee_email), [])
+
+    def test_lower_severity_and_switch_send_nothing(self):
+        soc_email, _ = make_account('soc')
+        database.create_incident(ticket_id='INC-' + uuid.uuid4().hex[:8].upper(), source_type='real_world_report', divisi='IT', severity='medium')
+        self.assertEqual(self.inbox_for(soc_email), [])
+        with unittest.mock.patch.dict('os.environ', {'SEVERE_INCIDENT_EMAIL_ENABLED': 'false'}):
+            database.create_incident(ticket_id='INC-' + uuid.uuid4().hex[:8].upper(), source_type='real_world_report', divisi='IT', severity='high')
+        self.assertEqual(self.inbox_for(soc_email), [])
+
+    def test_mail_failure_never_loses_the_ticket(self):
+        ticket = 'INC-' + uuid.uuid4().hex[:8].upper()
+        with unittest.mock.patch.object(database, 'create_inbox_email', side_effect=RuntimeError('smtp down')):
+            database.create_incident(ticket_id=ticket, source_type='real_world_report', divisi='IT', severity='high')
+        self.assertTrue(any(i['ticket_id'] == ticket for i in database.list_incidents()))
 
 
 if __name__ == '__main__':

@@ -107,6 +107,7 @@ class AccessRequests(unittest.TestCase):
         policy.assert_called_once()
         kwargs = policy.call_args.kwargs
         self.assertEqual((kwargs['domain_value'], kwargs['action'], kwargs['identity'].role), (self.domain, 'allow', 'soc'))
+        self.assertEqual(kwargs['expires_in_days'], 30)
         body = response.get_json()['request']
         self.assertEqual((body['status'], body['decided_by']), ('allowed', self.soc_email))
 

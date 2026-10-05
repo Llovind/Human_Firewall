@@ -9,6 +9,7 @@ modul ini adalah satu-satunya pintu masuk ke database.
 
 import sqlite3
 import hashlib
+import html
 import os
 import secrets
 import json
@@ -1860,6 +1861,32 @@ def create_incident(ticket_id: str, source_type: str, divisi: str,
         conn.commit()
     finally:
         conn.close()
+    # Only the most serious tickets interrupt people; everything else waits in the queue.
+    if severity == 'high':
+        notify_soc_of_severe_incident(ticket_id, divisi, reported_url)
+
+
+def notify_soc_of_severe_incident(ticket_id: str, divisi: str, reported_url: str = None):
+    """Email every active SOC analyst about a high-severity ticket. Never raises: a mail problem must not lose the ticket."""
+    if os.environ.get('SEVERE_INCIDENT_EMAIL_ENABLED', 'true').lower() not in ('true', '1', 'yes'):
+        return 0
+    try:
+        conn = get_connection()
+        try:
+            recipients = [r['email'] for r in conn.execute("SELECT email FROM employee_accounts WHERE role = 'soc' AND is_active = 1").fetchall()]
+        finally:
+            conn.close()
+        subject = f'[AFFERENT] High-severity incident {ticket_id}'
+        body = (f'<p>A high-severity incident was opened and needs a SOC owner.</p>'
+                f'<p><b>Ticket:</b> {html.escape(ticket_id)}<br><b>Division:</b> {html.escape(divisi or "-")}<br>'
+                f'<b>Reported address:</b> {html.escape(reported_url or "-")}</p>'
+                f'<p>Open the SOC dashboard, Incidents tab, to take it.</p>')
+        for email in recipients:
+            create_inbox_email(email, subject, body)
+        return len(recipients)
+    except Exception as exc:
+        print(f'SEVERE INCIDENT EMAIL WARNING: {exc}')
+        return 0
 
 
 def update_incident_status(ticket_id: str, status: str):

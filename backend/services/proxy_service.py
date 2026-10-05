@@ -564,7 +564,7 @@ def accept_ml_callback(payload: dict[str, Any]) -> dict[str, Any]:
 
 def manual_decision(
     *, domain_value: str, action: str, reason: str, identity: Any,
-    request_id: str, alert_id: str | None = None
+    request_id: str, alert_id: str | None = None, expires_in_days: int | None = None
 ) -> dict[str, Any]:
     domain = normalize_policy_domain(domain_value)
     action = action.strip().lower()
@@ -581,7 +581,7 @@ def manual_decision(
         "reason": reason.strip()[:1000],
         "confidence": 1.0,
         "model_version": None,
-        "expires_at": None,
+        "expires_at": _utcnow() + timedelta(days=expires_in_days) if expires_in_days else None,
         "updated_by": identity.email,
     }
     _before, row, resolved_alert = proxy_store.apply_manual_decision(
