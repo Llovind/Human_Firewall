@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 import database
 import uuid
-from security import require_roles
+from security import current_identity, require_roles
 
 incidents_bp = Blueprint('incidents', __name__)
 
@@ -79,20 +79,38 @@ def create_incident():
 @incidents_bp.route('/api/incidents/<ticket_id>', methods=['PATCH'])
 @require_roles('soc')
 def update_incident(ticket_id):
-    data = request.get_json(silent=True)
-    if not data or 'status' not in data:
-        return jsonify({"error": "field 'status' wajib diisi di body"}), 400
+    """Resolve, reopen, or (un)assign. Every change is recorded with who, when and why.
 
-    status = data['status']
+    Body: {"status": "open"|"closed", "note": "...", "assignee": "me"|""}.
+    Resolving requires a note. "me" assigns to the caller; "" removes the assignee.
+    """
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not ('status' in data or 'assignee' in data):
+        return jsonify({"error": "Send a status and/or an assignee."}), 400
+    identity = current_identity()
+    assignee = data.get('assignee')
+    if assignee is not None:
+        if not isinstance(assignee, str):
+            return jsonify({"error": "assignee must be text."}), 400
+        assignee = identity.email if assignee.strip().lower() == 'me' else ('' if not assignee.strip() else None)
+        if assignee is None:
+            return jsonify({"error": "assignee must be 'me' or empty."}), 400
     try:
-        updated = database.update_incident_status(ticket_id, status)
+        updated = database.apply_incident_change(ticket_id, identity.email, identity.role,
+                                                 status=data.get('status'), note=data.get('note'), assignee=assignee)
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
     if not updated:
-        return jsonify({"error": f"ticket_id '{ticket_id}' tidak ditemukan"}), 404
+        return jsonify({"error": f"Incident '{ticket_id}' was not found."}), 404
 
-    return jsonify({"message": f"Ticket {ticket_id} status diupdate ke {status}"}), 200
+    return jsonify({"message": f"Incident {ticket_id} updated.", "incident": updated}), 200
+
+
+@incidents_bp.route('/api/incidents/<ticket_id>/events', methods=['GET'])
+@require_roles('soc', 'ciso', 'grc')
+def incident_events(ticket_id):
+    return jsonify({"events": database.list_incident_events(ticket_id)}), 200
 
 
 @incidents_bp.route('/api/incidents', methods=['GET'])

@@ -83,6 +83,18 @@ def init_db():
                            'file_sha256 TEXT', 'file_size INTEGER'):
             if not _column_exists(cursor, 'employee_url_reports', definition.split()[0]):
                 cursor.execute(f'ALTER TABLE employee_url_reports ADD COLUMN {definition}')
+        # Employee requests to open a blocked site. This is not a threat report: it has
+        # no scan, no reward and no proxy alert. SOC answers it: the domain is either
+        # allowed for everyone (the proxy only supports domain-wide rules) or kept blocked.
+        cursor.execute('''CREATE TABLE IF NOT EXISTS access_requests (
+            id TEXT PRIMARY KEY, account_id INTEGER NOT NULL, email TEXT NOT NULL,
+            domain TEXT NOT NULL, reason TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','allowed','denied')),
+            decision_note TEXT, decided_by TEXT, decided_at TEXT, request_id TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )''')
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_access_requests_open ON access_requests(account_id, domain) WHERE status='open'")
+        cursor.execute('CREATE INDEX IF NOT EXISTS ix_access_requests_status ON access_requests(status, created_at)')
         # Bounded PDF quarantine: never served or rendered; removed after VT
         # submission/completion or expiry. The worker survives browser disconnects.
         cursor.execute('''CREATE TABLE IF NOT EXISTS pdf_analysis_jobs (
@@ -203,6 +215,22 @@ def init_db():
                 closed_at TIMESTAMP
             )
         ''')
+
+        # Audit trail for incident handling: who resolved, reopened or assigned an incident, when, and why.
+        if not _column_exists(cursor, 'incidents', 'assigned_to'):
+            cursor.execute('ALTER TABLE incidents ADD COLUMN assigned_to TEXT')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS incident_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticket_id TEXT NOT NULL,
+                actor_email TEXT NOT NULL,
+                actor_role TEXT NOT NULL,
+                event TEXT NOT NULL CHECK(event IN ('resolved','reopened','assigned','unassigned')),
+                note TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute('CREATE INDEX IF NOT EXISTS ix_incident_events_ticket ON incident_events(ticket_id, id)')
 
         # Tabel registration_otp — menyimpan kode OTP pendaftaran Telegram
         cursor.execute('''
@@ -1859,6 +1887,64 @@ def update_incident_status(ticket_id: str, status: str):
 
         conn.commit()
         return cursor.rowcount > 0  # True kalau ada baris yang ke-update
+    finally:
+        conn.close()
+
+
+def apply_incident_change(ticket_id: str, actor_email: str, actor_role: str, *,
+                          status: str = None, note: str = None, assignee: str = None):
+    """One audited change to an incident: resolve, reopen, assign or unassign.
+
+    * Resolving needs a reason of at least 5 characters (the trail must say why).
+    * `assignee` is an email, or '' to unassign.
+    Returns the updated incident, or None when the ticket does not exist.
+    Raises ValueError for anything invalid; nothing is written in that case.
+    """
+    if status is None and assignee is None:
+        raise ValueError("Nothing to change: send a status or an assignee.")
+    if status is not None and status not in VALID_STATUSES:
+        raise ValueError(f"status must be one of {VALID_STATUSES}")
+    note = (note or '').strip()
+    if len(note) > 1000:
+        raise ValueError("Note must be at most 1000 characters.")
+    if status == 'closed' and len(note) < 5:
+        raise ValueError("Add a reason of at least 5 characters to resolve an incident.")
+
+    conn = get_connection()
+    try:
+        with conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row = conn.execute('SELECT * FROM incidents WHERE ticket_id = ?', (ticket_id,)).fetchone()
+            if not row:
+                return None
+            events = []
+            if status is not None and status != row['status']:
+                if status == 'closed':
+                    conn.execute('UPDATE incidents SET status = ?, closed_at = CURRENT_TIMESTAMP WHERE ticket_id = ?', (status, ticket_id))
+                    events.append(('resolved', note))
+                else:
+                    conn.execute('UPDATE incidents SET status = ?, closed_at = NULL WHERE ticket_id = ?', (status, ticket_id))
+                    events.append(('reopened', note or None))
+            if assignee is not None:
+                new_owner = assignee.strip().lower() or None
+                if new_owner != (row['assigned_to'] or None):
+                    conn.execute('UPDATE incidents SET assigned_to = ? WHERE ticket_id = ?', (new_owner, ticket_id))
+                    events.append(('assigned' if new_owner else 'unassigned', new_owner))
+            for event, event_note in events:
+                conn.execute('INSERT INTO incident_events (ticket_id, actor_email, actor_role, event, note) VALUES (?, ?, ?, ?, ?)',
+                             (ticket_id, actor_email, actor_role, event, event_note))
+            return dict(conn.execute('SELECT * FROM incidents WHERE ticket_id = ?', (ticket_id,)).fetchone())
+    finally:
+        conn.close()
+
+
+def list_incident_events(ticket_id: str, limit: int = 100):
+    """Newest first. Empty list for an incident with no recorded changes."""
+    conn = get_connection()
+    try:
+        rows = conn.execute('SELECT id, ticket_id, actor_email, actor_role, event, note, created_at FROM incident_events WHERE ticket_id = ? ORDER BY id DESC LIMIT ?',
+                            (ticket_id, limit)).fetchall()
+        return [dict(row) for row in rows]
     finally:
         conn.close()
 

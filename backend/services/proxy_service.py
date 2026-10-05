@@ -198,7 +198,7 @@ def register_device(identity: Any, ip_address: str, label: str = "") -> dict[str
             "source_ip_hash": source_ip_hash(ip_address),
             "source_ip_hint": _ip_hint(ip_address),
         },
-        _env_int("PROXY_DEVICE_TTL_SECONDS", 28800),
+        _env_int("PROXY_DEVICE_TTL_SECONDS", 86400),
     )
     if not record:
         raise ProxyError(
@@ -212,7 +212,7 @@ def register_device(identity: Any, ip_address: str, label: str = "") -> dict[str
 def heartbeat_device(identity: Any, ip_address: str) -> dict[str, Any]:
     record = proxy_store.heartbeat_device(
         source_ip_hash(ip_address),
-        _env_int("PROXY_DEVICE_TTL_SECONDS", 28800),
+        _env_int("PROXY_DEVICE_TTL_SECONDS", 86400),
     )
     if not record or int(record["account_id"]) != int(identity.account_id):
         raise ProxyError(

@@ -357,7 +357,7 @@ def get_device(source_ip_hash: str) -> dict[str, Any] | None:
             return json.loads(raw)
     except Exception:
         pass
-    ttl = int(os.environ.get("PROXY_DEVICE_TTL_SECONDS", "28800"))
+    ttl = int(os.environ.get("PROXY_DEVICE_TTL_SECONDS", "86400"))
     with connection() as conn:
         row = conn.execute(
             """
@@ -418,7 +418,7 @@ def mark_proxy_seen(device_id: str) -> None:
     try:
         redis_client().setex(
             f"proxy:device:{payload['source_ip_hash']}",
-            int(os.environ.get("PROXY_DEVICE_TTL_SECONDS", "28800")),
+            int(os.environ.get("PROXY_DEVICE_TTL_SECONDS", "86400")),
             json.dumps(payload, default=_json_default, separators=(",", ":")),
         )
     except Exception:

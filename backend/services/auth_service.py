@@ -32,6 +32,10 @@ PASSWORD_HASHER = PasswordHasher(
 )
 
 
+# A login lasts one day from sign-in (absolute, not extended by activity). Override with AUTH_SESSION_TTL_SECONDS.
+SESSION_TTL_DEFAULT_SECONDS = 24 * 60 * 60
+
+
 class AuthError(RuntimeError):
     def __init__(self, code: str, message: str, status: int = 400, retry_after: int | None = None):
         super().__init__(message)
@@ -598,7 +602,7 @@ def verify_login_otp(
 
         raw_token = secrets.token_urlsafe(48)
         session_id = str(uuid.uuid4())
-        ttl_seconds = int(os.environ.get("AUTH_SESSION_TTL_SECONDS", "28800"))
+        ttl_seconds = int(os.environ.get("AUTH_SESSION_TTL_SECONDS", str(SESSION_TTL_DEFAULT_SECONDS)))
         expires_at = _utcnow() + timedelta(seconds=ttl_seconds)
         conn.execute("UPDATE otp_challenges SET used_at = CURRENT_TIMESTAMP WHERE id = ?", (challenge_id,))
         conn.execute(

@@ -20,6 +20,7 @@ load_dotenv()
 validate_runtime_security()
 
 from routes.threat import threat_bp
+from routes.access_requests import access_bp
 from routes.proxy import proxy_bp
 
 # Admin password, Flask session secret, and internal service key checks on startup
@@ -106,6 +107,7 @@ app.register_blueprint(incidents_bp)
 app.register_blueprint(admin_api_bp)
 app.register_blueprint(gamification_bp)
 app.register_blueprint(threat_bp)
+app.register_blueprint(access_bp)
 app.register_blueprint(proxy_bp)
 app.register_blueprint(ai_bp)  # AI Behavioral: /api/ai/*
 
