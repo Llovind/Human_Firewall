@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useI18n } from '@/i18n/I18nProvider';
 import { Check, Copy, Download, Globe2, Loader2, Network, ShieldCheck, WifiOff } from 'lucide-react';
 
 type ProxyStatus = {
@@ -40,7 +41,12 @@ async function responseError(response: Response, fallback: string) {
   }
 }
 
-export default function ProxyConnectionCard() {
+export interface ProxyReport { registered: boolean; connected: boolean; checking: boolean; failed: boolean }
+
+export default function ProxyConnectionCard({ onStatus }: { onStatus?: (report: ProxyReport) => void }) {
+  const { t } = useI18n();
+  const tRef = useRef(t);
+  useEffect(() => { tRef.current = t; }, [t]);
   const [status, setStatus] = useState<ProxyStatus>({ registered: false, connected: false });
   const [proxyUrl, setProxyUrl] = useState('http://127.0.0.1:3128');
   const [proxyProbeUrl, setProxyProbeUrl] = useState('');
@@ -72,12 +78,13 @@ export default function ProxyConnectionCard() {
       throw new Error(await responseError(
         statusResponse,
         statusResponse.status === 401
-          ? 'Proxy session unavailable. Reload your dashboard.'
-          : 'Proxy status unavailable',
+          ? tRef.current('proxy.err.session')
+          : tRef.current('proxy.err.status'),
       ));
     }
     const statusPayload = await statusResponse.json();
-    let currentStatus = statusPayload.status as ProxyStatus;
+    let currentStatus = statusPayload?.status as ProxyStatus | undefined;
+    if (!currentStatus) throw new Error(tRef.current('proxy.err.status'));
     if (!currentStatus.registered) {
       const registration = await directFetch('/api/proxy/device/register', {
         method: 'POST',
@@ -85,9 +92,11 @@ export default function ProxyConnectionCard() {
         body: JSON.stringify({ label: 'Perangkat utama' }),
       });
       if (!registration.ok) {
-        throw new Error(await responseError(registration, 'Could not activate this device'));
+        throw new Error(await responseError(registration, tRef.current('proxy.err.activate')));
       }
-      currentStatus = (await registration.json()).status;
+      const registered = (await registration.json())?.status as ProxyStatus | undefined;
+      if (!registered) throw new Error(tRef.current('proxy.err.activate'));
+      currentStatus = registered;
     }
     setStatus(currentStatus);
   }, []);
@@ -96,7 +105,7 @@ export default function ProxyConnectionCard() {
     const timer = window.setTimeout(() => {
       void loadStatus()
         .then(() => setError(''))
-        .catch((err) => setError(err instanceof Error ? err.message : 'Proxy service unavailable.'))
+        .catch((err) => setError(err instanceof Error ? err.message : tRef.current('proxy.err.unavailable')))
         .finally(() => setLoading(false));
     }, 0);
     return () => window.clearTimeout(timer);
@@ -129,10 +138,10 @@ export default function ProxyConnectionCard() {
           setStatus((await response.json()).status);
           setError('');
         } else {
-          setError(await responseError(response, 'Proxy heartbeat failed'));
+          setError(await responseError(response, tRef.current('proxy.err.lost')));
         }
       } catch {
-        setError('Connection to the proxy service lost');
+        setError(tRef.current('proxy.err.lost'));
       }
     };
     const timer = window.setInterval(() => void heartbeat(), 10_000);
@@ -149,10 +158,10 @@ export default function ProxyConnectionCard() {
         body: JSON.stringify({ label: 'Perangkat utama' }),
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || 'Activation failed');
+      if (!response.ok) throw new Error(payload.error || tRef.current('proxy.err.activate'));
       setStatus(payload.status);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Activation failed');
+      setError(err instanceof Error ? err.message : tRef.current('proxy.err.activate'));
     } finally {
       setLoading(false);
     }
@@ -165,16 +174,19 @@ export default function ProxyConnectionCard() {
   };
 
   const proxyConnected = status.registered && probeState === 'connected';
+  useEffect(() => {
+    onStatus?.({ registered: status.registered, connected: status.registered && probeState === 'connected', checking: loading || (status.registered && probeState === 'checking'), failed: Boolean(error) });
+  }, [onStatus, status.registered, probeState, loading, error]);
   const proxyFailed = status.registered && probeState === 'disconnected';
   const stateColor = proxyConnected ? '#22c55e' : proxyFailed ? '#ef4444' : status.registered ? '#f59e0b' : '#94a3b8';
   const StateIcon = proxyConnected ? ShieldCheck : proxyFailed ? WifiOff : status.registered ? Network : WifiOff;
   const title = proxyConnected
-    ? 'Connected to AFFERENT Proxy'
+    ? t('proxy.on.title')
     : proxyFailed
-      ? 'Failed to connect to AFFERENT Proxy'
-    : status.registered
-      ? 'Device registered — checking proxy'
-      : 'Set up proxy protection';
+      ? t('proxy.failed.title')
+      : status.registered
+        ? t('proxy.registered.title')
+        : t('proxy.setup.title');
 
   return (
     <section className="glass-card proxy-connect-card" aria-live="polite">
@@ -183,40 +195,40 @@ export default function ProxyConnectionCard() {
           <StateIcon size={24} />
         </div>
         <div>
-          <div className="proxy-eyebrow"><span style={{ background: stateColor }} /> DEVICE SECURITY</div>
+          <div className="proxy-eyebrow"><span style={{ background: stateColor }} /> {t('proxy.eyebrow')}</div>
           <h2>{title}</h2>
           <p>
             {proxyConnected
-              ? 'Domain traffic is monitored and follows AFFERENT policies.'
+              ? t('proxy.on.body')
               : proxyFailed
-                ? 'Proxy is off or unreachable. Check your device proxy settings.'
+                ? t('proxy.failed.body')
               : status.registered
-                ? 'Set your device proxy to this address, then open a website.'
-                : 'Activate this device, then add the proxy in your system settings.'}
+                ? t('proxy.registered.body')
+                : t('proxy.setup.body')}
           </p>
           {error && <div className="proxy-error">{error}</div>}
         </div>
       </div>
       <div className="proxy-connect-action">
-        <span>HTTP / HTTPS proxy</span>
-        <button type="button" className="proxy-address" onClick={copyProxy} title="Copy proxy address">
+        <span>{t('proxy.address')}</span>
+        <button type="button" className="proxy-address" onClick={copyProxy} title={t('proxy.copy')} aria-label={t('proxy.copy')}>
           <Globe2 size={15} /> {proxyUrl} {copied ? <Check size={14} /> : <Copy size={14} />}
         </button>
         {!status.registered && (
           <button type="button" className="btn btn-primary proxy-activate" onClick={activate} disabled={loading}>
             {loading ? <Loader2 size={16} className="spin" /> : <ShieldCheck size={16} />}
-            Activate device
+            {t('proxy.activate')}
           </button>
         )}
         <a
           href="/api/proxy/ca.crt"
           download="afferent-proxy-ca.crt"
           className="btn btn-secondary proxy-ca-download"
-          title="Lab certificate for HTTPS block pages"
+          title={t('proxy.ca.hint')}
         >
-          <Download size={13} /> Download CA certificate
+          <Download size={13} /> {t('proxy.ca')}
         </a>
-        {status.registered && <small>IP binding: {status.sourceIpHint || 'stored securely'}</small>}
+        {status.registered && <small>{t('proxy.ip', { ip: status.sourceIpHint || t('proxy.ip.stored') })}</small>}
       </div>
     </section>
   );

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { Search, Flag, FileText, RefreshCw, ShieldCheck, ShieldAlert, Send, Loader2 } from 'lucide-react';
+import { useI18n } from '@/i18n/I18nProvider';
 import ThreatEvidence, { EmployeeReport, FileScan, ThreatAnalysis } from './ThreatEvidence';
 
 function fileScanLabel(scan: FileScan) {
@@ -17,6 +18,7 @@ async function loadResults(path: string, signal?: AbortSignal) {
 }
 
 export default function EmployeeUrlScanner({ onReportComplete }: { onReportComplete?: () => void }) {
+  const { t } = useI18n();
   const [mode, setMode] = useState<'scan' | 'report' | 'file'>('scan');
   const [file, setFile] = useState<File | null>(null);
   const [consent, setConsent] = useState(false);
@@ -119,21 +121,21 @@ export default function EmployeeUrlScanner({ onReportComplete }: { onReportCompl
     finally { setBusy(false); }
   }
   return <section className="panel glass-card employee-threat-tools">
-    <div className="panel-header"><div className="security-center-heading"><ShieldCheck size={22} aria-hidden="true" /><div><h2 className="panel-title">URL & file security</h2><p>Check links and files. Report suspicious links to SOC.</p></div></div></div>
+    <div className="panel-header"><div className="security-center-heading"><ShieldCheck size={22} aria-hidden="true" /><div><h2 className="panel-title">{t('scan.title')}</h2><p>{t('scan.desc')}</p></div></div></div>
     <div className="url-tools-grid"><div>
-    <div className="debt-tabs" aria-label="Security tools">
-      <button type="button" disabled={busy} aria-pressed={mode === 'scan'} className={'btn ' + (mode === 'scan' ? 'btn-primary' : '')} onClick={() => { setMode('scan'); setError(''); setNotice(''); setScan(null); }}><Search size={16} />Scan URL</button>
-      <button type="button" disabled={busy} aria-pressed={mode === 'report'} className={'btn ' + (mode === 'report' ? 'btn-primary' : '')} onClick={() => { setMode('report'); setError(''); setNotice(''); setScan(null); }}><Flag size={16} />Report a link</button>
-      <button type="button" disabled={busy} aria-pressed={mode === 'file'} className={'btn ' + (mode === 'file' ? 'btn-primary' : '')} onClick={() => { setMode('file'); setHistory('files'); setError(''); setNotice(''); setScan(null); }}><FileText size={16} />Scan file</button>
+    <div className="debt-tabs" aria-label={t('scan.tabs')}>
+      <button type="button" disabled={busy} aria-pressed={mode === 'scan'} className={'btn ' + (mode === 'scan' ? 'btn-primary' : '')} onClick={() => { setMode('scan'); setError(''); setNotice(''); setScan(null); }}><Search size={16} />{t('scan.tab.check')}</button>
+      <button type="button" disabled={busy} aria-pressed={mode === 'report'} className={'btn ' + (mode === 'report' ? 'btn-primary' : '')} onClick={() => { setMode('report'); setError(''); setNotice(''); setScan(null); }}><Flag size={16} />{t('scan.tab.report')}</button>
+      <button type="button" disabled={busy} aria-pressed={mode === 'file'} className={'btn ' + (mode === 'file' ? 'btn-primary' : '')} onClick={() => { setMode('file'); setHistory('files'); setError(''); setNotice(''); setScan(null); }}><FileText size={16} />{t('scan.tab.file')}</button>
     </div>
-    <p className="debt-help">{mode === 'scan' ? 'VirusTotal + urlscan reputation. Scanning does not file a report or change proxy policies.' : mode === 'file' ? 'VirusTotal analysis, just for you. No SOC report is created.' : 'VirusTotal + urlscan evidence, sent to SOC for review.'}</p>
+    <p className="debt-help">{mode === 'scan' ? t('scan.help.check') : mode === 'file' ? t('scan.help.file') : t('scan.help.report')}</p>
     <form className="debt-form" onSubmit={submit}>
       {mode === 'file' ? <label className="file-upload">Choose a file<input ref={fileInput} type="file" required onChange={event => { setFile(event.target.files?.[0] || null); setSelectedFileId(''); setNotice(''); }} /><small>{file ? file.name + ' · ' + (file.size / 1024).toFixed(0) + ' KB' : 'PDF, documents, images, archives and other files · up to ' + Math.floor(fileMaxBytes / 1024 / 1024) + ' MB'}</small></label>
-        : <label>URL<input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://example.com/path" required maxLength={4096} autoComplete="off" /></label>}
+        : <label>{t('scan.url')}<input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://example.com/path" required maxLength={4096} autoComplete="off" /></label>}
       {mode === 'report' && <label>Description (optional)<textarea value={description} onChange={e => setDescription(e.target.value)} maxLength={2000} rows={3} /></label>}
       {mode === 'file' ? <label className="upload-consent"><input type="checkbox" required checked={consent} onChange={event => setConsent(event.target.checked)} /><span>This file is not confidential. I agree to share it with VirusTotal and its security partners.</span></label>
-        : <small>Reputation queries share this URL with VirusTotal/urlscan. Do not include passwords, tokens or personal data.</small>}
-      <button className="btn btn-primary" disabled={busy}>{busy ? <Loader2 size={16} className="spin" aria-hidden="true" /> : mode === 'report' ? <Send size={16} aria-hidden="true" /> : <Search size={16} aria-hidden="true" />}{busy ? 'Processing…' : mode === 'scan' ? 'Scan URL' : mode === 'file' ? 'Scan file' : 'Submit report'}</button>
+        : <small>{t('scan.privacy')}</small>}
+      <button className="btn btn-primary" disabled={busy}>{busy ? <Loader2 size={16} className="spin" aria-hidden="true" /> : mode === 'report' ? <Send size={16} aria-hidden="true" /> : <Search size={16} aria-hidden="true" />}{busy ? t('scan.processing') : mode === 'scan' ? t('scan.submit.check') : mode === 'file' ? t('scan.submit.file') : t('scan.submit.report')}</button>
     </form>
     {error && <p role="alert" className="debt-error">{error}</p>}
     {notice && <p role="status" className="debt-notice">{notice}</p>}
@@ -149,14 +151,14 @@ export default function EmployeeUrlScanner({ onReportComplete }: { onReportCompl
       <p>This result is not a Block/Allow decision.</p>
     </div>}
     </div><aside className="url-report-history">
-    <div className="panel-header"><h3>My activity</h3><button type="button" className="btn" onClick={() => void refresh()}><RefreshCw size={14} />Refresh</button></div>
-    <div className="debt-tabs" aria-label="My activity"><button type="button" className={'btn ' + (history === 'reports' ? 'btn-primary' : '')} aria-pressed={history === 'reports'} onClick={() => setHistory('reports')}>Link reports</button><button type="button" className={'btn ' + (history === 'files' ? 'btn-primary' : '')} aria-pressed={history === 'files'} onClick={() => setHistory('files')}>File scans</button></div>
+    <div className="panel-header"><h3>{t('scan.history')}</h3><button type="button" className="btn" onClick={() => void refresh()}><RefreshCw size={14} />{t('common.refresh')}</button></div>
+    <div className="debt-tabs" aria-label={t('scan.history')}><button type="button" className={'btn ' + (history === 'reports' ? 'btn-primary' : '')} aria-pressed={history === 'reports'} onClick={() => setHistory('reports')}>{t('scan.reports')}</button><button type="button" className={'btn ' + (history === 'files' ? 'btn-primary' : '')} aria-pressed={history === 'files'} onClick={() => setHistory('files')}>{t('scan.files')}</button></div>
     {history === 'reports' ? <>
-      {!reports.length && <p className="debt-help">No link reports yet.</p>}
+      {!reports.length && <p className="debt-help">{t('scan.none.reports')}</p>}
       <ul className="employee-report-list">{reports.map(report => <li key={report.id}><div><strong>{report.url}</strong><small>Evidence: {report.verdict} · {report.created_at} UTC</small><ThreatEvidence analysis={report.analysis} /></div><span className="badge" data-status={report.status}>{report.status.replaceAll('_', ' ')}</span></li>)}</ul>
     </> : <>
-      <p className="debt-help">Your results only. Not sent to the SOC inbox.</p>
-      {!fileScans.length && <p className="debt-help">No file scans yet.</p>}
+      <p className="debt-help">{t('scan.files.hint')}</p>
+      {!fileScans.length && <p className="debt-help">{t('scan.none.files')}</p>}
       <ul className="employee-report-list">{fileScans.map(item => <li key={item.id}><div><strong>{item.file_name}</strong><small>{Math.ceil(item.file_size / 1024)} KB · {item.created_at} UTC</small><span className="file-scan-label" data-verdict={item.verdict}>{fileScanLabel(item)}</span><ThreatEvidence analysis={item.analysis} /><button type="button" className="btn" onClick={() => { setSelectedFileId(item.id); setMode('file'); setError(''); setNotice(''); }}>View result</button></div><span className="badge">{item.status === 'pending' ? 'Scanning' : item.status === 'unknown' ? 'No verdict' : 'Scanned'}</span></li>)}</ul>
     </>}
     </aside></div>

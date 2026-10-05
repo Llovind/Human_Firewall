@@ -1,19 +1,29 @@
-import Link from 'next/link';
-import { ArrowRight, ShieldCheck, ShieldAlert, Link2, Flag, LockKeyhole } from 'lucide-react';
-import '@/app/security-pages.css';
+'use client';
 
-const signals = [
-  { Icon: ShieldAlert, title: 'Urgency is not proof', text: 'An unexpected password reset request can pressure you into acting before checking.' },
-  { Icon: Link2, title: 'Check the address, not the design', text: 'Convincing emails and login pages can be copied. Verify the sender and domain.' },
-  { Icon: Flag, title: 'When in doubt, report it', text: 'Use Report a link in your dashboard. Do not reply or forward the suspicious link.' },
-];
+import { Flag, Link2, LockKeyhole, ShieldAlert } from 'lucide-react';
+import { NoticeShell, Notice, HomeLink } from '@/components/ui/NoticeShell';
+import { useI18n } from '@/i18n/I18nProvider';
 
+/** Where a person lands after clicking a simulated phishing link: calm, specific, and useful. */
 export default function SimulationEducation() {
-  return <main className="security-screen" data-tone="education"><div className="security-workspace">
-    <header className="security-brand"><span><ShieldCheck size={25} /> AFFERENT<span className="security-brand-divider">/</span><small>Human Security</small></span><span className="security-status">Awareness simulation</span></header>
-    <article className="security-shell">
-      <section className="security-hero"><span className="security-icon"><ShieldAlert size={38} strokeWidth={1.6} /></span><span className="security-eyebrow">PAUSE. CHECK THE SIGNALS.</span><h1>This was a<br />phishing simulation.</h1><p className="security-lead">No password was changed. Use this moment to learn how convincing phishing can look.</p><div className="security-assurance"><LockKeyhole size={20} /><div><strong>Your credentials were not collected</strong><p>The demo records a submission event only. Email and password values are not sent or stored.</p></div></div><Link className="security-primary" href="/">Back to dashboard <ArrowRight size={17} /></Link></section>
-      <section className="security-guidance" aria-labelledby="education-next"><span className="security-eyebrow">WHAT TO REMEMBER</span><h2 id="education-next">Three habits that help</h2><div className="security-steps">{signals.map(({ Icon, title, text }, index) => <article key={title}><span className="security-step-icon"><Icon size={20} /></span><div><small>0{index + 1}</small><h3>{title}</h3><p>{text}</p></div></article>)}</div><div className="security-note"><strong>Use a trusted bookmark to open your work portal.</strong><p>If you entered a real password on a suspicious site, change it through the official portal and contact SOC.</p></div></section>
-    </article><footer className="security-footer"><span><ShieldCheck size={15} /> Learn from the simulation. Be ready for the real thing.</span><span>Click and submission events follow AFFERENT scoring. Updates may take a few seconds.</span></footer>
-  </div></main>;
+  const { t } = useI18n();
+  const habits = [
+    { Icon: ShieldAlert, title: t('edu.h1.title'), body: t('edu.h1.body') },
+    { Icon: Link2, title: t('edu.h2.title'), body: t('edu.h2.body') },
+    { Icon: Flag, title: t('edu.h3.title'), body: t('edu.h3.body') },
+  ];
+  return (
+    <NoticeShell footer={t('edu.footer')}>
+      <Notice level="medium" status={t('edu.status')} title={t('edu.title')} why={t('edu.lead')} actions={<HomeLink label={t('edu.back')} />}>
+        <div className="notice-banner" data-tone="ok"><strong><LockKeyhole size={14} aria-hidden="true" /> {t('edu.assure.title')}</strong>{t('edu.assure.body')}</div>
+        <h2 className="notice-sub">{t('edu.habits')}</h2>
+        <ol className="notice-habits">
+          {habits.map(({ Icon, title, body }) => (
+            <li key={title}><Icon size={18} aria-hidden="true" /><span><strong>{title}</strong>{body}</span></li>
+          ))}
+        </ol>
+        <div className="notice-banner"><strong>{t('edu.bookmark.title')}</strong>{t('edu.bookmark.body')}</div>
+      </Notice>
+    </NoticeShell>
+  );
 }

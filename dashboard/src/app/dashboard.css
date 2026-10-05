@@ -364,7 +364,7 @@
   align-items: center;
   justify-content: center;
   padding: 16px 18px;
-  background: #ffffff;
+  background: var(--bg-surface);
   border: 1.5px solid rgba(144, 202, 249, 0.65);
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(33, 150, 243, 0.06);
@@ -476,7 +476,7 @@
 
 .summary-item {
   padding: var(--space-5);
-  background: #ffffff;
+  background: var(--bg-surface);
   border: 1px solid rgba(13, 71, 161, 0.14);
   border-radius: 12px;
   box-shadow: 0 2px 10px -2px rgba(13, 71, 161, 0.05);
@@ -878,7 +878,7 @@
 
 .policy-card {
   padding: var(--space-5);
-  background: #ffffff;
+  background: var(--bg-surface);
   border: 1px solid rgba(13, 71, 161, 0.14);
   border-radius: 12px;
   box-shadow: 0 2px 10px -2px rgba(13, 71, 161, 0.05);
@@ -1627,7 +1627,7 @@
 }
 
 .threat-breakdown-panel {
-  background: #ffffff;
+  background: var(--bg-surface);
   border: 1px solid rgba(144, 202, 249, 0.45);
   border-radius: 12px;
   padding: 24px;
@@ -1653,7 +1653,7 @@
   align-items: flex-start;
   gap: 14px;
   padding: 14px 16px;
-  background: #f8fafc;
+  background: var(--bg-base);
   border: 1px solid rgba(226, 232, 240, 0.9);
   border-radius: 8px;
   margin-bottom: 10px;
@@ -1661,7 +1661,7 @@
 }
 
 .threat-indicator-card:hover {
-  background: #f1f5f9;
+  background: var(--bg-elevated);
   border-color: rgba(144, 202, 249, 0.6);
 }
 
@@ -1804,7 +1804,7 @@
 }
 
 .inspect-detail-drawer {
-  background: #ffffff;
+  background: var(--bg-surface);
   border: 1.5px solid rgba(144, 202, 249, 0.8);
   border-radius: 12px;
   padding: 18px 22px;

@@ -275,3 +275,10 @@
 @media (prefers-reduced-motion: reduce) {
   .login-primary, .login-input-wrap input, .otp-input { transition: none; }
 }
+
+.login-notice { display: grid; gap: 4px; margin: 0 0 18px; padding: 12px 14px; font-size: 13px; line-height: 1.5; color: #1b3a73; background: #eef4ff; border: 1px solid #b6cdf7; border-radius: 10px; }
+.login-notice strong { font-size: 14px; }
+
+.login-lang { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.login-lang .lang-switch button { color: #475569; border-color: #cbd5e1; }
+.login-lang .lang-switch button[aria-pressed="true"] { color: #0f2747; background: #eef4ff; border-color: #7b8599; }
