@@ -1,8 +1,16 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Ban, CheckCircle2, Clock3, Radio, ShieldAlert, SlidersHorizontal, X } from 'lucide-react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { Ban, CheckCircle2 } from 'lucide-react';
 import DomainSecondOpinion from './DomainSecondOpinion';
+import Dialog from '@/components/ui/Dialog';
+import SeverityBadge from '@/components/ui/SeverityBadge';
+import StateMessage from '@/components/ui/StateMessage';
+import StatusChip from '@/components/ui/StatusChip';
+import { useToast } from '@/components/ui/Toast';
+import { useI18n } from '@/i18n/I18nProvider';
+import { useNow } from '@/hooks/useNow';
+import { formatAgo } from '@/lib/relativeTime';
 
 type Alert = {
   id: string;
@@ -41,7 +49,12 @@ type Traffic = {
   occurred_at: string;
 };
 
+const TRAFFIC_ROWS = 50;
+
 export default function ProxyOperationsSection() {
+  const { t, lang } = useI18n();
+  const toast = useToast();
+  const now = useNow();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [verdicts, setVerdicts] = useState<Verdict[]>([]);
   const [traffic, setTraffic] = useState<Traffic[]>([]);
@@ -51,6 +64,7 @@ export default function ProxyOperationsSection() {
   const [domain, setDomain] = useState('');
   const [action, setAction] = useState<'block' | 'allow'>('block');
   const [reason, setReason] = useState('');
+  const [policyError, setPolicyError] = useState('');
   const [queueFilter, setQueueFilter] = useState('actionable');
   const [review, setReview] = useState<
     { kind: 'alert'; item: Alert; action: 'block' | 'allow' } |
@@ -58,25 +72,20 @@ export default function ProxyOperationsSection() {
   >(null);
   const [reviewReason, setReviewReason] = useState('');
   const [reviewError, setReviewError] = useState('');
-  const reviewDialog = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    if (review) reviewDialog.current?.showModal();
-  }, [review]);
 
   const load = useCallback(async () => {
     try {
-    const [alertResponse, verdictResponse, trafficResponse] = await Promise.all([
-      fetch('/api/proxy/alerts', { cache: 'no-store' }),
-      fetch('/api/proxy/verdicts', { cache: 'no-store' }),
-      fetch('/api/proxy/traffic?limit=200', { cache: 'no-store' }),
-    ]);
-    if (alertResponse.ok) setAlerts((await alertResponse.json()).alerts || []);
-    if (verdictResponse.ok) setVerdicts((await verdictResponse.json()).verdicts || []);
-    if (trafficResponse.ok) setTraffic((await trafficResponse.json()).events || []);
-    if (!alertResponse.ok || !verdictResponse.ok || !trafficResponse.ok) setMessage('Some telemetry could not refresh. Showing the last snapshot.');
-    } catch { setMessage('Could not refresh telemetry. Check the backend connection.'); }
-  }, []);
+      const [alertResponse, verdictResponse, trafficResponse] = await Promise.all([
+        fetch('/api/proxy/alerts', { cache: 'no-store' }),
+        fetch('/api/proxy/verdicts', { cache: 'no-store' }),
+        fetch('/api/proxy/traffic?limit=200', { cache: 'no-store' }),
+      ]);
+      if (alertResponse.ok) setAlerts((await alertResponse.json()).alerts || []);
+      if (verdictResponse.ok) setVerdicts((await verdictResponse.json()).verdicts || []);
+      if (trafficResponse.ok) setTraffic((await trafficResponse.json()).events || []);
+      setMessage(!alertResponse.ok || !verdictResponse.ok || !trafficResponse.ok ? t('ops.fail.refresh') : '');
+    } catch { setMessage(t('ops.fail.refresh')); }
+  }, [t]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
@@ -105,21 +114,24 @@ export default function ProxyOperationsSection() {
     return () => stream.close();
   }, [load]);
 
+  const openReview = (next: NonNullable<typeof review>, defaultReason: string) => {
+    setReview(next); setReviewReason(defaultReason); setReviewError('');
+  };
+
   const decideAlert = async (alert: Alert, nextAction: 'block' | 'allow', decisionReason: string) => {
     setBusy(alert.id);
     try {
-    const response = await fetch(`/api/proxy/alerts/${alert.id}/decision`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: nextAction, reason: decisionReason }),
-    });
-    const payload = await response.json();
-    setMessage(response.ok ? `Policy updated for ${alert.domain}.` : payload.error || 'Could not save the decision.');
-    if (response.ok) await load();
-    else setReviewError(payload.error || 'Could not save the decision.');
-    return response.ok;
+      const response = await fetch(`/api/proxy/alerts/${alert.id}/decision`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: nextAction, reason: decisionReason }),
+      });
+      const payload = await response.json();
+      if (response.ok) { toast.show({ message: t('ops.toast.policy', { domain: alert.domain }), tone: 'ok' }); await load(); }
+      else setReviewError(payload.error || t('ops.fail.save'));
+      return response.ok;
     } catch {
-      setReviewError('Decision unconfirmed. Check the policy before retrying.');
+      setReviewError(t('ops.fail.unconfirmed'));
       return false;
     }
     finally { setBusy(''); }
@@ -127,41 +139,38 @@ export default function ProxyOperationsSection() {
 
   const submitManual = async (event: FormEvent) => {
     event.preventDefault();
+    if (reason.trim().length < 5) { setPolicyError(t('ops.dialog.short')); return; }
+    setPolicyError('');
     setBusy('manual');
     try {
-    const response = await fetch('/api/proxy/manual-decision', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ domain, action, reason }),
-    });
-    const payload = await response.json();
-    setMessage(response.ok
-      ? `${action.toUpperCase()} policy applied to ${payload.verdict?.domain || domain} and all subdomains. Reload existing HTTPS connections.`
-      : payload.error || 'Could not save the policy.');
-    if (response.ok) {
-      setDomain(''); setReason(''); await load();
-    }
-    } catch { setMessage('Policy unconfirmed. Your form has been preserved.'); }
+      const response = await fetch('/api/proxy/manual-decision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain, action, reason }),
+      });
+      const payload = await response.json();
+      if (response.ok) {
+        toast.show({ message: t('ops.toast.applied', { action: t(action === 'block' ? 'ops.action.block' : 'ops.action.allow'), domain: payload.verdict?.domain || domain }), tone: 'ok' });
+        setDomain(''); setReason(''); await load();
+      } else setPolicyError(payload.error || t('ops.fail.policy'));
+    } catch { setPolicyError(t('ops.fail.policy')); }
     finally { setBusy(''); }
   };
 
   const blockTraffic = async (item: Traffic, decisionReason: string) => {
     setBusy(item.event_id);
     try {
-    const response = await fetch('/api/proxy/manual-decision', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ domain: item.domain, action: 'block', reason: decisionReason }),
-    });
-    const payload = await response.json();
-    setMessage(response.ok
-      ? `BLOCK applied to ${payload.verdict?.domain || item.domain}. New proxy connections will be denied.`
-      : payload.error || 'Could not block this domain.');
-    if (response.ok) await load();
-    else setReviewError(payload.error || 'Could not block this domain.');
-    return response.ok;
+      const response = await fetch('/api/proxy/manual-decision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain: item.domain, action: 'block', reason: decisionReason }),
+      });
+      const payload = await response.json();
+      if (response.ok) { toast.show({ message: t('ops.toast.blocked', { domain: payload.verdict?.domain || item.domain }), tone: 'ok' }); await load(); }
+      else setReviewError(payload.error || t('ops.fail.save'));
+      return response.ok;
     } catch {
-      setReviewError('Block unconfirmed. Check the policy before retrying.');
+      setReviewError(t('ops.fail.unconfirmed'));
       return false;
     }
     finally { setBusy(''); }
@@ -173,101 +182,143 @@ export default function ProxyOperationsSection() {
     traffic: traffic.length,
   }), [alerts, traffic, verdicts]);
   const visibleAlerts = alerts.filter(item => queueFilter === 'all' || (queueFilter === 'history' ? item.status !== 'open' || item.stalePrediction : item.status === 'open' && !item.stalePrediction && (queueFilter === 'unknown' ? item.urgency === 'Unknown' && item.source !== 'employee_report' : item.urgency === 'Critical' || item.source === 'employee_report')));
+  const ago = (value: string) => formatAgo(value, lang, now);
+  const blocking = review?.action === 'block';
+
+  const submitReview = async (event: FormEvent) => {
+    event.preventDefault();
+    if (busy || !review) return;
+    const trimmedReason = reviewReason.trim();
+    if (trimmedReason.length < 5) { setReviewError(t('ops.dialog.short')); return; }
+    setReviewError('');
+    const saved = review.kind === 'alert'
+      ? await decideAlert(review.item, review.action, trimmedReason)
+      : await blockTraffic(review.item, trimmedReason);
+    if (saved) setReview(null);
+  };
 
   return (
-    <section className="proxy-ops">
-      <div className="proxy-ops-hero glass-card">
-        <div><div className="proxy-ops-kicker"><Radio size={13} /> Proxy monitoring</div><h2>Traffic & policies</h2><p>Monitor access and manage domain policies.</p></div>
-        <div className={`proxy-stream ${streamOnline ? 'online' : ''}`}><span /> {streamOnline ? 'Connected' : 'Reconnecting'}</div>
+    <section className="proxy-ops ops-page">
+      <div className="ops-intro">
+        <p className="debt-help">{t('ops.desc')}</p>
+        <StatusChip tone={streamOnline ? 'ok' : 'warn'}>{t(streamOnline ? 'ops.stream.on' : 'ops.stream.off')}</StatusChip>
       </div>
-
-      <div className="proxy-stat-grid">
-        <div className="glass-card"><Activity size={18} /><strong>{counts.traffic}</strong><span>Recent traffic</span></div>
-        <div className="glass-card"><Ban size={18} /><strong>{counts.blocked}</strong><span>SOC blocks</span></div>
-        <div className="glass-card"><ShieldAlert size={18} /><strong>{counts.open}</strong><span>Open alerts</span></div>
+      <div className="strip" aria-label={t('ops.desc')}>
+        <span className="strip-static"><b>{counts.open}</b>{t('ops.stat.alerts')}</span>
+        <span className="strip-static"><b>{counts.blocked}</b>{t('ops.stat.blocks')}</span>
+        <span className="strip-static"><b>{counts.traffic}</b>{t('ops.stat.traffic')}</span>
       </div>
+      {message && <p className="debt-error" role="alert">{message}</p>}
 
-      {message && <div className="proxy-ops-message">{message}</div>}
+      <div className="ops-layout">
+        <div className="ops-main">
+          <section className="ops-block" aria-labelledby="ops-alerts">
+            <div className="ops-head"><h3 id="ops-alerts">{t('ops.alerts.title')}</h3><span className="emp-muted">{t('ops.alerts.count', { n: counts.open })}</span></div>
+            <label className="ops-filter">{t('ops.filter.show')}
+              <select value={queueFilter} onChange={event => setQueueFilter(event.target.value)}>
+                <option value="actionable">{t('ops.filter.actionable')}</option>
+                <option value="unknown">{t('ops.filter.unknown')}</option>
+                <option value="history">{t('ops.filter.history')}</option>
+                <option value="all">{t('ops.filter.all')}</option>
+              </select>
+            </label>
+            <p className="debt-help">{t('ops.alerts.help')}</p>
+            {visibleAlerts.length === 0
+              ? <StateMessage variant="empty" title={t('ops.alerts.empty')} compact />
+              : <div className="table-wrap"><table className="data-table">
+                  <caption className="visually-hidden">{t('ops.alerts.caption')}</caption>
+                  <thead><tr><th scope="col">{t('ops.col.urgency')}</th><th scope="col">{t('ops.col.domain')}</th><th scope="col" data-secondary>{t('ops.col.reason')}</th><th scope="col" data-secondary>{t('ops.col.client')}</th><th scope="col" data-narrow-hide>{t('ops.col.time')}</th><th scope="col">{t('ops.col.action')}</th></tr></thead>
+                  <tbody>
+                    {visibleAlerts.map((alert) => (
+                      <tr key={alert.id}>
+                        <td>{alert.stalePrediction
+                          ? <SeverityBadge level="info" label={t('ops.urgency.historical')} />
+                          : alert.urgency === 'Critical' ? <SeverityBadge level="critical" label={t('ops.urgency.critical')} /> : <SeverityBadge level="info" label={t('ops.urgency.unknown')} />}</td>
+                        <td><span className="mono">{alert.domain}</span></td>
+                        <td data-secondary><span className="cell-clip" title={alert.reason}>{alert.reason}</span></td>
+                        <td data-secondary>{alert.employee_email || 'ML'}<small className="cell-sub">{alert.source.toUpperCase()}{alert.confidence != null ? ` · ${Math.round(alert.confidence * 100)}%` : ''}</small></td>
+                        <td data-narrow-hide title={new Date(alert.created_at).toLocaleString()}>{ago(alert.created_at)}</td>
+                        <td>{alert.status === 'open'
+                          ? <span className="ops-actions">
+                              <button type="button" className="btn" disabled={!!busy} onClick={() => openReview({ kind: 'alert', item: alert, action: 'allow' }, t('ops.dialog.defaultAllow'))}><CheckCircle2 size={14} aria-hidden="true" />{t('ops.action.allow')}</button>
+                              <button type="button" className="btn btn-danger" disabled={!!busy} onClick={() => openReview({ kind: 'alert', item: alert, action: 'block' }, t('ops.dialog.defaultBlock'))}><Ban size={14} aria-hidden="true" />{t('ops.action.block')}</button>
+                            </span>
+                          : <StatusChip tone={alert.status === 'blocked' ? 'bad' : 'ok'}>{t(alert.status === 'blocked' ? 'ops.status.blocked' : 'ops.status.allowed')}</StatusChip>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table></div>}
+          </section>
 
-      <div className="glass-card proxy-alert-panel">
-        <div className="proxy-section-title"><div><span>Monitoring</span><h3>Live traffic</h3></div><b>{traffic.length} events</b></div>
-        <div className="proxy-alert-list proxy-traffic-list">
-          {traffic.length === 0 && <div className="proxy-empty"><Activity size={22} /> No traffic received from Squid yet.</div>}
-          {traffic.map((item) => (
-            <article key={item.event_id} className="proxy-alert">
-              <div className="proxy-alert-top">
-                <span className={`urgency ${item.action === 'block' ? 'critical' : 'unknown'}`}>
-                  {item.action === 'block' ? 'Blocked' : ['soc', 'ml'].includes(item.decision_source) ? 'Allowed' : 'Unknown · allowed'}
-                </span>
-                <span className="proxy-time"><Clock3 size={12} /> {new Date(item.occurred_at).toLocaleString('en-GB')}</span>
-              </div>
-              <h4>{item.domain}{item.port ? `:${item.port}` : ''}</h4>
-              <p>{item.reason}</p>
-              <div className="proxy-alert-meta"><span>{item.employee_email || 'Unidentified client'}</span><span>{item.method} · {item.decision_source.toUpperCase()}</span></div>
-              <DomainSecondOpinion domain={item.domain} />
-              {item.action !== 'block' && (
-                <div className="proxy-alert-actions">
-                  <button disabled={!!busy} onClick={() => { setReview({ kind: 'traffic', item, action: 'block' }); setReviewReason('Blocked from live traffic by SOC'); setReviewError(''); }} className="block"><Ban size={14} /> Block</button>
-                </div>
-              )}
-            </article>
-          ))}
+          <section className="ops-block" aria-labelledby="ops-traffic">
+            <div className="ops-head"><h3 id="ops-traffic">{t('ops.traffic.title')}</h3><span className="emp-muted">{t('ops.traffic.count', { n: traffic.length })}</span></div>
+            {traffic.length === 0
+              ? <StateMessage variant="empty" title={t('ops.traffic.empty')} compact />
+              : <div className="table-wrap"><table className="data-table">
+                  <caption className="visually-hidden">{t('ops.traffic.caption')}</caption>
+                  <thead><tr><th scope="col" data-narrow-hide>{t('ops.col.time')}</th><th scope="col">{t('ops.col.domain')}</th><th scope="col" data-secondary>{t('ops.col.client')}</th><th scope="col">{t('ops.col.decision')}</th><th scope="col" data-secondary>{t('ops.col.source')}</th><th scope="col">{t('ops.col.action')}</th></tr></thead>
+                  <tbody>
+                    {traffic.slice(0, TRAFFIC_ROWS).map((item) => (
+                      <tr key={item.event_id}>
+                        <td data-narrow-hide title={new Date(item.occurred_at).toLocaleString()}>{ago(item.occurred_at)}</td>
+                        <td><span className="mono">{item.domain}{item.port ? `:${item.port}` : ''}</span></td>
+                        <td data-secondary>{item.employee_email || t('ops.traffic.unidentified')}</td>
+                        <td>{item.action === 'block'
+                          ? <StatusChip tone="bad">{t('ops.status.blocked')}</StatusChip>
+                          : ['soc', 'ml'].includes(item.decision_source) ? <StatusChip tone="ok">{t('ops.status.allowed')}</StatusChip> : <StatusChip tone="warn">{t('ops.traffic.unknownAllowed')}</StatusChip>}</td>
+                        <td data-secondary><span className="cell-clip" title={item.reason}>{item.method} · {item.decision_source.toUpperCase()}</span></td>
+                        <td>{item.action !== 'block' && <button type="button" className="btn btn-danger" disabled={!!busy} onClick={() => openReview({ kind: 'traffic', item, action: 'block' }, t('ops.dialog.defaultTraffic'))}><Ban size={14} aria-hidden="true" />{t('ops.action.block')}</button>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table></div>}
+            {traffic.length > TRAFFIC_ROWS && <p className="emp-muted">{t('ops.traffic.more', { n: TRAFFIC_ROWS })}</p>}
+          </section>
         </div>
-      </div>
 
-      <div className="proxy-ops-grid">
-        <div className="glass-card proxy-alert-panel">
-          <div className="proxy-section-title"><div><span>Review</span><h3>Security alerts</h3></div><b>{counts.open} open</b></div>
-          <label className="proxy-queue-filter">Show<select value={queueFilter} onChange={event => setQueueFilter(event.target.value)}><option value="actionable">Critical & employee reports</option><option value="unknown">Unknown — monitoring</option><option value="history">History / older models</option><option value="all">All observations</option></select></label>
-          <p className="debt-help">Unknown does not mean malicious. ML confidence is not proof of compromise.</p>
-          <div className="proxy-alert-list">
-            {visibleAlerts.length === 0 && <div className="proxy-empty"><Activity size={22} /> No alerts in this category.</div>}
-            {visibleAlerts.map((alert) => (
-              <article key={alert.id} className={`proxy-alert ${alert.status !== 'open' ? 'resolved' : ''}`}>
-                <div className="proxy-alert-top"><span className={`urgency ${alert.stalePrediction ? 'unknown' : alert.urgency.toLowerCase()}`}>{alert.stalePrediction ? 'Historical prediction' : alert.urgency}</span><span className="proxy-time"><Clock3 size={12} /> {new Date(alert.created_at).toLocaleString('en-GB')}</span></div>
-                <h4>{alert.domain}</h4><p>{alert.reason}</p>
-                <div className="proxy-alert-meta"><span>{alert.employee_email || 'ML callback'}</span><span>{alert.source.toUpperCase()}{alert.confidence != null ? ` · ${Math.round(alert.confidence * 100)}%` : ''}</span></div>
-                <DomainSecondOpinion domain={alert.domain} />
-                {alert.status === 'open' ? <div className="proxy-alert-actions"><button disabled={!!busy} onClick={() => { setReview({ kind: 'alert', item: alert, action: 'allow' }); setReviewReason('False positive, allowed by SOC'); setReviewError(''); }} className="allow"><CheckCircle2 size={14} /> Allow</button><button disabled={!!busy} onClick={() => { setReview({ kind: 'alert', item: alert, action: 'block' }); setReviewReason('Confirmed malicious by SOC'); setReviewError(''); }} className="block"><Ban size={14} /> Block</button></div> : <div className={`proxy-resolution ${alert.status}`}>{alert.status}</div>}
-              </article>
-            ))}
-          </div>
-        </div>
-
-        <div className="proxy-ops-side">
-          <form className="glass-card proxy-manual" onSubmit={submitManual}>
-            <div className="proxy-section-title"><div><span>SOC decision</span><h3>Domain policy</h3></div><SlidersHorizontal size={18} /></div>
-            <label>Domain<input required value={domain} onChange={(event) => setDomain(event.target.value)} placeholder="contoh-domain.id" /></label>
-            <small>Applies to this domain and all subdomains. Check the spelling.</small>
-            <label>Decision<select value={action} onChange={(event) => setAction(event.target.value as 'block' | 'allow')}><option value="block">Block</option><option value="allow">Allow</option></select></label>
-            <label>Reason<textarea required minLength={5} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Decision reason (required)" /></label>
-            <button className="btn btn-primary" disabled={busy === 'manual'}>{busy === 'manual' ? 'Saving…' : 'Apply policy'}</button>
+        <aside className="ops-side">
+          <form className="ops-card" onSubmit={submitManual} noValidate>
+            <h3>{t('ops.policy.title')}</h3>
+            <div className="field"><label htmlFor="policy-domain">{t('ops.policy.domain')}</label><input id="policy-domain" required value={domain} onChange={(event) => setDomain(event.target.value)} placeholder={t('ops.policy.placeholder')} /><small>{t('ops.policy.hint')}</small></div>
+            <div className="field"><label htmlFor="policy-action">{t('ops.policy.decision')}</label><select id="policy-action" value={action} onChange={(event) => setAction(event.target.value as 'block' | 'allow')}><option value="block">{t('ops.action.block')}</option><option value="allow">{t('ops.action.allow')}</option></select></div>
+            <div className="field" data-invalid={Boolean(policyError)}><label htmlFor="policy-reason">{t('ops.policy.reason')}</label><textarea id="policy-reason" required minLength={5} value={reason} onChange={(event) => setReason(event.target.value)} placeholder={t('ops.policy.reason.placeholder')} />{policyError && <small className="field-error" role="alert">{policyError}</small>}</div>
+            <button type="submit" className="btn btn-primary" disabled={busy === 'manual'}>{busy === 'manual' ? t('ops.policy.saving') : t('ops.policy.apply')}</button>
           </form>
 
-          <div className="glass-card proxy-verdicts"><div className="proxy-section-title"><div><span>Saved policies</span><h3>Recent decisions</h3></div></div>{verdicts.slice(0, 8).map((item) => <div className="proxy-verdict-row" key={item.id}><div><strong>{item.domain}</strong><span>{item.source === 'soc' ? 'Manual SOC' : `ML ${item.model_version || ''}`}</span></div><b className={item.decision}>{item.decision}</b></div>)}</div>
-        </div>
+          <div className="ops-card">
+            <h3>{t('ops.recent.title')}</h3>
+            {verdicts.length === 0 && <p className="emp-muted">{t('ops.recent.empty')}</p>}
+            <ul className="emp-list">
+              {verdicts.slice(0, 8).map((item) => (
+                <li key={item.id}>
+                  <span className="emp-list-main"><span className="mono">{item.domain}</span><small>{item.source === 'soc' ? t('ops.recent.manual') : t('ops.recent.model', { v: item.model_version || '' })}</small></span>
+                  <StatusChip tone={item.decision === 'block' ? 'bad' : 'ok'}>{t(item.decision === 'block' ? 'ops.status.blocked' : 'ops.status.allowed')}</StatusChip>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </aside>
       </div>
-      {review && <dialog ref={reviewDialog} className="inbox-dialog" aria-labelledby="decision-title" onCancel={event => { if (busy) event.preventDefault(); else setReview(null); }}>
-        <button className="account-close" aria-label="Close" disabled={!!busy} onClick={() => setReview(null)}><X size={20} /></button>
-        <h2 id="decision-title">{review.action === 'block' ? 'Block this domain?' : 'Allow this domain?'}</h2>
-        <p className="decision-domain">{review.item.domain}</p>
-        <form className="debt-form" onSubmit={async event => {
-          event.preventDefault();
-          if (busy) return;
-          const trimmedReason = reviewReason.trim();
-          if (trimmedReason.length < 5) { setReviewError('Enter a reason with at least 5 characters.'); return; }
-          setReviewError('');
-          const saved = review.kind === 'alert'
-            ? await decideAlert(review.item, review.action, trimmedReason)
-            : await blockTraffic(review.item, trimmedReason);
-          if (saved) setReview(null);
-        }}>
-          <label>Decision reason<textarea autoFocus required minLength={5} maxLength={1000} rows={3} value={reviewReason} onChange={event => setReviewReason(event.target.value)} /></label>
-          <small>This decision and its reason are recorded in the SOC audit.</small>
-          {reviewError && <p className="debt-error" role="alert">{reviewError}</p>}
-          <div className="decision-actions"><button type="button" className="btn" disabled={!!busy} onClick={() => setReview(null)}>Cancel</button><button className={`btn ${review.action === 'block' ? 'btn-danger' : 'btn-primary'}`} disabled={!!busy}>{busy ? 'Saving…' : review.action === 'block' ? 'Confirm Block' : 'Confirm Allow'}</button></div>
-        </form>
-      </dialog>}
+
+      <Dialog open={review !== null} onClose={() => { if (!busy) setReview(null); }} busy={!!busy} size="md" title={blocking ? t('ops.dialog.block') : t('ops.dialog.allow')}>
+        {review && <>
+          <p className="decision-domain mono">{review.item.domain}</p>
+          {review.item.reason && <p className="decision-reason-text">{review.item.reason}</p>}
+          <DomainSecondOpinion domain={review.item.domain} />
+          <form className="ui-form" onSubmit={submitReview}>
+            <div className="field" data-invalid={Boolean(reviewError)}>
+              <label htmlFor="decision-reason">{t('ops.dialog.reason')}</label>
+              <textarea id="decision-reason" autoFocus required minLength={5} maxLength={1000} rows={3} value={reviewReason} onChange={event => setReviewReason(event.target.value)} />
+              <small>{t('ops.dialog.hint')}</small>
+              {reviewError && <small className="field-error" role="alert">{reviewError}</small>}
+            </div>
+            <div className="ui-dialog-footer">
+              <button type="button" className="btn" disabled={!!busy} onClick={() => setReview(null)}>{t('common.cancel')}</button>
+              <button type="submit" className={`btn ${blocking ? 'btn-danger' : 'btn-primary'}`} disabled={!!busy}>{busy ? t('ops.dialog.saving') : blocking ? t('ops.dialog.confirmBlock') : t('ops.dialog.confirmAllow')}</button>
+            </div>
+          </form>
+        </>}
+      </Dialog>
     </section>
   );
 }

@@ -3,7 +3,9 @@
 import { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/admin/DashboardLayout';
 import OverviewSection from '@/components/admin/OverviewSection';
-import IncidentTriageSection from '@/components/admin/IncidentTriageSection';
+import IncidentQueue from '@/components/admin/IncidentQueue';
+import ExecutiveSummary from '@/components/admin/ExecutiveSummary';
+import { useI18n } from '@/i18n/I18nProvider';
 import ThreatCacheSection from '@/components/admin/ThreatCacheSection';
 import LeaderboardSection from '@/components/admin/LeaderboardSection';
 import PolicySection from '@/components/admin/PolicySection';
@@ -15,13 +17,14 @@ import type { Incident, Stats, ThreatCacheEntry, AISummary, BehaviorScore, Polic
 import AIIntelligenceSection from '@/components/admin/AIIntelligenceSection';
 
 export default function CISODashboard() {
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState('overview');
   const [campaigns, setCampaigns] = useState<GoPhishCampaign[]>([]);
   const [employees, setEmployees] = useState<EmployeeAccount[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
 
   // Polling core data
-  const { data: incidentData, hasUpdated: incidentUpdated } = usePolling<{ incidents: Incident[]; stats: Stats }>('/api/incident', 3000);
+  const { data: incidentData, hasUpdated: incidentUpdated, isLoading: incidentsLoading, error: incidentsError, refresh: refreshIncidents } = usePolling<{ incidents: Incident[]; stats: Stats }>('/api/incident', 3000);
   const { data: cacheData, hasUpdated: cacheUpdated } = usePolling<{ cache: ThreatCacheEntry[] }>('/api/cache', 3000);
   const { data: summaryData, hasUpdated: summaryUpdated } = usePolling<{ summaries: AISummary[] }>('/api/summary', 3000);
   const { data: behaviorData, hasUpdated: behaviorUpdated } = usePolling<{ scores: BehaviorScore[] }>('/api/behavior', 3000);
@@ -53,45 +56,28 @@ export default function CISODashboard() {
 
   return (
     <DashboardLayout role="ciso" activeTab={activeTab} onTabChange={setActiveTab}>
-      {/* CISO Executive Notice Banner */}
-      <div style={{
-        background: 'var(--bg-warning)',
-        border: '1px solid var(--border-warning)',
-        borderRadius: '8px',
-        padding: '12px 16px',
-        marginBottom: '20px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        fontSize: '13px',
-        color: 'var(--text-warning)',
-      }}>
-        <span><strong>Read-only.</strong> Decision operasional ditangani tim SOC dan administrator.</span>
-      </div>
-
       {activeTab === 'overview' && (
         <>
-          <OverviewSection
-            readOnly={true}
-            stats={incidentData?.stats}
-            incidents={activeIncidents}
-            summaries={summaries}
-            scores={scores}
-            cache={cache}
-            complianceData={complianceData}
-            incidentUpdated={incidentUpdated}
-            cacheUpdated={cacheUpdated}
-            summaryUpdated={summaryUpdated}
-            behaviorUpdated={behaviorUpdated}
-          />
-          <div style={{ marginTop: '24px' }}>
-            <IncidentTriageSection
-              readOnly={true}
-              incidents={activeIncidents}
-              onSelectIncident={() => {}}
-              onResolveIncident={() => {}}
-            />
-          </div>
+          <ExecutiveSummary incidents={incidents} scores={scores} compliance={complianceData} campaigns={campaigns} />
+          <IncidentQueue incidents={incidents} canResolve={false} onChanged={refreshIncidents} loading={incidentsLoading} error={Boolean(incidentsError) && !incidentData} />
+          <details className="exec-more">
+            <summary>{t('exec.more')}<small>{t('exec.more.hint')}</small></summary>
+            <div>
+              <OverviewSection
+                readOnly={true}
+                stats={incidentData?.stats}
+                incidents={activeIncidents}
+                summaries={summaries}
+                scores={scores}
+                cache={cache}
+                complianceData={complianceData}
+                incidentUpdated={incidentUpdated}
+                cacheUpdated={cacheUpdated}
+                summaryUpdated={summaryUpdated}
+                behaviorUpdated={behaviorUpdated}
+              />
+            </div>
+          </details>
         </>
       )}
 

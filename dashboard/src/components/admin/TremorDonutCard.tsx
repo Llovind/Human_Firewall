@@ -42,7 +42,7 @@ export function TremorDonutCard({
     <div
       className={`chart-card glass-card ${className}`}
       style={{
-        background: '#ffffff',
+        background: 'var(--bg-surface)',
         borderRadius: '14px',
         border: '1px solid rgba(13, 71, 161, 0.12)',
         padding: '24px',

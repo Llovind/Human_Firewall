@@ -14,6 +14,18 @@ export interface Incident {
   target: string;
   description: string;
   status: string;
+  /** Email of the SOC analyst who owns it, if any. */
+  assignee?: string | null;
+}
+
+export interface IncidentEvent {
+  id: number;
+  ticket_id: string;
+  actor_email: string;
+  actor_role: string;
+  event: 'resolved' | 'reopened' | 'assigned' | 'unassigned';
+  note: string | null;
+  created_at: string;
 }
 
 export interface ThreatCacheEntry {

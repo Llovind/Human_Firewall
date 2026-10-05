@@ -1,6 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import Dialog from '@/components/ui/Dialog';
+import { useToast } from '@/components/ui/Toast';
+import { useI18n } from '@/i18n/I18nProvider';
 import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/admin/DashboardLayout';
 import GophishCampaignSection from '@/components/admin/GophishCampaignSection';
@@ -9,7 +12,7 @@ import LeaderboardSection from '@/components/admin/LeaderboardSection';
 import AIIntelligenceSection from '@/components/admin/AIIntelligenceSection';
 import { usePolling } from '@/hooks/usePolling';
 import type { Division, EmployeeAccount, GoPhishCampaign, GoPhishResource, LeaderboardResponse } from '@/components/admin/types';
-import { X, Play, Mail, Globe, Users, Building, Download, Edit3, Send, Target } from 'lucide-react';
+import { X, Play, Download, Send, Target } from 'lucide-react';
 
 type EditableGoPhishResource = {
   id: number;
@@ -28,6 +31,13 @@ function errorMessage(error: unknown): string {
 
 export default function PhishingAdminDashboard() {
   const router = useRouter();
+  const { t } = useI18n();
+  const toast = useToast();
+  const [templateError, setTemplateError] = useState('');
+  const [landingError, setLandingError] = useState('');
+  const [divisionError, setDivisionError] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState<{ kind: 'template' | 'page'; id: number; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState('gophish');
   const [campaigns, setCampaigns] = useState<GoPhishCampaign[]>([]);
   const [resources, setResources] = useState<GoPhishResource | null>(null);
@@ -174,10 +184,10 @@ export default function PhishingAdminDashboard() {
     try {
       const res = await fetch('/api/admin/gophish/sync', { method: 'POST' });
       const data = await res.json();
-      if (res.ok) alert(data.message || 'Employee roster synced to GoPhish.');
-      else alert(`Could not sync: ${data.error || 'Unexpected error'}`);
+      if (res.ok) toast.show({ message: t('adm.sync.ok'), tone: 'ok' });
+      else toast.show({ message: `${t('adm.sync.fail')}: ${data.error || ''}`.replace(/: $/, ''), tone: 'bad' });
     } catch {
-      alert('Could not reach the server.');
+      toast.show({ message: t('adm.error.server'), tone: 'bad' });
     }
   };
 
@@ -211,7 +221,7 @@ export default function PhishingAdminDashboard() {
     e.preventDefault();
     setLaunchError('');
     if (!launchName.trim() || !launchTemplate || !launchProfile || !launchPage || !launchUrl || !selectedEmails.length) {
-      setLaunchError('Pilih penerima, template, landing page, Mailpit, dan isi URL server GoPhish.');
+      setLaunchError(t('adm.validation.launch'));
       return;
     }
 
@@ -263,9 +273,11 @@ export default function PhishingAdminDashboard() {
         setTemplateHtml('<p>Hello {{.FirstName}},</p><p>Please verify your account: <a href="{{.URL}}">Continue verification</a></p>');
         setTemplateText('Hello {{.FirstName}},\nPlease verify your account: {{.URL}}');
       }
+      setTemplateError('');
       setIsTemplateModalOpen(true);
     } else {
       setLandingModalMode(mode);
+      setLandingError('');
       setCloneAuthorized(false); setCloneError(''); setCloneNotice(''); setImportSiteUrl('');
       if (mode === 'edit' && item) {
         setLandingId(item.id);
@@ -285,10 +297,11 @@ export default function PhishingAdminDashboard() {
   const handleSaveTemplate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!templateName.trim() || !templateSubject.trim()) {
-      alert('Template name and subject are required');
+      setTemplateError(t('adm.validation.template'));
       return;
     }
 
+    setTemplateError('');
     setIsSavingTemplate(true);
     try {
       const url = templateModalMode === 'edit' && templateId 
@@ -308,32 +321,39 @@ export default function PhishingAdminDashboard() {
       });
 
       if (res.ok) {
-        alert(`Email template ${templateModalMode === 'edit' ? 'updated' : 'created'}.`);
+        toast.show({ message: t('adm.template.saved'), tone: 'ok' });
         setIsTemplateModalOpen(false);
         await loadResources();
       } else {
         const data = await res.json();
-        alert(`Could not save template: ${data.error || 'Unexpected error'}`);
+        setTemplateError(data.error || t('adm.error.server'));
       }
-    } catch (err: unknown) {
-      alert(`Backend connection failed: ${errorMessage(err)}`);
+    } catch {
+      setTemplateError(t('adm.error.server'));
     } finally {
       setIsSavingTemplate(false);
     }
   };
 
-  const handleDeleteTemplate = async (id: number) => {
-    if (!confirm('Yakin ingin menghapus email template ini?')) return;
+  const handleDeleteTemplate = (id: number) => {
+    const item = resources?.templates.find(x => x.id === id);
+    setConfirmDelete({ kind: 'template', id, name: item?.name || `#${id}` });
+  };
+
+  const performDelete = async () => {
+    if (!confirmDelete) return;
+    setDeleting(true);
     try {
-      const res = await fetch(`/api/admin/gophish/templates/${id}`, { method: 'DELETE' });
+      const path = confirmDelete.kind === 'template' ? 'templates' : 'pages';
+      const res = await fetch(`/api/admin/gophish/${path}/${confirmDelete.id}`, { method: 'DELETE' });
       if (res.ok) {
+        toast.show({ message: t(confirmDelete.kind === 'template' ? 'adm.template.deleted' : 'adm.page.deleted'), tone: 'ok' });
+        setConfirmDelete(null);
         await loadResources();
-      } else {
-        alert('Could not delete the template.');
-      }
+      } else toast.show({ message: t('adm.delete.failed'), tone: 'bad' });
     } catch {
-      alert('Could not reach the backend.');
-    }
+      toast.show({ message: t('adm.error.server'), tone: 'bad' });
+    } finally { setDeleting(false); }
   };
 
   // Landing Page Modal Handlers
@@ -368,10 +388,11 @@ export default function PhishingAdminDashboard() {
   const handleSaveLandingPage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!landingName.trim() || !landingHtml.trim()) {
-      alert('Landing page name and HTML are required');
+      setLandingError(t('adm.validation.landing'));
       return;
     }
 
+    setLandingError('');
     setIsSavingLanding(true);
     try {
       const url = landingModalMode === 'edit' && landingId 
@@ -392,32 +413,23 @@ export default function PhishingAdminDashboard() {
       });
 
       if (res.ok) {
-        alert(`Landing page ${landingModalMode === 'edit' ? 'updated' : 'created'}.`);
+        toast.show({ message: t('adm.page.saved'), tone: 'ok' });
         setIsLandingModalOpen(false);
         await loadResources();
       } else {
         const data = await res.json();
-        alert(`Could not save landing page: ${data.error || 'Unexpected error'}`);
+        setLandingError(data.error || t('adm.error.server'));
       }
-    } catch (err: unknown) {
-      alert(`Backend connection failed: ${errorMessage(err)}`);
+    } catch {
+      setLandingError(t('adm.error.server'));
     } finally {
       setIsSavingLanding(false);
     }
   };
 
-  const handleDeletePage = async (id: number) => {
-    if (!confirm('Yakin ingin menghapus landing page ini?')) return;
-    try {
-      const res = await fetch(`/api/admin/gophish/pages/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        await loadResources();
-      } else {
-        alert('Could not delete the landing page.');
-      }
-    } catch {
-      alert('Could not reach the backend.');
-    }
+  const handleDeletePage = (id: number) => {
+    const item = resources?.pages.find(x => x.id === id);
+    setConfirmDelete({ kind: 'page', id, name: item?.name || `#${id}` });
   };
 
   // Employee CRUD Handlers
@@ -492,7 +504,7 @@ export default function PhishingAdminDashboard() {
   const handleEditEmployeeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!empEmail.trim()) {
-      alert('Email is required');
+      setEmpFormError(t('adm.validation.email'));
       return;
     }
 
@@ -531,16 +543,18 @@ export default function PhishingAdminDashboard() {
   // Division CRUD Handlers
   const handleOpenAddDivision = () => {
     setNewDivisionName('');
+    setDivisionError('');
     setIsAddDivisionModalOpen(true);
   };
 
   const handleAddDivisionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newDivisionName.trim()) {
-      alert('Division name is required');
+      setDivisionError(t('adm.validation.division'));
       return;
     }
 
+    setDivisionError('');
     setIsSavingDivision(true);
     try {
       const res = await fetch('/api/admin/divisions', {
@@ -551,14 +565,14 @@ export default function PhishingAdminDashboard() {
 
       const data = await res.json();
       if (res.ok) {
-        alert('Division added.');
+        toast.show({ message: t('adm.division.added'), tone: 'ok' });
         setIsAddDivisionModalOpen(false);
         await loadDivisions();
       } else {
-        alert(`Could not add division: ${data.error || 'Unexpected error'}`);
+        setDivisionError(data.error || t('adm.error.server'));
       }
-    } catch (err: unknown) {
-      alert(`Connection failed: ${errorMessage(err)}`);
+    } catch {
+      setDivisionError(t('adm.error.server'));
     } finally {
       setIsSavingDivision(false);
     }
@@ -743,19 +757,9 @@ export default function PhishingAdminDashboard() {
       )}
 
       {/* ── MODAL 2: Template Builder (Create / Edit) ── */}
-      {isTemplateModalOpen && (
-        <div className="dialog-overlay">
-          <div className="dialog-box fade-up font-body" style={{ maxWidth: '640px', width: '90%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-primary)' }}>
-                <Mail size={18} style={{ color: 'var(--accent)' }} /> {templateModalMode === 'edit' ? 'Edit Email Template' : 'Create Email Template'}
-              </h3>
-              <button onClick={() => setIsTemplateModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveTemplate} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <Dialog open={isTemplateModalOpen} onClose={() => setIsTemplateModalOpen(false)} title={templateModalMode === 'edit' ? 'Edit email template' : 'Create email template'} size="lg" busy={isSavingTemplate}>
+        <form onSubmit={handleSaveTemplate} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {templateError && <p className="debt-error" role="alert">{templateError}</p>}
               <div>
                 <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
                   Template Name *
@@ -812,52 +816,41 @@ export default function PhishingAdminDashboard() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Dialog>
 
       {/* ── MODAL 3: Landing Page Builder (Create / Edit / Clone) ── */}
-      {isLandingModalOpen && (
-        <div className="dialog-overlay">
-          <div className="dialog-box fade-up font-body" style={{ maxWidth: '680px', width: '90%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-primary)' }}>
-                <Globe size={18} style={{ color: 'var(--accent)' }} /> {landingModalMode === 'edit' ? 'Edit Landing Page' : 'Create Landing Page'}
-              </h3>
-              <button onClick={() => setIsLandingModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                <X size={18} />
-              </button>
-            </div>
+      <Dialog open={isLandingModalOpen} onClose={() => setIsLandingModalOpen(false)} title={landingModalMode === 'edit' ? 'Edit landing page' : 'Create landing page'} size="lg" busy={isSavingLanding || isImportingSite}>
+                    {/* Import / Clone Site Helper */}
+        <div style={{ padding: '12px 14px', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', marginBottom: '16px' }}>
+          <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+            Clone login page · Firecrawl
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input
+              type="text"
+              placeholder="https://domain-milik-anda.com/login"
+              value={importSiteUrl}
+              onChange={(e) => setImportSiteUrl(e.target.value)}
+              style={{ flex: 1, padding: '8px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '12px', outline: 'none' }}
+            />
+            <button
+              type="button"
+              onClick={handleImportSite}
+              disabled={isImportingSite || !cloneAuthorized || !importSiteUrl.trim()}
+              style={{ padding: '8px 14px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Download size={13} /> {isImportingSite ? 'Fetching HTML…' : 'Clone Firecrawl'}
+            </button>
+          </div>
+          <label className="campaign-clone-consent"><input type="checkbox" checked={cloneAuthorized} onChange={e => setCloneAuthorized(e.target.checked)} />I own this page or have permission to use it for simulation.</label>
+          <p className="debt-help">Clones static visuals only. Source scripts and forms are removed; SPA/OAuth pages may not be supported.</p>
+          {cloneError && <p className="debt-error" role="alert">{cloneError}</p>}
+          {cloneNotice && <p className="debt-notice" role="status">{cloneNotice}</p>}
+        </div>
 
-            {/* Import / Clone Site Helper */}
-            <div style={{ padding: '12px 14px', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', marginBottom: '16px' }}>
-              <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                Clone login page · Firecrawl
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input
-                  type="text"
-                  placeholder="https://domain-milik-anda.com/login"
-                  value={importSiteUrl}
-                  onChange={(e) => setImportSiteUrl(e.target.value)}
-                  style={{ flex: 1, padding: '8px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '12px', outline: 'none' }}
-                />
-                <button
-                  type="button"
-                  onClick={handleImportSite}
-                  disabled={isImportingSite || !cloneAuthorized || !importSiteUrl.trim()}
-                  style={{ padding: '8px 14px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}
-                >
-                  <Download size={13} /> {isImportingSite ? 'Fetching HTML…' : 'Clone Firecrawl'}
-                </button>
-              </div>
-              <label className="campaign-clone-consent"><input type="checkbox" checked={cloneAuthorized} onChange={e => setCloneAuthorized(e.target.checked)} />I own this page or have permission to use it for simulation.</label>
-              <p className="debt-help">Clones static visuals only. Source scripts and forms are removed; SPA/OAuth pages may not be supported.</p>
-              {cloneError && <p className="debt-error" role="alert">{cloneError}</p>}
-              {cloneNotice && <p className="debt-notice" role="status">{cloneNotice}</p>}
-            </div>
-
-            <form onSubmit={handleSaveLandingPage} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        
+        <form onSubmit={handleSaveLandingPage} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {landingError && <p className="debt-error" role="alert">{landingError}</p>}
               <div>
                 <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
                   Page Name *
@@ -916,24 +909,11 @@ export default function PhishingAdminDashboard() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Dialog>
 
       {/* ── MODAL 4A: Add Employee ── */}
-      {isAddEmployeeModalOpen && (
-        <div className="dialog-overlay">
-          <div className="dialog-box fade-up font-body" style={{ maxWidth: '460px', width: '90%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-primary)' }}>
-                <Users size={18} style={{ color: 'var(--accent)' }} /> Create Employee Account
-              </h3>
-              <button onClick={() => setIsAddEmployeeModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddEmployeeSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <Dialog open={isAddEmployeeModalOpen} onClose={() => setIsAddEmployeeModalOpen(false)} title={'Create employee account'} size="md" busy={isSavingEmp}>
+        <form onSubmit={handleAddEmployeeSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
                   Email Address *
@@ -1024,24 +1004,11 @@ export default function PhishingAdminDashboard() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Dialog>
 
       {/* ── MODAL 4B: Edit Employee ── */}
-      {isEditEmployeeModalOpen && (
-        <div className="dialog-overlay">
-          <div className="dialog-box fade-up font-body" style={{ maxWidth: '460px', width: '90%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-primary)' }}>
-                <Edit3 size={18} style={{ color: 'var(--accent)' }} /> Edit Employee
-              </h3>
-              <button onClick={() => setIsEditEmployeeModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleEditEmployeeSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <Dialog open={isEditEmployeeModalOpen} onClose={() => setIsEditEmployeeModalOpen(false)} title={'Edit employee account'} size="md" busy={isSavingEmp}>
+        <form onSubmit={handleEditEmployeeSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
                   Email Address *
@@ -1130,24 +1097,12 @@ export default function PhishingAdminDashboard() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Dialog>
 
       {/* ── MODAL 5: Add Division ── */}
-      {isAddDivisionModalOpen && (
-        <div className="dialog-overlay">
-          <div className="dialog-box fade-up font-body" style={{ maxWidth: '420px', width: '90%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-primary)' }}>
-                <Building size={18} style={{ color: 'var(--accent)' }} /> Add New Division
-              </h3>
-              <button onClick={() => setIsAddDivisionModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddDivisionSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <Dialog open={isAddDivisionModalOpen} onClose={() => setIsAddDivisionModalOpen(false)} title={'Add division'} size="sm" busy={isSavingDivision}>
+        <form onSubmit={handleAddDivisionSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {divisionError && <p className="debt-error" role="alert">{divisionError}</p>}
               <div>
                 <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
                   Division Name *
@@ -1179,9 +1134,20 @@ export default function PhishingAdminDashboard() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Dialog>
+      <Dialog
+        open={confirmDelete !== null}
+        onClose={() => { if (!deleting) setConfirmDelete(null); }}
+        busy={deleting}
+        tone="danger"
+        size="sm"
+        title={t(confirmDelete?.kind === 'page' ? 'adm.delete.page.title' : 'adm.delete.template.title')}
+        description={t('adm.delete.body', { name: confirmDelete?.name ?? '' })}
+        footer={<>
+          <button type="button" className="btn" disabled={deleting} onClick={() => setConfirmDelete(null)}>{t('common.cancel')}</button>
+          <button type="button" className="btn btn-danger" disabled={deleting} onClick={() => void performDelete()}>{deleting ? t('adm.delete.working') : t('adm.delete.confirm')}</button>
+        </>}
+      />
     </DashboardLayout>
   );
 }

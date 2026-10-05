@@ -41,7 +41,7 @@ export default function GCDashboard() {
 
   return (
     <DashboardLayout role="grc" activeTab={activeTab} onTabChange={setActiveTab}>
-      {activeTab === 'inbox' && <SecurityInboxSection />}
+      {activeTab === 'inbox' && <SecurityInboxSection canDecideAccess={false} />}
       {activeTab === 'overview' && (
         <OverviewSection
           readOnly={true}

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/admin/DashboardLayout';
 import OverviewSection from '@/components/admin/OverviewSection';
-import IncidentTriageSection from '@/components/admin/IncidentTriageSection';
+import IncidentQueue from '@/components/admin/IncidentQueue';
 import ThreatCacheSection from '@/components/admin/ThreatCacheSection';
 import LoginHistorySection from '@/components/admin/LoginHistorySection';
 import { usePolling } from '@/hooks/usePolling';
@@ -19,7 +19,7 @@ export default function SOCDashboard() {
   const [loginHistory, setLoginHistory] = useState<AdminLoginEvent[]>([]);
 
   // Polling core data
-  const { data: incidentData, hasUpdated: incidentUpdated } = usePolling<{ incidents: Incident[]; stats: Stats }>('/api/incident', 3000);
+  const { data: incidentData, hasUpdated: incidentUpdated, isLoading: incidentsLoading, error: incidentsError, refresh: refreshIncidents } = usePolling<{ incidents: Incident[]; stats: Stats }>('/api/incident', 3000);
   const { data: cacheData, hasUpdated: cacheUpdated } = usePolling<{ cache: ThreatCacheEntry[] }>('/api/cache', 3000);
   const { data: summaryData, hasUpdated: summaryUpdated, refresh: refreshSummary, error: summaryError } = usePolling<{ summaries: AISummary[] }>('/api/summary', 10000);
   const { data: behaviorData, hasUpdated: behaviorUpdated, error: behaviorError } = usePolling<{ scores: BehaviorScore[] }>('/api/behavior', 10000);
@@ -32,19 +32,6 @@ export default function SOCDashboard() {
       .catch(() => {});
   }, []);
 
-  const handleResolveIncident = async (id: string) => {
-    try {
-      const res = await fetch('/api/incident', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ticket_id: id, status: 'closed' }),
-      });
-      if (!res.ok) alert('Could not update incident status.');
-    } catch {
-      alert('Could not reach the server.');
-    }
-  };
-
   const incidents = incidentData?.incidents || [];
   const activeIncidents = incidents.filter(inc => inc.status !== 'closed');
   const cache = cacheData?.cache || [];
@@ -55,6 +42,7 @@ export default function SOCDashboard() {
     <DashboardLayout role="soc" activeTab={activeTab} onTabChange={setActiveTab}>
       {activeTab === 'overview' && (
         <>
+          <IncidentQueue incidents={incidents} canResolve onChanged={refreshIncidents} loading={incidentsLoading} error={Boolean(incidentsError) && !incidentData} />
           {(summaryError || behaviorError) && <p className="debt-error" role="alert">Telemetry belum dapat diperbarui. Snapshot terakhir ditampilkan, tanpa data contoh.</p>}
           <OverviewSection
             onRefreshSummary={refreshSummary}
@@ -70,14 +58,6 @@ export default function SOCDashboard() {
             summaryUpdated={summaryUpdated}
             behaviorUpdated={behaviorUpdated}
           />
-          <div style={{ marginTop: '24px' }}>
-            <IncidentTriageSection
-              readOnly={false}
-              incidents={activeIncidents}
-              onSelectIncident={() => {}}
-              onResolveIncident={handleResolveIncident}
-            />
-          </div>
         </>
       )}
 
@@ -101,7 +81,7 @@ export default function SOCDashboard() {
       {activeTab === 'ai' && (
         <AIIntelligenceSection role="soc" readOnly={false} />
       )}
-      {activeTab === 'inbox' && <SecurityInboxSection />}
+      {activeTab === 'inbox' && <SecurityInboxSection canDecideAccess={true} />}
     </DashboardLayout>
   );
 }

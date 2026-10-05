@@ -147,7 +147,7 @@ export default function OverviewSection({
                   <YAxis type="category" dataKey="name" stroke="var(--text-secondary)" fontSize={12} width={120} className="font-body" />
                   <Tooltip
                     cursor={false}
-                    contentStyle={{ background: '#ffffff', border: '1px solid rgba(13, 71, 161, 0.15)', borderRadius: '8px', boxShadow: '0 4px 14px rgba(13, 71, 161, 0.1)' }}
+                    contentStyle={{ background: 'var(--bg-surface)', border: '1px solid rgba(13, 71, 161, 0.15)', borderRadius: '8px', boxShadow: '0 4px 14px rgba(13, 71, 161, 0.1)' }}
                     itemStyle={{ color: '#091b38', fontWeight: 600 }}
                   />
                   <Bar dataKey="score" radius={[0, 4, 4, 0]} barSize={16} isAnimationActive={false}>

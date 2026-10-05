@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Fish, Play, RefreshCw, Mail, Eye, MousePointer, Plus, Pencil, Trash2, StopCircle, X, Globe, ExternalLink } from 'lucide-react';
 import type { Division, EmployeeAccount, GoPhishCampaign, GoPhishResource } from './types';
+import { useI18n } from '@/i18n/I18nProvider';
 import { formatWIB } from './types';
 
 type Source = 'local' | 'gophish';
@@ -40,6 +41,8 @@ export function getCampaignStats(c: GoPhishCampaign) {
 
 export default function GophishCampaignSection(props: Props) {
   const { readOnly, campaigns, employees, divisions, resources, selectedEmails, onSelectedEmailsChange } = props;
+  const { t } = useI18n();
+  const [blockers, setBlockers] = useState<('resources' | 'recipients')[]>([]);
   const [division, setDivision] = useState('ALL');
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState<GoPhishCampaign | null>(null);
@@ -88,30 +91,40 @@ export default function GophishCampaignSection(props: Props) {
     } catch (err) { setActionError(err instanceof Error ? err.message : 'Action failed.'); }
     finally { setWorking(false); }
   }
+  function createCampaign() {
+    const missing: ('resources' | 'recipients')[] = [];
+    if (!ready) missing.push('resources');
+    if (!selectedEmails.length) missing.push('recipients');
+    setBlockers(missing);
+    if (!missing.length) props.onOpenLaunchModal();
+  }
+  const goToRecipients = () => document.getElementById('campaign-recipients')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   return <section className="campaign-workspace">
     <header className="campaign-hero glass-card">
       <div><span className="campaign-kicker">Email simulations</span><h2><Fish size={25} />Phishing simulations</h2><p>Build awareness with simulated phishing emails.</p></div>
       <div className="campaign-actions">
         {props.onRefresh && <button className="btn" onClick={props.onRefresh} disabled={props.busy}><RefreshCw size={15} />Refresh</button>}
         {resources?.adminUrl && <a className="btn" href={resources.adminUrl} target="_blank" rel="noopener noreferrer"><ExternalLink size={15} />GoPhish</a>}
-        {!readOnly && <button className="btn btn-primary" onClick={props.onOpenLaunchModal} disabled={!ready || !selectedEmails.length || props.busy}><Play size={15} />Create campaign</button>}
+        {!readOnly && <button className="btn btn-primary" onClick={createCampaign} disabled={props.busy}><Play size={15} />Create campaign</button>}
       </div>
     </header>
     {(props.error || (actionError && !action)) && <p className="debt-error" role="alert">{props.error || actionError}</p>}
     {props.notice && <p className="debt-notice" role="status">{props.notice}</p>}
+    {blockers.length > 0 && <div className="debt-error" role="alert"><strong>{t('adm.blocked.title')}</strong>
+      <ul style={{ margin: '6px 0 0 18px' }}>{blockers.includes('resources') && <li>{t('adm.blocked.resources')}</li>}{blockers.includes('recipients') && <li>{t('adm.blocked.recipients')} <button type="button" className="emp-link" onClick={goToRecipients}>{t('adm.blocked.go')}</button></li>}</ul></div>}
     {!readOnly && <div className="campaign-readiness glass-card"><Mail size={20} /><div><strong>{ready ? 'GoPhish + Mailpit ready' : 'Set up campaign resources first'}</strong><p>Demo emails are captured by Mailpit only.</p></div>
       <div className="campaign-actions">{props.onSetupResources && <button className="btn" onClick={() => props.onSetupResources?.()} disabled={props.busy}><Plus size={15} />Set up lab demo</button>}{resources?.mailpitUrl && <a className="btn" href={resources.mailpitUrl} target="_blank" rel="noopener noreferrer"><Mail size={15} />Mailpit (host)</a>}</div>
     </div>}
     <div className="campaign-metrics">{metrics.map(({ label, value, Icon }) => <div className="glass-card" key={label}><Icon size={18} /><strong>{value}</strong><span>{label}</span></div>)}</div>
-    {!readOnly && <section className="glass-card campaign-panel">
-      <div className="campaign-section-heading"><div><span className="campaign-kicker">01 / RECIPIENTS</span><h3>Target employees <span className="badge badge-info">{selectedEmails.length} selected</span></h3></div><div className="campaign-actions"><button className="btn" onClick={() => onSelectedEmailsChange(Array.from(new Set([...selectedEmails, ...filtered.map(e => e.email)])))}>Select filtered</button><button className="btn" onClick={() => onSelectedEmailsChange([])}>Clear</button></div></div>
+    {!readOnly && <section className="glass-card campaign-panel" id="campaign-recipients">
+      <div className="campaign-section-heading"><div><span className="campaign-kicker">STEP 1 · RECIPIENTS</span><h3>Target employees <span className="badge badge-info">{selectedEmails.length} selected</span></h3></div><div className="campaign-actions"><button className="btn" onClick={() => onSelectedEmailsChange(Array.from(new Set([...selectedEmails, ...filtered.map(e => e.email)])))}>Select filtered</button><button className="btn" onClick={() => onSelectedEmailsChange([])}>Clear</button></div></div>
       <div className="campaign-filters"><label>Search email<input type="search" placeholder="Search employees…" value={search} onChange={e => setSearch(e.target.value)} /></label><label>Division<select value={division} onChange={e => setDivision(e.target.value)}><option value="ALL">All divisions</option>{divisions.map(d => <option key={d.name} value={d.name}>{d.name}</option>)}</select></label></div>
       <div className="campaign-recipient-list">{filtered.map(e => <label className="campaign-recipient" key={e.email}><input type="checkbox" checked={selectedEmails.includes(e.email)} onChange={event => onSelectedEmailsChange(event.target.checked ? [...selectedEmails, e.email] : selectedEmails.filter(email => email !== e.email))} /><span><strong>{e.email}</strong><small>{e.divisi}</small></span></label>)}</div>
       {!filtered.length && <p className="campaign-empty">No matching active employees.</p>}
       <p className="debt-help">Recipients are synced when the campaign starts.</p>
     </section>}
     {!readOnly && <section className="glass-card campaign-panel">
-      <div className="campaign-section-heading"><div><span className="campaign-kicker">02 / CHOOSE CONTENT</span><h3>Simulation content</h3></div><span className="badge badge-info">No password storage</span></div>
+      <div className="campaign-section-heading"><div><span className="campaign-kicker">STEP 2 · CHOOSE CONTENT</span><h3>Simulation content</h3></div><span className="badge badge-info">No password storage</span></div>
       <div className="campaign-material-options">
         <article><Mail size={24} /><h4>Password reset request</h4><p>Ready-to-use demo email and form. No extra API needed.</p><button className="btn btn-primary" disabled={props.busy} onClick={() => props.onSetupResources?.('password-reset')}>Use this template</button></article>
         <article><Globe size={24} /><h4>Page clone · Firecrawl</h4><p>Clone an authorized public page. Demo submissions lead to education.</p><button className="btn" onClick={() => props.onOpenTemplateBuilder('new', 'page')}>Open clone editor</button></article>
@@ -119,7 +132,7 @@ export default function GophishCampaignSection(props: Props) {
       <p className="debt-help">Click: −10 points · Submit: −20 more points. Each event is counted once.</p>
     </section>}
     {!readOnly && <details className="glass-card campaign-panel campaign-resources">
-      <summary><span className="campaign-kicker">02 / CONTENT</span><h3>Template & landing page</h3><span>{resources?.templates.length || 0} template · {resources?.pages.length || 0} landing page</span></summary>
+      <summary><span className="campaign-kicker">CONTENT LIBRARY</span><h3>Template & landing page</h3><span>{resources?.templates.length || 0} template · {resources?.pages.length || 0} landing page</span></summary>
       <div className="campaign-resource-grid">{(['template', 'page'] as const).map(type => {
         const items = type === 'template' ? resources?.templates || [] : resources?.pages || [];
         const Icon = type === 'template' ? Mail : Globe;
@@ -128,7 +141,7 @@ export default function GophishCampaignSection(props: Props) {
           {items.map(item => <article className="campaign-resource" key={item.id}><div><strong>{item.name}</strong><small>{'subject' in item ? item.subject : 'Simulation page'}</small></div><div className="campaign-actions"><button className="btn" aria-label={'Edit ' + item.name} onClick={() => props.onOpenTemplateBuilder('edit', type, item)}><Pencil size={14} /></button><button className="btn" aria-label={'Delete ' + item.name} onClick={() => type === 'template' ? props.onDeleteTemplate(item.id) : props.onDeletePage(item.id)}><Trash2 size={14} /></button></div></article>)}</div>;
       })}</div>
     </details>}
-    <section className="glass-card campaign-panel"><div className="campaign-section-heading"><div><span className="campaign-kicker">03 / MONITORING</span><h3>Campaigns & responses</h3></div><span className="badge badge-neutral">{campaigns.length} campaign</span></div>
+    <section className="glass-card campaign-panel"><div className="campaign-section-heading"><div><span className="campaign-kicker">STEP 3 · MONITORING</span><h3>Campaigns & responses</h3></div><span className="badge badge-neutral">{campaigns.length} campaign</span></div>
       <div className="campaign-table-scroll"><table className="campaign-table"><thead><tr><th>Campaign</th><th>Status</th><th>Sent / target</th><th>Opened</th><th>Clicked</th><th>Submit</th><th>Actions</th></tr></thead><tbody>
       {campaigns.map(c => { const s = getCampaignStats(c); return <tr key={(c.source || 'gophish') + ':' + c.id}><td><strong>{c.name}</strong><small>{c.source === 'local' ? 'Legacy simulation archive' : 'GoPhish → Mailpit'} · #{c.id}</small></td><td><span className={'badge ' + (c.status === 'Completed' ? 'badge-neutral' : 'badge-info')}>{c.status}</span>{s.error > 0 && <small className="campaign-failure">{s.error} delivery failures</small>}</td><td>{s.sent} / {s.total}</td><td>{s.opened}</td><td>{s.clicked}</td><td>{s.submitted_data}</td><td><div className="campaign-actions"><button className="btn" onClick={() => void view(c)} aria-label={'Detail ' + c.name}><Eye size={14} /></button>{!readOnly && c.status !== 'Completed' && <button className="btn" onClick={() => { setAction({ campaign: c, type: 'stop' }); setActionError(''); }} aria-label={'Stop ' + c.name}><StopCircle size={14} /></button>}{!readOnly && <button className="btn" onClick={() => { setAction({ campaign: c, type: 'delete' }); setActionError(''); }} aria-label={'Delete ' + c.name}><Trash2 size={14} /></button>}</div></td></tr>; })}
       {!campaigns.length && <tr><td colSpan={7} className="campaign-empty">No campaigns yet. Select recipients to create one.</td></tr>}
