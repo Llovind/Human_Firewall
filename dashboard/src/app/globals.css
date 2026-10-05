@@ -19,20 +19,20 @@
   --brand-royal:    #0D47A1;
 
   /* Default MAIN Theme: Cloud-Azure Light Mode */
-  --bg-deep:        #f3f6fa;
-  --bg-base:        #f7f9fc;
+  --bg-deep:        #f5f6f9;
+  --bg-base:        #f8f9fb;
   --bg-surface:     #ffffff;
-  --bg-elevated:    #edf3fa;
-  --bg-hover:       #e5edf7;
+  --bg-elevated:    #eef0f5;
+  --bg-hover:       #e7eaf1;
 
   /* Borders (Delicate Sky & Sapphire) */
-  --border:         #dce4ee;
-  --border-hover:   #a8bdd7;
-  --border-active:  #2196F3;
+  --border:         #dde1ea;
+  --border-hover:   #b3bccd;
+  --border-active:  #2a52be;
 
   /* Primary Accent */
-  --accent:         #2563b9;
-  --accent-dim:     #174d95;
+  --accent:         #2a52be;
+  --accent-dim:     #203f94;
   --accent-bright:  #90CAF9;
 
   /* Logo brand palette */
@@ -42,16 +42,16 @@
 
   /* ── Standardized Semantic Status Tokens (Enterprise Desaturated) ── */
   /* Danger / High Risk */
-  --bg-danger:        rgba(208, 49, 30, 0.08);
-  --text-danger:      #D0311E;
-  --border-danger:    rgba(208, 49, 30, 0.35);
+  --bg-danger:        #FEF3F2;
+  --text-danger:      #B42318;
+  --border-danger:    #FDA29B;
   --danger:           #D0311E;
-  --danger-dim:       #b22817;
+  --danger-dim:       #B42318;
 
   /* Warning / Moderate / Vulnerable */
-  --bg-warning:       rgba(247, 216, 127, 0.15);
+  --bg-warning:       #FEF9E7;
   --text-warning:     #8c6809;
-  --border-warning:   #F7D87F;
+  --border-warning:   #F0D58A;
   --warning:          #F7D87F;
   --warning-dim:      #d4b04f;
 
@@ -63,7 +63,7 @@
   --success-dim:      #15803d;
 
   /* Neutral / Not Configured / Unset / Pending */
-  --bg-neutral:       #f8fafc;
+  --bg-neutral:       #F1F5F9;
   --text-neutral:     #475569;
   --border-neutral:   #cbd5e1;
   --neutral:          #64748b;
@@ -72,14 +72,14 @@
   --info-dim:         #2196F3;
 
   /* Text - High Contrast Deep Royal Navy for Crisp Sunlight Visibility */
-  --text-primary:   #091b38;
+  --text-primary:   #0b1b33;
   --text-secondary: #485c76;
-  --text-muted:     #63758c;
+  --text-muted:     #5a6c82;
   --text-inverse:   #ffffff;
 
   /* Typography */
-  --font-heading:   var(--font-poppins-source, 'Poppins', sans-serif);
-  --font-body:      var(--font-poppins-source, 'Poppins', sans-serif);
+  --font-heading:   var(--font-plex-source, 'IBM Plex Sans', system-ui, sans-serif);
+  --font-body:      var(--font-plex-source, 'IBM Plex Sans', system-ui, sans-serif);
   --font-mono-data: var(--font-jetbrains-source, 'JetBrains Mono', monospace);
   --font-sans:      var(--font-body);
   --font-mono:      var(--font-mono-data);
@@ -96,10 +96,10 @@
   --space-12: 48px;
 
   /* Typography Scale */
-  --text-2xs: 10px;
-  --text-xs:  11px;
+  --text-2xs: 12px;
+  --text-xs:  12px;
   --text-sm:  13px;
-  --text-base: 14.5px;
+  --text-base: 14px;
   --text-md:  16px;
   --text-lg:  18px;
   --text-xl:  20px;
@@ -113,10 +113,10 @@
   --sidebar-width: clamp(220px, 13vw, 272px);
 
   /* Tactical Border radius */
-  --radius-sm: 8px;
-  --radius-md: 10px;
-  --radius-lg: 18px;
-  --radius-xl: 22px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
   --radius-full: 9999px;
 
   /* Transitions */
@@ -125,24 +125,43 @@
   --transition-slow: 400ms ease;
 
   /* Shadows (Soft floating card depth) */
-  --shadow-sm:  0 2px 8px -2px rgba(13, 71, 161, 0.06), 0 1px 4px -1px rgba(13, 71, 161, 0.04);
-  --shadow-md:  0 8px 24px -4px rgba(13, 71, 161, 0.08), 0 4px 12px -2px rgba(13, 71, 161, 0.05);
-  --shadow-lg:  0 16px 40px -6px rgba(13, 71, 161, 0.12), 0 6px 16px -3px rgba(13, 71, 161, 0.07);
+  --shadow-sm:  0 1px 2px rgba(10, 20, 40, 0.06);
+  --shadow-md:  0 4px 12px rgba(10, 20, 40, 0.08);
+  --shadow-lg:  0 12px 32px rgba(10, 20, 40, 0.16);
+
+  /* ── Redesign tokens (2026-10) ── */
+  --border-control:   #7b8599;
+  --on-accent:        #ffffff;
+  --accent-strong:    #203f94;
+  --focus-ring:       #2a52be;
+  --sidebar-bg:       var(--bg-elevated);
+  --sidebar-text:     var(--text-secondary);
+  --sidebar-hover:    var(--bg-hover);
+  --sidebar-active-bg: var(--bg-surface);
+  --sidebar-w:        248px;
+  --sidebar-w-mini:   64px;
+  /* Severity ramp: always paired with a symbol and a word */
+  --sev-critical:     #B42318; --sev-critical-bg: #FEF3F2;
+  --sev-high:         #B54708; --sev-high-bg:     #FFF6ED;
+  --sev-medium:       #8c6809; --sev-medium-bg:   #FEF9E7;
+  --sev-low:          #1D5FA8; --sev-low-bg:      #EFF6FD;
+  --sev-info:         #475569; --sev-info-bg:     #F1F5F9;
+  --sev-ok:           #166534; --sev-ok-bg:       #F0FDF4;
 }
 
 /* Dark Theme Overrides */
 [data-theme="dark"] {
-  --bg-deep:        #0b1422;
-  --bg-base:        #101d2e;
-  --bg-surface:     #142338;
-  --bg-elevated:    #1a2d44;
-  --bg-hover:       #243b55;
+  --bg-deep:        #0a1626;
+  --bg-base:        #0e1b2e;
+  --bg-surface:     #111f33;
+  --bg-elevated:    #172a42;
+  --bg-hover:       #203650;
 
-  --border:         rgba(144, 202, 249, 0.14);
-  --border-hover:   rgba(144, 202, 249, 0.32);
-  --border-active:  rgba(33, 150, 243, 0.65);
+  --border:         #233851;
+  --border-hover:   #3a5272;
+  --border-active:  #7db3ff;
 
-  --accent:         #78b8ff;
+  --accent:         #7db3ff;
   --accent-dim:     #0D47A1;
   --accent-bright:  #90CAF9;
 
@@ -177,14 +196,28 @@
   --info:             #90CAF9;
   --info-dim:         #2196F3;
 
-  --text-primary:   #f0f7ff;
+  --text-primary:   #eef4fb;
   --text-secondary: #b8d1eb;
   --text-muted:     #9cacc2;
-  --text-inverse:   #050c1a;
+  --text-inverse:   #06101e;
 
   --shadow-sm:  0 2px 8px rgba(0, 0, 0, 0.4);
   --shadow-md:  0 4px 16px rgba(0, 0, 0, 0.5);
   --shadow-lg:  0 8px 40px rgba(0, 0, 0, 0.6);
+
+  /* ── Redesign tokens (2026-10) ── */
+  --border-control:   #5d7391;
+  --on-accent:        #06101e;
+  --accent-strong:    #a8cdff;
+  --focus-ring:       #7db3ff;
+  --sidebar-bg:       var(--bg-surface);
+  --sidebar-active-bg: var(--bg-elevated);
+  --sev-critical:     #ff8575; --sev-critical-bg: rgba(255, 133, 117, 0.16);
+  --sev-high:         #fdab6d; --sev-high-bg:     rgba(253, 171, 109, 0.14);
+  --sev-medium:       #F7D87F; --sev-medium-bg:   rgba(247, 216, 127, 0.14);
+  --sev-low:          #8cc4ff; --sev-low-bg:      rgba(140, 196, 255, 0.14);
+  --sev-info:         #94a3b8; --sev-info-bg:     rgba(148, 163, 184, 0.14);
+  --sev-ok:           #86efac; --sev-ok-bg:       rgba(134, 239, 172, 0.12);
 }
 
 /* ── Base ──────────────────────────────────────────────────── */

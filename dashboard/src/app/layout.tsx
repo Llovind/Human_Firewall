@@ -1,13 +1,16 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono, Poppins } from "next/font/google";
+import { IBM_Plex_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import "./workspace.css";
+import "./ui.css";
 import { AuthProvider } from "@/context/AuthContext";
+import { I18nProvider } from "@/i18n/I18nProvider";
+import { ToastProvider } from "@/components/ui/Toast";
 
-const poppins = Poppins({
+const plexSans = IBM_Plex_Sans({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-  variable: "--font-poppins-source",
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-plex-source",
   display: "swap",
 });
 
@@ -30,11 +33,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${poppins.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en" className={`${plexSans.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+      <head>
+        {/* Apply the saved theme before first paint so dark mode does not flash light. */}
+        <script dangerouslySetInnerHTML={{ __html: "try{if(localStorage.getItem('hfl_theme')==='dark')document.documentElement.setAttribute('data-theme','dark')}catch(e){}" }} />
+      </head>
       <body className="font-body">
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+        <I18nProvider>
+          <ToastProvider>
+            <AuthProvider>
+              {children}
+            </AuthProvider>
+          </ToastProvider>
+        </I18nProvider>
       </body>
     </html>
   );

@@ -1,60 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Sun, Moon } from 'lucide-react';
+import { Moon, Sun } from 'lucide-react';
+import { useTheme } from '@/hooks/useTheme';
+import { useI18n } from '@/i18n/I18nProvider';
 
+/** Icon button for top bars. The sidebar has its own labelled row that uses the same hook. */
 export default function ThemeToggle() {
-  const [theme, setTheme] = useState<'dark' | 'light'>('light');
-
-  useEffect(() => {
-    const saved = localStorage.getItem('hfl_theme') as 'dark' | 'light' | null;
-    const initial = saved || 'light';
-    // Browser-only preference is intentionally synchronized after hydration.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTheme(initial);
-    document.documentElement.setAttribute('data-theme', initial);
-  }, []);
-
-  const toggleTheme = () => {
-    const next = theme === 'dark' ? 'light' : 'dark';
-    setTheme(next);
-    document.documentElement.setAttribute('data-theme', next);
-    localStorage.setItem('hfl_theme', next);
-  };
-
+  const [theme, toggle] = useTheme();
+  const { t } = useI18n();
+  const label = theme === 'dark' ? t('shell.theme.light') : t('shell.theme.dark');
   return (
-    <button
-      onClick={toggleTheme}
-      title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-      aria-label="Toggle theme"
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: '34px',
-        height: '34px',
-        borderRadius: '6px',
-        background: 'var(--bg-elevated)',
-        border: '1px solid var(--border)',
-        color: 'var(--text-secondary)',
-        cursor: 'pointer',
-        transition: 'all 0.2s ease',
-        padding: 0,
-      }}
-      onMouseEnter={e => {
-        e.currentTarget.style.borderColor = 'var(--accent)';
-        e.currentTarget.style.color = 'var(--text-primary)';
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.borderColor = 'var(--border)';
-        e.currentTarget.style.color = 'var(--text-secondary)';
-      }}
-    >
-      {theme === 'dark' ? (
-        <Sun size={17} style={{ color: '#f59e0b' }} />
-      ) : (
-        <Moon size={17} style={{ color: '#2196F3' }} />
-      )}
+    <button type="button" className="iconbtn theme-toggle" onClick={toggle} title={label} aria-label={label}>
+      {theme === 'dark' ? <Sun size={18} aria-hidden="true" /> : <Moon size={18} aria-hidden="true" />}
     </button>
   );
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { AUTH_SESSION_COOKIE } from '@/lib/authSession';
+import { handleMockRequest, mocksEnabled } from '@/mocks';
 
 const PUBLIC_API_ROUTES = new Set([
   '/api/auth/login',
@@ -33,7 +34,10 @@ function hasValidServiceBearer(request: NextRequest): boolean {
  * Lightweight edge gate. Presence is checked here; Flask validates the opaque
  * session and enforces the server-side RBAC role for every backend operation.
  */
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
+  // Front-end-only mode (USE_MOCKS=true on `next dev`): fake session + fake API, no backend.
+  if (mocksEnabled()) return (await handleMockRequest(request)) ?? NextResponse.next();
+
   if (isLocalDevBypassEnabled()) return NextResponse.next();
 
   const { pathname } = request.nextUrl;

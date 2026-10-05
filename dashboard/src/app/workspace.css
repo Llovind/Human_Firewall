@@ -1,154 +1,34 @@
 /* Shared workspace surfaces. Security pages retain their standalone design. */
 :root {
-  --workspace-gradient: linear-gradient(120deg, #163f77, #2563b9 62%, #217c88);
+  --workspace-gradient: var(--accent);
   --workspace-wash: linear-gradient(115deg, var(--bg-surface) 35%, var(--bg-elevated));
 }
 
 button, input, select, textarea { font-family: inherit; }
 button:disabled { cursor: not-allowed; }
-:is(.app, .app-shell) {
-  background: radial-gradient(ellipse at 85% 0%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 48%), var(--bg-deep);
+:is(.app, .app-shell, .shell) {
+  background: var(--bg-deep);
 }
 .app-shell .app-shell-main { max-width: 1540px; padding: 24px 32px 48px; }
 .app > .main { max-width: 1480px; padding-top: 28px; }
-:is(.app, .app-shell) .glass-card {
+:is(.app, .app-shell, .shell) .glass-card {
   border: 1px solid var(--border);
   box-shadow: 0 3px 16px rgb(12 37 68 / 4%);
 }
-:is(.app, .app-shell) .glass-card:hover { box-shadow: 0 5px 20px rgb(12 37 68 / 6%); }
-:is(.app, .app-shell) .btn { min-height: 40px; padding: 9px 15px; font-size: 12px; border-radius: 10px; }
-:is(.app, .app-shell) .btn-primary { background: var(--workspace-gradient); color: #fff; border-color: transparent; }
-:is(.app, .app-shell) .btn-primary:hover:not(:disabled) { background: linear-gradient(120deg, #123561, #20549e 62%, #1b6873); }
-:is(.app, .app-shell) .btn-danger { color: var(--text-danger); background: var(--bg-danger); border-color: var(--border-danger); }
-:is(.app, .app-shell) .badge { font-size: 11px; font-weight: 600; text-transform: none; letter-spacing: 0; }
-:is(.app, .app-shell) .panel-header { gap: 16px; flex-wrap: wrap; align-items: center; }
-:is(.app, .app-shell) :is(.panel-title, .chart-title) { font-size: 17px; letter-spacing: -.025em; font-weight: 600; }
-:is(.app, .app-shell) :is(.panel, .chart-card) { padding: 24px; }
-:is(.app, .app-shell) :is(.chart-header, .campaign-section-heading) { gap: 16px; flex-wrap: wrap; }
-:is(.app, .app-shell) :is(table th, table td) { border-bottom: 1px solid var(--border); }
-:is(.app, .app-shell) table th { background: var(--bg-base); color: var(--text-secondary); font-size: 11px; letter-spacing: .02em; }
-:is(.app, .app-shell) table td { font-size: 12px; line-height: 1.65; }
-:is(.app, .app-shell) table tr:hover td { background: var(--bg-base); }
-:is(.app, .app-shell) :is(input, select, textarea):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-:is(.app, .app-shell) :is(.debt-help, .panel-desc) { font-size: 12px; line-height: 1.7; }
-:is(.app, .app-shell) .debt-tabs { background: var(--bg-elevated); border-color: transparent; border-radius: 12px; }
-:is(.app, .app-shell) .debt-tabs .btn { background: transparent; color: var(--text-secondary); border-color: transparent; }
-:is(.app, .app-shell) .debt-tabs .btn[aria-pressed="true"] { color: var(--accent); background: var(--bg-surface); border-color: var(--border); }
+:is(.app, .app-shell, .shell) .glass-card:hover { box-shadow: 0 5px 20px rgb(12 37 68 / 6%); }
+:is(.app, .app-shell, .shell) .badge { font-size: 11px; font-weight: 600; text-transform: none; letter-spacing: 0; }
+:is(.app, .app-shell, .shell) .panel-header { gap: 16px; flex-wrap: wrap; align-items: center; }
+:is(.app, .app-shell, .shell) :is(.panel-title, .chart-title) { font-size: 17px; letter-spacing: -.025em; font-weight: 600; }
+:is(.app, .app-shell, .shell) :is(.panel, .chart-card) { padding: 24px; }
+:is(.app, .app-shell, .shell) :is(.chart-header, .campaign-section-heading) { gap: 16px; flex-wrap: wrap; }
+:is(.app, .app-shell, .shell) :is(table th, table td) { border-bottom: 1px solid var(--border); }
+:is(.app, .app-shell, .shell) table th { background: var(--bg-base); color: var(--text-secondary); font-size: 11px; letter-spacing: .02em; }
+:is(.app, .app-shell, .shell) table td { font-size: 12px; line-height: 1.65; }
+:is(.app, .app-shell, .shell) table tr:hover td { background: var(--bg-base); }
+:is(.app, .app-shell, .shell) :is(input, select, textarea):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+:is(.app, .app-shell, .shell) :is(.debt-help, .panel-desc) { font-size: 12px; line-height: 1.7; }
+:is(.app, .app-shell, .shell) .debt-tabs { background: var(--bg-elevated); border-color: transparent; border-radius: 12px; }
+:is(.app, .app-shell, .shell) .debt-tabs .btn { background: transparent; color: var(--text-secondary); border-color: transparent; }
+:is(.app, .app-shell, .shell) .debt-tabs .btn[aria-pressed="true"] { color: var(--accent); background: var(--bg-surface); border-color: var(--border); }
 
-/* Navigation: stable, compact and free of decorative live claims. */
-.app-shell .sidebar-nav {
-  background: linear-gradient(170deg, #142945, #183959 66%, #194958);
-  border-right: 0; padding: 24px 16px; color: #e6eef8;
-  --logo-navy: #bed8f4; --logo-blue: #6ab5f3; --logo-lightblue: #a1e2de;
-}
-.app-shell .sidebar-nav-logo { padding: 8px 12px 32px; margin-bottom: 16px; }
-.app-shell .sidebar-wordmark { color: #fff; letter-spacing: .11em; font-size: 16px; }
-.app-shell .sidebar-menu { flex: 1; gap: 6px; }
-.app-shell .sidebar-item { color: #bfcede; font-size: 13px; padding: 13px 14px; border-radius: 12px; }
-.app-shell .sidebar-item:hover { color: #fff; background: rgb(255 255 255 / 7%); }
-.app-shell .sidebar-item.active { color: #fff; background: linear-gradient(110deg, rgb(85 151 216 / 27%), rgb(92 180 175 / 15%)); border-color: rgb(159 201 235 / 24%); }
-.app-shell .sidebar-item.active svg { color: #9ad8ee; }
-.app-shell .sidebar-item:focus-visible { outline-color: #a8d9ff; color: #fff; }
-.app-shell .sidebar-user-card { border-color: rgb(255 255 255 / 12%); margin-top: 32px; }
-.app-shell .sidebar-user-name { color: #edf5ff; font-size: 12px; }
-.app-shell .sidebar-role-chip { color: #abc3d9; text-transform: none; letter-spacing: 0; font-size: 11px; }
-.app-shell .sidebar-user-avatar { color: #fff; background: rgb(255 255 255 / 9%); border-color: rgb(255 255 255 / 14%); }
-.app-shell .topbar-slim {
-  display: flex; justify-content: space-between; align-items: center; gap: 20px;
-  padding: 12px 0 24px; margin-bottom: 24px; border-bottom: 1px solid var(--border);
-}
-.workspace-heading small { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 3px; }
-.workspace-heading h1 { font-size: 24px; line-height: 1.4; font-weight: 600; letter-spacing: -.035em; }
-.workspace-readonly { font-size: 11px; padding: 5px 10px; border-radius: 8px; background: var(--bg-neutral); color: var(--text-secondary); border: 1px solid var(--border); }
-.app-shell .topbar-right { gap: 12px; }
-.app .topbar { background: var(--bg-surface); padding: 14px 28px; border-bottom: 1px solid var(--border); gap: 18px; }
-.employee-intro { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 24px; }
-.employee-intro h1 { font-size: 26px; font-weight: 600; letter-spacing: -.035em; }
-.employee-intro p { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
-.employee-intro .btn { background: transparent; color: var(--text-secondary); }
-
-/* Data summaries stay neutral; the hierarchy comes from spacing and type. */
-.app-shell .stats-grid .stat-card { text-align: left; display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 8px 12px; padding: 22px; border-top: 1px solid var(--border); }
-.app-shell .stat-icon { grid-column: 2; grid-row: 1 / 3; margin: 0; width: 40px; height: 40px; border-radius: 12px; }
-.app-shell .stat-icon svg { width: 19px; height: 19px; }
-.app-shell .stat-value { grid-column: 1; font-family: var(--font-body); font-size: 30px; line-height: 1.2; font-weight: 600; }
-.app-shell .stat-label { grid-column: 1; font-size: 12px; letter-spacing: 0; text-transform: none; }
-.app-shell .stats-grid .stat-card > div:last-child { grid-column: 1 / -1; }
-:is(.app, .app-shell) :is(.campaign-hero, .inbox-hero, .proxy-ops-hero) { background: var(--workspace-wash); padding: 24px 28px; }
-:is(.app, .app-shell) :is(.campaign-kicker, .proxy-ops-kicker) { color: var(--accent); font-size: 11px; font-weight: 500; letter-spacing: .04em; }
-:is(.app, .app-shell) :is(.campaign-hero h2, .inbox-hero h2, .proxy-ops-hero h2) { font-size: 25px; font-weight: 600; margin: 6px 0; letter-spacing: -.035em; }
-:is(.app, .app-shell) :is(.campaign-metrics, .inbox-metrics, .proxy-stat-grid) strong { font-weight: 600; font-size: 26px; }
-.app-shell .campaign-material-options article { background: var(--bg-base); padding: 22px; }
-.app-shell .campaign-material-options h4 { font-size: 16px; font-weight: 600; }
-.app-shell .campaign-material-options p { font-size: 12px; line-height: 1.7; }
-.app-shell .summary-text { line-height: 1.8; font-size: 13px; }
-.app-shell .summary-details { margin-top: 12px; font-size: 12px; }
-.app-shell .summary-details summary { cursor: pointer; color: var(--accent); font-weight: 500; }
-.app-shell .inbox-item { box-shadow: none; padding: 20px 24px; }
-.app-shell .inbox-hero .proxy-ops-kicker { display: none; }
-.app-shell .proxy-ops-grid { grid-template-columns: minmax(0, 1.35fr) minmax(300px, .85fr); }
-.app-shell .proxy-traffic-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: 440px; padding-right: 4px; }
-.app-shell .proxy-alert { background: var(--bg-base); padding: 16px 18px; }
-.app-shell .proxy-alert h4 { font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; word-break: normal; }
-.app-shell .proxy-time { font-size: 10px; }
-.app-shell .proxy-alert-meta { font-size: 11px; flex-wrap: wrap; }
-.app-shell .proxy-stream.online { color: var(--text-success); border-color: var(--border-success); background: var(--bg-success); }
-.app-shell .urgency { font-size: 10px; text-transform: none; }
-.app-shell :is(.urgency.critical, .proxy-alert-actions .block, .proxy-resolution.blocked) { color: var(--text-danger); }
-.app-shell .urgency.unknown { color: var(--text-warning); }
-.app-shell :is(.proxy-alert-actions .allow, .proxy-resolution.allowed, .proxy-verdict-row>b.allow) { color: var(--text-success); }
-.app-shell .proxy-verdict-row>b.block { color: var(--text-danger); }
-.app-shell .proxy-alert-actions button { min-height: 34px; font-size: 11px; font-family: inherit; }
-.app-shell .proxy-manual label { font-size: 12px; text-transform: none; letter-spacing: 0; gap: 7px; margin: 16px 0 10px; }
-.app-shell .proxy-manual small { font-size: 11px; color: var(--text-secondary); display: block; line-height: 1.7; }
-.app-shell .proxy-section-title>b { color: var(--text-secondary); text-transform: none; }
-.app-shell .decision-domain { padding: 12px 16px; margin: 18px 0; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-base); overflow-wrap: anywhere; font-weight: 500; }
-.app-shell .decision-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px; }
-.app .proxy-connect-card { background: var(--workspace-wash); padding: 22px 24px; }
-.app .proxy-connect-main h2 { font-size: 17px; font-weight: 600; }
-.app .proxy-connect-main p { max-width: 600px; }
-.app .proxy-eyebrow { letter-spacing: .04em; font-size: 10px; font-weight: 500; }
-.app .url-tools-grid { gap: 28px; }
-.app .employee-threat-tools { margin-bottom: 24px; }
-.app .employee-dashboard-layout { gap: 24px; }
-.app .mini-stat { border-color: var(--border); background: var(--bg-base); box-shadow: none; }
-.app .mini-stat-label { text-transform: none; letter-spacing: 0; font-size: 11px; }
-.app .my-score-card { padding: 24px; }
-.app .dashboard-footer { color: var(--text-muted); font-size: 11px; letter-spacing: 0; }
-
-@media (max-width: 1180px) {
-  .app-shell .app-shell-main { padding: 24px; }
-  .app-shell .proxy-traffic-list { grid-template-columns: 1fr; }
-  .app-shell .topbar-right .clock { display: none; }
-  .app-shell .stat-card { padding: 18px; }
-}
-@media (max-width: 900px) {
-  .app-shell .proxy-ops-grid { grid-template-columns: 1fr; }
-  .app .topbar { flex-wrap: wrap; }
-  .employee-intro { align-items: flex-start; flex-wrap: wrap; }
-  .workspace-heading h1 { font-size: 20px; }
-}
-@media (prefers-reduced-motion: reduce) {
-  :is(.app, .app-shell) :is(.fade-up, .fade-up-1, .fade-up-2, .fade-up-3, .fade-up-4, .fade-up-5, .fade-up-6, .live-dot) { animation: none; }
-}
-/* File reports share the existing security workspace, without inline previews. */
-.debt-form .file-upload { padding: 18px; border: 1px dashed var(--border-color); border-radius: 12px; background: var(--bg-card); }
-.file-upload input::file-selector-button { font: inherit; color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px 12px; margin-right: 12px; cursor: pointer; }
-.file-scan-result { display: flex; align-items: flex-start; gap: 14px; padding: 20px; margin-top: 18px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg-elevated); }
-.file-scan-result > svg { flex-shrink: 0; color: var(--accent); }
-.file-scan-result > div { min-width: 0; overflow-wrap: anywhere; }
-.file-scan-result strong { font-size: 16px; }
-.file-scan-result p { margin-top: 8px; color: var(--text-secondary); font-size: 13px; line-height: 1.7; }
-.file-scan-result[data-verdict="malicious"] { background: var(--bg-danger); border-color: var(--border-danger); }
-.file-scan-result[data-verdict="malicious"] > svg, .file-scan-result[data-verdict="malicious"] strong, .file-scan-label[data-verdict="malicious"] { color: var(--text-danger); }
-.file-scan-result[data-verdict="suspicious"] { background: var(--bg-warning); border-color: var(--border-warning); }
-.file-scan-result[data-verdict="suspicious"] > svg, .file-scan-result[data-verdict="suspicious"] strong, .file-scan-label[data-verdict="suspicious"] { color: var(--text-warning); }
-.file-scan-label { display: block; margin-top: 10px; font-size: 12px; font-weight: 600; }
-.employee-report-list .btn { margin-top: 10px; }
-.debt-form .upload-consent { display: flex; align-items: flex-start; gap: 10px; font-weight: 400; line-height: 1.6; }
-.debt-form .upload-consent input { width: 17px; height: 17px; flex-shrink: 0; margin-top: 4px; accent-color: #2375ed; }
-.file-report-meta { overflow-wrap: anywhere; font-size: 12px; color: var(--text-secondary); }
-.local-review { margin: 12px 0; }
-.local-review-result { border-left: 2px solid #2e84ee; margin-top: 10px; padding: 10px 14px; background: rgba(46,132,238,.06); border-radius: 0 10px 10px 0; }
-.local-review-result strong { text-transform: capitalize; font-size: 13px; }
-.local-review-result small { color: var(--text-secondary); font-size: 11px; }
+/* Navigation and buttons now live in ui.css (shell, sidebar, flat buttons). */
