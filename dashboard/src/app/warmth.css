@@ -25,7 +25,7 @@
 }
 
 /* Key figures: a coloured top edge, each in its own colour. */
-.kpi { border-top: 4px solid var(--kpi-c, var(--pop-blue)); }
+.kpi-label::before { content: ""; display: inline-block; width: 9px; height: 9px; margin-right: 8px; border-radius: 50%; background: var(--kpi-c, var(--pop-blue)); vertical-align: 1px; }
 .exec-kpis > .kpi:nth-child(4n+1), .kpi:nth-child(4n+1) { --kpi-c: var(--pop-blue); }
 .exec-kpis > .kpi:nth-child(4n+2), .kpi:nth-child(4n+2) { --kpi-c: var(--pop-teal); }
 .exec-kpis > .kpi:nth-child(4n+3), .kpi:nth-child(4n+3) { --kpi-c: var(--pop-amber); }
@@ -37,7 +37,6 @@
 .sb nav button:nth-of-type(5n+3) svg { color: var(--pop-amber); }
 .sb nav button:nth-of-type(5n+4) svg { color: var(--pop-violet); }
 .sb nav button:nth-of-type(5n+5) svg { color: var(--pop-pink); }
-.sb-link[aria-current="page"] { box-shadow: inset 4px 0 0 var(--accent); }
 .sb-count { color: var(--pop-blue-text); background: var(--pop-blue-bg); border-color: transparent; font-weight: 700; }
 
 /* Cards that explain themselves get a small coloured marker before the title. */
@@ -61,8 +60,8 @@
 .emp-page .quiz-option:nth-child(4n+3) .quiz-letter { color: var(--pop-amber-text); background: var(--pop-amber-bg); }
 .emp-page .quiz-option:nth-child(4n+4) .quiz-letter { color: var(--pop-violet-text); background: var(--pop-violet-bg); }
 .emp-page .quiz-option .quiz-letter { width: 32px; height: 32px; font-size: 14px; border-radius: 8px; }
-.emp-page .training-option:nth-child(1) { border-top: 4px solid var(--pop-teal); }
-.emp-page .training-option:nth-child(2) { border-top: 4px solid var(--pop-violet); }
+.emp-page .training-option:nth-child(1):hover { border-color: var(--pop-teal); }
+.emp-page .training-option:nth-child(2):hover { border-color: var(--pop-violet); }
 
 /* Badges: earned ones are coloured, unearned stay quiet. */
 .badge-grid li[data-earned="true"]:nth-child(5n+1) { background: var(--pop-blue-bg); border-color: var(--pop-blue); }
@@ -98,7 +97,8 @@
 [data-theme="dark"] .emp-page .emp-next { background: linear-gradient(135deg, #1e3a8a, #2549b8); }
 .emp-page .emp-next .btn-primary { background: #fff; box-shadow: none; }
 .sb-link { border-radius: 12px; }
-.sb-link[aria-current="page"] { color: var(--pop-blue-text); background: var(--pop-blue-bg); border-color: transparent; box-shadow: inset 4px 0 0 var(--accent); }
+.sb-link[aria-current="page"] { color: var(--pop-blue-text); background: var(--pop-blue-bg); border-color: transparent; box-shadow: none; }
+.sb-link[aria-current="page"]::before { content: ""; position: absolute; left: 4px; top: 50%; width: 4px; height: 18px; margin-top: -9px; border-radius: 4px; background: var(--accent); }
 .sb-search { border-radius: 999px; }
 .avatar { background: var(--pop-violet-bg); color: var(--pop-violet-text); border-color: transparent; }
 .emp-card > h2::before, .emp-card-head h2::before, .exec-card > h3::before, .ops-head h3::before { border-radius: 50%; }
