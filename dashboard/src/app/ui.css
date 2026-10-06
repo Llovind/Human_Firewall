@@ -438,3 +438,31 @@ a.kpi:hover { border-color: var(--border-control); }
 .notif-count { position: absolute; top: -2px; right: -2px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; font-size: 11px; line-height: 16px; font-weight: 700; text-align: center; color: var(--on-accent); background: var(--sev-critical); }
 .notif-panel { position: absolute; right: 0; top: calc(100% + 8px); z-index: 60; width: min(360px, calc(100vw - 32px)); display: grid; gap: 8px; padding: 12px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); }
 .notif-panel .emp-list li { align-items: center; padding: 8px 0; font-size: var(--text-sm); }
+
+/* ── Sidebar extras: search, counts, live note ───────────────────────── */
+.sb-search { display: flex; align-items: center; gap: 8px; width: 100%; height: 36px; padding: 0 10px; font: inherit; font-size: var(--text-sm); color: var(--text-secondary); background: var(--bg-surface); border: 1px solid var(--border-control); border-radius: var(--radius-sm); cursor: pointer; }
+.sb-search:hover { background: var(--sidebar-hover); color: var(--text-primary); }
+.sb-search:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.sb-search kbd { margin-left: auto; font: inherit; font-size: var(--text-xs); padding: 0 6px; border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted); }
+.shell[data-collapsed="true"] .sb-search { justify-content: center; padding: 0; }
+.shell[data-collapsed="true"] :is(.sb-search-text, .sb-search kbd, .sb-sync-text) { display: none; }
+.sb-link { position: relative; }
+.sb-link .sb-count { margin-left: auto; }
+.shell[data-collapsed="true"] .sb-link .sb-count { display: block; position: absolute; top: 2px; right: 2px; min-width: 16px; padding: 0 4px; font-size: 11px; line-height: 16px; text-align: center; color: var(--on-accent); background: var(--sev-critical); border-color: var(--bg-surface); }
+.sb-sync { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: var(--text-xs); color: var(--text-secondary); }
+.sb-sync i { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--sev-ok); }
+.sb-sync[data-state="stale"] i { background: var(--sev-critical); }
+.sb-sync[data-state="waiting"] i { background: var(--text-muted); }
+.shell[data-collapsed="true"] .sb-sync { justify-content: center; padding: 6px 0; }
+.cmd { display: grid; gap: 10px; }
+.cmd-list { display: grid; gap: 4px; max-height: 320px; overflow: auto; }
+.cmd-group { margin: 6px 0 2px; font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
+.cmd-item { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 6px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: var(--text-base); }
+.cmd-item[aria-selected="true"] { background: var(--sidebar-active-bg); box-shadow: inset 3px 0 0 var(--accent); }
+
+/* ── Campaign wizard ─────────────────────────────────────────────────── */
+.wiz-steps { list-style: none; display: flex; gap: 8px; flex-wrap: wrap; padding: 0; margin: 0 0 12px; font-size: var(--text-sm); counter-reset: wiz; }
+.wiz-steps li { counter-increment: wiz; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 999px; }
+.wiz-steps li::before { content: counter(wiz); font-weight: 700; font-variant-numeric: tabular-nums; }
+.wiz-steps li[aria-current="step"] { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+.wiz-steps li[data-done="true"] { color: var(--text-primary); }

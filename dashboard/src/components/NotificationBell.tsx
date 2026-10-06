@@ -6,14 +6,14 @@ import { Bell } from 'lucide-react';
 import { usePolling } from '@/hooks/usePolling';
 import { usePreference } from '@/hooks/usePreference';
 import { useI18n } from '@/i18n/I18nProvider';
-import { normalizeSeverity } from '@/components/ui/SeverityBadge';
+import type { WorkQueue } from '@/hooks/useWorkQueue';
 
 type Role = 'employee' | 'soc' | 'grc' | 'ciso' | 'phishing_admin';
 interface MyRequest { id: string; domain: string; status: 'open' | 'allowed' | 'denied' }
 interface Note { key: string; text: string; tab?: string; href?: string }
 
 /** Everything the person should know about, in one list. Employees see answers to their requests; staff see work waiting. */
-export default function NotificationBell({ role, onOpenTab }: { role: Role; onOpenTab?: (tab: string) => void }) {
+export default function NotificationBell({ role, onOpenTab, queue }: { role: Role; onOpenTab?: (tab: string) => void; /** Work waiting for staff; supplied by the layout so every number on screen comes from one place. */ queue?: WorkQueue }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -21,23 +21,17 @@ export default function NotificationBell({ role, onOpenTab }: { role: Role; onOp
   const seen = useMemo(() => new Set(seenRaw.split(',').filter(Boolean)), [seenRaw]);
 
   const isEmployee = role === 'employee';
-  const reads = role === 'soc' || role === 'grc';
-  const watchesIncidents = role === 'soc' || role === 'grc' || role === 'ciso';
   const { data: mine } = usePolling<{ requests: MyRequest[] }>(isEmployee ? '/api/access-requests' : '', 30000);
-  const { data: queue } = usePolling<{ counts?: { open?: number } }>(reads ? '/api/admin/access-requests' : '', 30000);
-  const { data: incidents } = usePolling<{ incidents?: { status: string; severity: string }[] }>(watchesIncidents ? '/api/incident' : '', 30000);
 
   const notes = useMemo<Note[]>(() => {
     const list: Note[] = [];
     if (isEmployee) {
       (mine?.requests ?? []).filter(r => r.status !== 'open' && !seen.has(r.id)).forEach(r => list.push({ key: r.id, text: t(r.status === 'allowed' ? 'notif.req.allowed' : 'notif.req.denied', { domain: r.domain }), href: '/' }));
     }
-    const waiting = queue?.counts?.open ?? 0;
-    if (reads && waiting > 0) list.push({ key: 'staff-requests', text: t('notif.staff.requests', { n: waiting }), tab: 'inbox' });
-    const urgent = (incidents?.incidents ?? []).filter(i => i.status !== 'closed' && ['critical', 'high'].includes(normalizeSeverity(i.severity))).length;
-    if (watchesIncidents && urgent > 0) list.push({ key: 'staff-urgent', text: t('notif.staff.urgent', { n: urgent }), tab: 'overview' });
+    if (queue && queue.requestsWaiting > 0) list.push({ key: 'staff-requests', text: t('notif.staff.requests', { n: queue.requestsWaiting }), tab: 'inbox' });
+    if (queue && queue.urgentIncidents > 0) list.push({ key: 'staff-urgent', text: t('notif.staff.urgent', { n: queue.urgentIncidents }), tab: 'overview' });
     return list;
-  }, [isEmployee, mine, queue, incidents, seen, reads, watchesIncidents, t]);
+  }, [isEmployee, mine, queue, seen, t]);
 
   useEffect(() => {
     if (!open) return;

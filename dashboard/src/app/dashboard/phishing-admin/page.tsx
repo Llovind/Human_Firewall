@@ -10,12 +10,13 @@ import { useI18n } from '@/i18n/I18nProvider';
 import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/admin/DashboardLayout';
 import GophishCampaignSection from '@/components/admin/GophishCampaignSection';
+import CampaignWizard from '@/components/admin/CampaignWizard';
 import EmployeeRosterSection from '@/components/admin/EmployeeRosterSection';
 import LeaderboardSection from '@/components/admin/LeaderboardSection';
 import AIIntelligenceSection from '@/components/admin/AIIntelligenceSection';
 import { usePolling } from '@/hooks/usePolling';
 import type { Division, EmployeeAccount, GoPhishCampaign, GoPhishResource, LeaderboardResponse } from '@/components/admin/types';
-import { Download, Send, Target } from 'lucide-react';
+import { Download } from 'lucide-react';
 
 type EditableGoPhishResource = {
   id: number;
@@ -634,22 +635,29 @@ export default function PhishingAdminDashboard() {
         <AIIntelligenceSection role="phishing_admin" readOnly={false} />
       )}
 
-      {/* Launch a lab campaign */}
-      <Dialog open={isLaunchModalOpen} onClose={() => setIsLaunchModalOpen(false)} busy={isLaunching} title={t('adm2.launch.title')} description={t('adm2.launch.help')} size="md"
-        footer={<>
-          <button type="button" className="btn" disabled={isLaunching} onClick={() => setIsLaunchModalOpen(false)}>{t('common.cancel')}</button>
-          <button type="submit" form="launch-form" className="btn btn-primary" disabled={isLaunching}>{isLaunching ? t('adm2.launch.submitting') : <><Send size={14} aria-hidden="true" /> {t('adm2.launch.submit')}</>}</button>
-        </>}>
-        <form id="launch-form" onSubmit={handleLaunchCampaign} className="ui-form">
-          {launchError && <p className="field-error" role="alert">{launchError}</p>}
-          <Field label={t('adm2.launch.name')}>{c => <input {...c} type="text" required maxLength={150} placeholder={t('adm2.launch.name.ph')} value={launchName} onChange={e => setLaunchName(e.target.value)} />}</Field>
-          <Field label={t('adm2.launch.template')}>{c => <select {...c} required value={launchTemplate} onChange={e => setLaunchTemplate(e.target.value)}>{(resources?.templates || []).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}</Field>
-          <Field label={t('adm2.launch.profile')}>{c => <select {...c} required value={launchProfile} onChange={e => setLaunchProfile(e.target.value)}>{(resources?.profiles || []).filter(p => p.host === 'mailpit:1025').map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}</Field>
-          <Field label={t('adm2.launch.page')}>{c => <select {...c} required value={launchPage} onChange={e => setLaunchPage(e.target.value)}>{(resources?.pages || []).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}</Field>
-          <Field label={t('adm2.launch.url')}>{c => <input {...c} type="url" required placeholder={t('adm2.launch.url.ph')} value={launchUrl} onChange={e => setLaunchUrl(e.target.value)} />}</Field>
-          {selectedEmails.length > 0 && <p className="inline-note"><Target size={14} aria-hidden="true" />{t('adm2.launch.targets', { n: selectedEmails.length })}</p>}
-        </form>
-      </Dialog>
+      {/* New simulation: who, what, review */}
+      <CampaignWizard
+        open={isLaunchModalOpen}
+        onClose={() => setIsLaunchModalOpen(false)}
+        employees={Array.isArray(employees) ? employees : []}
+        divisions={Array.isArray(divisions) ? divisions : []}
+        resources={resources}
+        selectedEmails={Array.isArray(selectedEmails) ? selectedEmails : []}
+        onSelectedEmailsChange={setSelectedEmails}
+        form={{ name: launchName, template: launchTemplate, profile: launchProfile, page: launchPage, url: launchUrl }}
+        onFormChange={patch => {
+          if (patch.name !== undefined) setLaunchName(patch.name);
+          if (patch.template !== undefined) setLaunchTemplate(patch.template);
+          if (patch.profile !== undefined) setLaunchProfile(patch.profile);
+          if (patch.page !== undefined) setLaunchPage(patch.page);
+          if (patch.url !== undefined) setLaunchUrl(patch.url);
+        }}
+        launching={isLaunching}
+        error={launchError}
+        onSubmit={handleLaunchCampaign}
+        onSetupResources={preset => void handleSetupResources(preset)}
+        onAddContent={type => handleOpenTemplateBuilder('new', type)}
+      />
 
       {/* Email template */}
       <Dialog open={isTemplateModalOpen} onClose={() => setIsTemplateModalOpen(false)} busy={isSavingTemplate} size="lg" title={t(templateModalMode === 'edit' ? 'adm2.tpl.edit' : 'adm2.tpl.create')}

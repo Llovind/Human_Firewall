@@ -45,18 +45,13 @@ export function getCampaignStats(c: GoPhishCampaign) {
 }
 
 export default function GophishCampaignSection(props: Props) {
-  const { readOnly, campaigns, employees, divisions, resources, selectedEmails, onSelectedEmailsChange } = props;
+  const { readOnly, campaigns, resources } = props;
   const { t } = useI18n();
-  const [blockers, setBlockers] = useState<('resources' | 'recipients')[]>([]);
-  const [division, setDivision] = useState('ALL');
-  const [search, setSearch] = useState('');
   const [detail, setDetail] = useState<GoPhishCampaign | null>(null);
   const [action, setAction] = useState<{ campaign: GoPhishCampaign; type: 'stop' | 'delete' } | null>(null);
   const [working, setWorking] = useState(false);
   const [actionError, setActionError] = useState('');
 
-  const eligible = employees.filter(e => e.is_active && (!e.role || e.role === 'employee'));
-  const filtered = eligible.filter(e => (division === 'ALL' || e.divisi === division) && e.email.toLowerCase().includes(search.toLowerCase()));
   const total = campaigns.reduce((acc, c) => {
     const s = getCampaignStats(c);
     return { sent: acc.sent + s.sent, opened: acc.opened + s.opened, clicked: acc.clicked + s.clicked };
@@ -89,15 +84,6 @@ export default function GophishCampaignSection(props: Props) {
     finally { setWorking(false); }
   }
 
-  function createCampaign() {
-    const missing: ('resources' | 'recipients')[] = [];
-    if (!ready) missing.push('resources');
-    if (!selectedEmails.length) missing.push('recipients');
-    setBlockers(missing);
-    if (!missing.length) props.onOpenLaunchModal();
-  }
-  const goToRecipients = () => document.getElementById('campaign-recipients')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
   const statusLabel = (status: string) => (status === 'Completed' ? t('cmpg.status.Completed') : status);
   const columns: Column<GoPhishCampaign>[] = [
     { key: 'name', header: t('cmpg.col.campaign'), render: c => <span className="cell-clip"><strong>{c.name}</strong><span className="cell-sub">{c.source === 'local' ? t('cmpg.source.local') : t('cmpg.source.gophish')} · #{c.id}</span></span> },
@@ -122,14 +108,12 @@ export default function GophishCampaignSection(props: Props) {
         <span className="ops-actions" style={{ flexWrap: 'wrap' }}>
           {props.onRefresh && <button type="button" className="btn" onClick={props.onRefresh} disabled={props.busy}><RefreshCw size={14} aria-hidden="true" /> {t('cmpg.refresh')}</button>}
           {resources?.adminUrl && <a className="btn" href={resources.adminUrl} target="_blank" rel="noopener noreferrer"><ExternalLink size={14} aria-hidden="true" /> GoPhish</a>}
-          {!readOnly && <button type="button" className="btn btn-primary" onClick={createCampaign} disabled={props.busy}><Play size={14} aria-hidden="true" /> {t('cmpg.create')}</button>}
+          {!readOnly && <button type="button" className="btn btn-primary" onClick={() => props.onOpenLaunchModal()} disabled={props.busy}><Play size={14} aria-hidden="true" /> {t('cmpg.create')}</button>}
         </span>
       </div>
 
       {(props.error || (actionError && !action)) && <p className="field-error" role="alert">{props.error || actionError}</p>}
       {props.notice && <p className="inline-note" role="status">{props.notice}</p>}
-      {blockers.length > 0 && <div className="inline-note" role="alert"><div><strong>{t('adm.blocked.title')}</strong>
-        <ul style={{ margin: '6px 0 0 18px' }}>{blockers.includes('resources') && <li>{t('adm.blocked.resources')}</li>}{blockers.includes('recipients') && <li>{t('adm.blocked.recipients')} <button type="button" className="emp-link" onClick={goToRecipients}>{t('adm.blocked.go')}</button></li>}</ul></div></div>}
 
       {!readOnly && (
         <div className="inline-note"><Mail size={18} aria-hidden="true" />
@@ -147,40 +131,6 @@ export default function GophishCampaignSection(props: Props) {
         <KpiCard label={t('cmpg.m.opened')} value={total.opened} />
         <KpiCard label={t('cmpg.m.clicked')} value={total.clicked} />
       </div>
-
-      {!readOnly && (
-        <section className="ops-block" id="campaign-recipients" aria-labelledby="cmpg-s1">
-          <div className="ops-intro">
-            <div><p className="emp-muted">{t('cmpg.step1')}</p><h3 id="cmpg-s1" style={{ fontSize: 16, fontWeight: 600 }}>{t('cmpg.targets')} <StatusChip tone="open">{t('cmpg.selected', { n: selectedEmails.length })}</StatusChip></h3></div>
-            <span className="ops-actions" style={{ flexWrap: 'wrap' }}>
-              <button type="button" className="btn" onClick={() => onSelectedEmailsChange(Array.from(new Set([...selectedEmails, ...filtered.map(e => e.email)])))}>{t('cmpg.selectFiltered')}</button>
-              <button type="button" className="btn" onClick={() => onSelectedEmailsChange([])}>{t('cmpg.clear')}</button>
-            </span>
-          </div>
-          <div className="filter-bar">
-            <label className="filter-search"><span className="visually-hidden">{t('cmpg.search')}</span><input type="search" placeholder={t('cmpg.search')} value={search} onChange={e => setSearch(e.target.value)} /></label>
-            <label className="filter-select"><span className="visually-hidden">{t('cmpg.division')}</span>
-              <select value={division} onChange={e => setDivision(e.target.value)}><option value="ALL">{t('cmpg.division.all')}</option>{divisions.map(d => <option key={d.name} value={d.name}>{d.name}</option>)}</select></label>
-          </div>
-          {filtered.length > 0 ? (
-            <div className="recipient-list">{filtered.map(e => (
-              <label key={e.email}><input type="checkbox" checked={selectedEmails.includes(e.email)} onChange={event => onSelectedEmailsChange(event.target.checked ? [...selectedEmails, e.email] : selectedEmails.filter(email => email !== e.email))} /><span>{e.email}<small>{e.divisi}</small></span></label>
-            ))}</div>
-          ) : <StateMessage variant="empty" compact title={t('cmpg.noMatch')} why=" " />}
-          <p className="emp-muted">{t('cmpg.synced')}</p>
-        </section>
-      )}
-
-      {!readOnly && (
-        <section className="ops-block" aria-labelledby="cmpg-s2">
-          <div className="ops-intro"><div><p className="emp-muted">{t('cmpg.step2')}</p><h3 id="cmpg-s2" style={{ fontSize: 16, fontWeight: 600 }}>{t('cmpg.content')}</h3></div><StatusChip>{t('cmpg.noPasswords')}</StatusChip></div>
-          <div className="option-grid">
-            <article><Mail size={22} aria-hidden="true" /><h4>{t('cmpg.opt.reset')}</h4><p>{t('cmpg.opt.reset.desc')}</p><div><button type="button" className="btn btn-primary" disabled={props.busy} onClick={() => props.onSetupResources?.('password-reset')}>{t('cmpg.opt.reset.btn')}</button></div></article>
-            <article><Globe size={22} aria-hidden="true" /><h4>{t('cmpg.opt.clone')}</h4><p>{t('cmpg.opt.clone.desc')}</p><div><button type="button" className="btn" onClick={() => props.onOpenTemplateBuilder('new', 'page')}>{t('cmpg.opt.clone.btn')}</button></div></article>
-          </div>
-          <p className="emp-muted">{t('cmpg.points')}</p>
-        </section>
-      )}
 
       {!readOnly && (
         <details className="exec-more campaign-details">
@@ -208,7 +158,7 @@ export default function GophishCampaignSection(props: Props) {
       )}
 
       <section className="ops-block" aria-labelledby="cmpg-s3">
-        <div className="ops-intro"><div><p className="emp-muted">{t('cmpg.step3')}</p><h3 id="cmpg-s3" style={{ fontSize: 16, fontWeight: 600 }}>{t('cmpg.monitor')}</h3></div><span className="emp-muted">{t('cmpg.count', { n: campaigns.length })}</span></div>
+        <div className="ops-intro"><div><h3 id="cmpg-s3" style={{ fontSize: 16, fontWeight: 600 }}>{t('cmpg.monitor')}</h3></div><span className="emp-muted">{t('cmpg.count', { n: campaigns.length })}</span></div>
         <DataTable caption={t('cmpg.monitor')} columns={columns} rows={campaigns} rowKey={c => `${c.source || 'gophish'}:${c.id}`} density="comfortable" empty={<StateMessage variant="empty" title={t('cmpg.empty.title')} why={t('cmpg.empty.why')} />} />
       </section>
 

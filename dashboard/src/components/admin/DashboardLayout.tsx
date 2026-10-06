@@ -7,6 +7,10 @@ import Logo from '@/components/Logo';
 import AccountMenu from '@/components/AccountMenu';
 import NotificationBell from '@/components/NotificationBell';
 import FirstRunTour from '@/components/FirstRunTour';
+import CommandPalette, { type Command } from '@/components/ui/CommandPalette';
+import { useWorkQueue } from '@/hooks/useWorkQueue';
+import { useNow } from '@/hooks/useNow';
+import { formatAgo } from '@/lib/relativeTime';
 import { useI18n } from '@/i18n/I18nProvider';
 import { usePreference } from '@/hooks/usePreference';
 import { useTheme } from '@/hooks/useTheme';
@@ -16,7 +20,7 @@ import { ROLE_ROUTES } from '@/components/admin/types';
 import NoAccess from '@/components/ui/NoAccess';
 import {
   LayoutDashboard, ShieldAlert, Trophy, FileWarning, Fish,
-  Mail, Users, Brain, FileCheck, Globe, History, Moon, Sun, Menu, PanelLeft, X
+  Mail, Users, Brain, FileCheck, Globe, History, Moon, Sun, Menu, PanelLeft, Search, Settings, X
 } from 'lucide-react';
 import '@/app/dashboard.css';
 
@@ -64,6 +68,18 @@ export default function DashboardLayout({ role, activeTab, onTabChange, children
   const [sidebar, setSidebar] = usePreference('afferent_sidebar', 'open');
   const [mobileOpen, setMobileOpen] = useState(false);
   const collapsed = sidebar === 'mini';
+  const queue = useWorkQueue(role);
+  const now = useNow(10_000);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // Ctrl or Command + K opens "Go to", from anywhere on the page.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); setPaletteOpen(true); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
 
   // Signed-out visitors go to sign-in. Signed-in people on the wrong page see a clear "no access" screen instead.
   useEffect(() => {
@@ -104,9 +120,25 @@ export default function DashboardLayout({ role, activeTab, onTabChange, children
   const themeLabel = theme === 'dark' ? t('shell.theme.light') : t('shell.theme.dark');
   const choose = (id: string) => { onTabChange(id); setMobileOpen(false); };
 
+  // What is waiting, shown beside the page that deals with it.
+  const waiting = (id: string): number => {
+    if (id === 'inbox') return queue.requestsWaiting;
+    if (id === 'overview') return role === 'soc' ? queue.openIncidents : queue.urgentIncidents;
+    return 0;
+  };
+  const syncState = queue.failed ? 'stale' : queue.updatedAt === null ? 'waiting' : 'live';
+  const syncText = syncState === 'stale' ? t('sync.stale') : syncState === 'waiting' ? t('sync.waiting') : `${t('sync.live')} · ${t('sync.updated', { time: formatAgo(new Date(queue.updatedAt ?? now).toISOString(), lang, now) })}`;
+  const commands: Command[] = [
+    ...tabs.map(tab => ({ id: `tab-${tab.id}`, label: t(tab.labelKey), group: 'pages' as const, icon: tab.icon, run: () => choose(tab.id) })),
+    { id: 'settings', label: t('settings.title'), group: 'pages' as const, icon: <Settings size={ICON} aria-hidden="true" />, run: () => router.push('/settings') },
+    { id: 'theme', label: t(theme === 'dark' ? 'cmd.theme.light' : 'cmd.theme.dark'), group: 'actions' as const, icon: theme === 'dark' ? <Sun size={ICON} aria-hidden="true" /> : <Moon size={ICON} aria-hidden="true" />, run: toggleTheme },
+    { id: 'lang', label: t(lang === 'en' ? 'cmd.lang.id' : 'cmd.lang.en'), group: 'actions' as const, icon: <Globe size={ICON} aria-hidden="true" />, run: () => setLang(lang === 'en' ? 'id' : 'en') },
+  ];
+
   return (
     <div className="shell font-body" data-collapsed={collapsed} data-open={mobileOpen}>
       <FirstRunTour role={role} />
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} />
       <a className="skip-link" href="#content">{t('shell.skip')}</a>
       <div className="shell-scrim" onClick={() => setMobileOpen(false)} aria-hidden="true" />
 
@@ -125,6 +157,12 @@ export default function DashboardLayout({ role, activeTab, onTabChange, children
           </button>
         </div>
 
+        <button type="button" className="sb-search" onClick={() => setPaletteOpen(true)} aria-label={collapsed ? t('nav.search') : undefined} title={t('nav.search.label')}>
+          <Search size={16} aria-hidden="true" />
+          <span className="sb-search-text">{t('nav.search')}</span>
+          <kbd aria-hidden="true">⌘K</kbd>
+        </button>
+
         <nav aria-label={t('nav.main')} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
           <div className="sb-group">{t('nav.menu')}</div>
           {tabs.map(tab => {
@@ -140,6 +178,7 @@ export default function DashboardLayout({ role, activeTab, onTabChange, children
               >
                 {tab.icon}
                 <span className="sb-label">{label}</span>
+                {waiting(tab.id) > 0 && <span className="sb-count" title={t('nav.count', { n: waiting(tab.id) })}>{waiting(tab.id)}<span className="visually-hidden"> {t('nav.count', { n: waiting(tab.id) })}</span></span>}
               </button>
             );
           })}
@@ -148,6 +187,7 @@ export default function DashboardLayout({ role, activeTab, onTabChange, children
         <div className="sb-spacer" />
         <hr className="sb-sep" />
 
+        <p className="sb-sync" data-state={syncState} role="status" title={syncText}><i aria-hidden="true" /><span className="sb-sync-text">{syncText}</span></p>
         <div className="sb-lang" role="group" aria-label={t('lang.label')}>
           <Globe size={ICON} aria-hidden="true" />
           <span className="sb-label">{t('lang.label')}</span>
@@ -177,7 +217,7 @@ export default function DashboardLayout({ role, activeTab, onTabChange, children
           </div>
           <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             {role === 'ciso' && <span className="shell-chip" title={t('shell.readonlyHint')}>{t('shell.readonly')}</span>}
-            <NotificationBell role={role} onOpenTab={choose} />
+            <NotificationBell role={role} onOpenTab={choose} queue={queue} />
           </span>
         </header>
         <div className="shell-content" id="content" tabIndex={-1}>

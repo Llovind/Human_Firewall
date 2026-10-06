@@ -105,7 +105,7 @@ export default function OverviewSection({ stats, incidents, summaries, scores, c
             ) : <p className="emp-muted">{t('ov.div.empty')}</p>}
           </div>
         </section>
-        <TremorDonutCard title={t('ov.sev.title')} description={t('ov.sev.desc')} data={donut} totalLabel={t('ov.sev.total')} unit={t('ov.sev.unit')} />
+        <TremorDonutCard title={t('ov.sev.title')} description={t('ov.sev.desc')} data={donut} totalLabel={t('ov.sev.total')} />
       </div>
 
       <div className="exec-grid">

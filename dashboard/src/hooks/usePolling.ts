@@ -22,12 +22,15 @@ export function usePolling<T>(
   isLoading: boolean;
   error: string | null;
   hasUpdated: boolean;
+  /** When the last request succeeded (milliseconds since 1970), or null before the first one. */
+  updatedAt: number | null;
   refresh: () => void;
 } {
   const [data, setData] = useState<T | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasUpdated, setHasUpdated] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
   const previousDataRef = useRef<string>('');
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
@@ -58,6 +61,7 @@ export function usePolling<T>(
       }
       
       setError(null);
+      setUpdatedAt(Date.now());
     } catch (err) {
       if (controller.signal.aborted) return;
       setError(err instanceof Error ? err.message : 'Failed to fetch');
@@ -101,5 +105,5 @@ export function usePolling<T>(
     };
   }, [fetchData, interval]);
 
-  return { data, isLoading, error, hasUpdated, refresh };
+  return { data, isLoading, error, hasUpdated, updatedAt, refresh };
 }
