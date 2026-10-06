@@ -1,3 +1,8 @@
+'use client';
+
+import { useI18n } from '@/i18n/I18nProvider';
+import type { MessageKey } from '@/i18n/messages';
+
 export type ThreatAnalysis = {
   verdict: string;
   providerStatus?: Record<string, { state: string; statusCode: number }>;
@@ -16,20 +21,16 @@ export type FileScan = {
   analysis: ThreatAnalysis;
 };
 
-const labels: Record<string, string> = {
-  ready: 'Results available', no_record: 'No existing scan', no_verdict: 'No verdict',
-  result_unavailable: 'Full results unavailable', not_configured: 'API key not configured',
-  rate_limited: 'Rate limited — try later', unavailable: 'Provider unavailable',
-  queued: 'Queued for analysis', pending: 'Analysis in progress', expired: 'Analysis timed out',
-};
+const STATES = ['ready', 'no_record', 'no_verdict', 'result_unavailable', 'not_configured', 'rate_limited', 'unavailable', 'queued', 'pending', 'expired'];
 
 export default function ThreatEvidence({ analysis }: { analysis?: ThreatAnalysis }) {
-  return <details className="provider-details"><summary>Provider evidence</summary>
+  const { t } = useI18n();
+  return <details className="provider-details"><summary>{t('ev.title')}</summary>
     {analysis?.providerStatus ? Object.entries(analysis.providerStatus).map(([provider, status]) =>
-      <p key={provider}><strong>{provider === 'virustotal' ? 'VirusTotal' : 'urlscan'}</strong>: {labels[status.state] || status.state}
+      <p key={provider}><strong>{provider === 'virustotal' ? 'VirusTotal' : 'urlscan'}</strong>: {STATES.includes(status.state) ? t(`ev.state.${status.state}` as MessageKey) : status.state}
         {analysis.evidence?.[provider] && <> · {analysis.evidence[provider].verdict}
-          {analysis.evidence[provider].vt_score != null && <> · {analysis.evidence[provider].vt_score} engine detections</>}</>}
-      </p>) : <p>No provider details recorded.</p>}
-    <small>No result or no detections is not a guarantee of safety.</small>
+          {analysis.evidence[provider].vt_score != null && <> · {t('ev.detections', { n: analysis.evidence[provider].vt_score ?? 0 })}</>}</>}
+      </p>) : <p>{t('ev.none')}</p>}
+    <small>{t('ev.note')}</small>
   </details>;
 }

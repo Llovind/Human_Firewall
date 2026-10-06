@@ -1,12 +1,17 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  Copy, Check, Download, FileText, ShieldCheck, RefreshCw,
-  Search, ShieldAlert, Shield, Users,
-  AlertTriangle, Zap, CheckCircle2, Info
-} from 'lucide-react';
+import { Check, Copy, Download, FileText, RefreshCw } from 'lucide-react';
 import { exportExecutivePdf } from '@/lib/ExecutivePdfExporter';
+import DataTable, { type Column } from '@/components/ui/DataTable';
+import Dialog from '@/components/ui/Dialog';
+import FilterBar from '@/components/ui/FilterBar';
+import KpiCard from '@/components/ui/KpiCard';
+import SeverityBadge, { type SeverityLevel } from '@/components/ui/SeverityBadge';
+import StateMessage from '@/components/ui/StateMessage';
+import { useI18n } from '@/i18n/I18nProvider';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import type { MessageKey } from '@/i18n/messages';
 
 export interface AIIntelligenceSectionProps {
   role?: 'soc' | 'ciso' | 'grc' | 'phishing_admin';
@@ -18,1034 +23,268 @@ export interface AIIntelligenceSectionProps {
   readOnly?: boolean;
 }
 
+type Level = 'SAFE' | 'VULNERABLE' | 'DANGER';
+
 interface UserClassification {
-  email: string;
-  divisi: string;
-  risk_level: 'SAFE' | 'VULNERABLE' | 'DANGER';
-  risk_score: number;
-  primary_risk: string;
-  one_line_assessment: string;
-  education_tip: string;
+  email: string; divisi: string; risk_level: Level; risk_score: number;
+  primary_risk: string; one_line_assessment: string; education_tip: string;
 }
-
 interface OrgRiskSummary {
-  safe_count: number;
-  vulnerable_count: number;
-  danger_count: number;
-  most_at_risk_division: string;
-  overall_assessment: string;
+  safe_count: number; vulnerable_count: number; danger_count: number;
+  most_at_risk_division: string; overall_assessment: string;
 }
-
 interface UserDeepDive {
-  email: string;
-  risk_level: 'SAFE' | 'VULNERABLE' | 'DANGER';
-  risk_score: number;
-  vulnerable_to: string[];
-  risk_factors: string[];
-  positive_factors: string[];
-  education_message: string;
-  recommendations: string[];
-  priority_action: string;
-  trend_assessment: string;
+  email: string; risk_level: Level; risk_score: number; vulnerable_to: string[];
+  risk_factors: string[]; positive_factors: string[]; education_message: string;
+  recommendations: string[]; priority_action: string; trend_assessment: string;
 }
-
 interface HeatmapData {
-  classifications: UserClassification[];
-  org_risk_summary?: OrgRiskSummary;
-  _warning?: string;
-  _source?: string;
+  classifications: UserClassification[]; org_risk_summary?: OrgRiskSummary; _warning?: string; _source?: string;
 }
 
+const SEVERITY: Record<Level, SeverityLevel> = { DANGER: 'high', VULNERABLE: 'medium', SAFE: 'low' };
+const RANK: Record<Level, number> = { DANGER: 0, VULNERABLE: 1, SAFE: 2 };
+
+/** Throws a short code; the component turns it into a sentence in the current language. */
 async function loadHeatmap(role: string, refresh = false, signal?: AbortSignal): Promise<HeatmapData> {
   const res = await fetch(`/api/ai/classify?role=${role}${refresh ? '&refresh=true' : ''}`, { signal });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Heatmap belum tersedia.');
-  if (!Array.isArray(data.classifications)) throw new Error('Format heatmap tidak valid.');
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error('heatmap');
+  if (!Array.isArray(data.classifications)) throw new Error('format');
   return data;
 }
 
-export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({
-  role = 'soc',
-  markdownReport = '',
-  isLoading = false,
-  onExportPdf,
-  isPdfLoading = false,
-}) => {
-  const [activeSubTab, setActiveSubTab] = useState<'heatmap' | 'report'>('heatmap');
-  
-  // Heatmap State
+function MarkdownReport({ content }: { content: string }) {
+  const lines = content.split('\n');
+  const out: React.ReactNode[] = [];
+  let table: string[] = [];
+  const cells = (row: string) => row.split('|').map(c => c.trim()).filter(Boolean);
+  const flush = (key: number) => {
+    if (table.length >= 2) {
+      const head = cells(table[0]);
+      const rows = table.slice(2).map(cells);
+      out.push(
+        <div className="table-wrap" key={`t${key}`}>
+          <table className="data-table">
+            <thead><tr>{head.map((h, i) => <th key={i} scope="col">{h}</th>)}</tr></thead>
+            <tbody>{rows.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j}>{c}</td>)}</tr>)}</tbody>
+          </table>
+        </div>,
+      );
+    }
+    table = [];
+  };
+  lines.forEach((line, i) => {
+    if (line.trim().startsWith('|')) { table.push(line); return; }
+    if (table.length) flush(i);
+    if (line.startsWith('# ')) out.push(<h1 key={i}>{line.slice(2)}</h1>);
+    else if (line.startsWith('## ')) out.push(<h2 key={i}>{line.slice(3)}</h2>);
+    else if (line.startsWith('### ')) out.push(<h3 key={i}>{line.slice(4)}</h3>);
+    else if (line.startsWith('- ') || line.startsWith('* ')) out.push(<div className="md-li" key={i}><span aria-hidden="true">•</span><span>{line.slice(2)}</span></div>);
+    else if (line.trim()) out.push(<p key={i}>{line}</p>);
+  });
+  if (table.length) flush(lines.length);
+  return <div className="md-report">{out}</div>;
+}
+
+export const AIIntelligenceSection: React.FC<AIIntelligenceSectionProps> = ({ role = 'soc', markdownReport = '', isLoading = false, onExportPdf, isPdfLoading = false }) => {
+  const { t } = useI18n();
+  const wide = useMediaQuery('(min-width: 1100px)');
+  const [tab, setTab] = useState<'heatmap' | 'report'>('heatmap');
   const [classifications, setClassifications] = useState<UserClassification[]>([]);
-  const [orgSummary, setOrgSummary] = useState<OrgRiskSummary | null>(null);
-  const [isHeatmapLoading, setIsHeatmapLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedDivision, setSelectedDivision] = useState('ALL');
-  const [selectedRiskFilter, setSelectedRiskFilter] = useState('ALL');
-
-  // Master-Detail Selection State
-  const [selectedUserEmail, setSelectedUserEmail] = useState<string | null>(null);
-  const [userDeepDive, setUserDeepDive] = useState<UserDeepDive | null>(null);
-  const [isDeepDiveLoading, setIsDeepDiveLoading] = useState(false);
-  const deepDiveRequest = useRef(0);
-
-  // Markdown Report State
-  const [internalReport, setInternalReport] = useState<string>('');
-  const [isReportLoading, setIsReportLoading] = useState(false);
+  const [org, setOrg] = useState<OrgRiskSummary | null>(null);
+  const [heatmapLoading, setHeatmapLoading] = useState(true);
+  const [query, setQuery] = useState('');
+  const [division, setDivision] = useState('ALL');
+  const [level, setLevel] = useState('ALL');
+  const [selected, setSelected] = useState<string | null>(null);
+  const [deepDive, setDeepDive] = useState<UserDeepDive | null>(null);
+  const [deepLoading, setDeepLoading] = useState(false);
+  const deepRequest = useRef(0);
+  const [report, setReport] = useState('');
+  const [reportLoading, setReportLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
-  const [sourceNotice, setSourceNotice] = useState('');
-  const [pdfGenerating, setPdfGenerating] = useState(false);
+  const [source, setSource] = useState('');
+  const [pdfBusy, setPdfBusy] = useState(false);
 
-  const activeReport = markdownReport || internalReport;
-  const isReportBusy = isLoading || isReportLoading;
+  const activeReport = markdownReport || report;
+  const reportBusy = isLoading || reportLoading;
 
-  const applyHeatmap = useCallback((data: HeatmapData) => {
+  const describe = useCallback((err: unknown, fallback: MessageKey) => (err instanceof Error && err.message === 'format' ? t('ai.err.format') : t(fallback)), [t]);
+
+  const apply = useCallback((data: HeatmapData) => {
     setClassifications(data.classifications);
-    setSourceNotice(data._warning || (data._source === 'llm' ? 'Analisis LLM berdasarkan telemetry.' : 'Baseline telemetry.'));
-    setOrgSummary(data.org_risk_summary || null);
+    setSource(data._warning || (data._source === 'llm' ? 'llm' : 'baseline'));
+    setOrg(data.org_risk_summary || null);
   }, []);
 
-  // Fetch Heatmap Data
-  const fetchHeatmapData = async (refresh = false) => {
-    setIsHeatmapLoading(true);
-    setError('');
-    try {
-      applyHeatmap(await loadHeatmap(role, refresh));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load the heatmap.');
-    } finally {
-      setIsHeatmapLoading(false);
-    }
+  const refresh = async () => {
+    setHeatmapLoading(true); setError('');
+    try { apply(await loadHeatmap(role, true)); } catch (err) { setError(describe(err, 'ai.err.heatmap')); } finally { setHeatmapLoading(false); }
   };
 
   useEffect(() => {
     const controller = new AbortController();
     loadHeatmap(role, false, controller.signal)
-      .then(data => { if (!controller.signal.aborted) applyHeatmap(data); })
-      .catch(err => { if (!controller.signal.aborted) setError(err instanceof Error ? err.message : 'Could not load the heatmap.'); })
-      .finally(() => { if (!controller.signal.aborted) setIsHeatmapLoading(false); });
+      .then(data => { if (!controller.signal.aborted) apply(data); })
+      .catch(err => { if (!controller.signal.aborted) setError(describe(err, 'ai.err.heatmap')); })
+      .finally(() => { if (!controller.signal.aborted) setHeatmapLoading(false); });
     return () => controller.abort();
-  }, [role, applyHeatmap]);
+  }, [role, apply, describe]);
 
-  // Fetch Individual User Deep Dive in-place
-  const handleSelectUser = async (email: string) => {
-    const requestId = ++deepDiveRequest.current;
-    setSelectedUserEmail(email);
-    setIsDeepDiveLoading(true);
-    setUserDeepDive(null);
-    setError('');
+  const selectUser = async (email: string) => {
+    const id = ++deepRequest.current;
+    setSelected(email); setDeepLoading(true); setDeepDive(null); setError('');
     try {
       const res = await fetch(`/api/ai/user/${encodeURIComponent(email)}?days=30`);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Analisis employee belum tersedia.');
-        if (requestId === deepDiveRequest.current) setUserDeepDive(data);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error('user');
+      if (id === deepRequest.current) setDeepDive(data);
     } catch (err) {
-      if (requestId === deepDiveRequest.current) setError(err instanceof Error ? err.message : 'Analisis belum tersedia.');
+      if (id === deepRequest.current) setError(describe(err, 'ai.err.user'));
     } finally {
-      if (requestId === deepDiveRequest.current) setIsDeepDiveLoading(false);
+      if (id === deepRequest.current) setDeepLoading(false);
     }
   };
 
-  const fetchReportData = async (refresh = false) => {
-    setIsReportLoading(true);
-    setError('');
+  const fetchReport = async (force = false) => {
+    setReportLoading(true); setError('');
     try {
-      const res = await fetch(`/api/ai/report?days=7${refresh ? '&refresh=true' : ''}`);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Laporan AI belum tersedia.');
-        if (data.markdown_report) setInternalReport(data.markdown_report);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Laporan belum tersedia.');
-    } finally {
-      setIsReportLoading(false);
-    }
+      const res = await fetch(`/api/ai/report?days=7${force ? '&refresh=true' : ''}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error('report');
+      if (data.markdown_report) setReport(data.markdown_report);
+    } catch (err) { setError(describe(err, 'ai.err.report')); } finally { setReportLoading(false); }
   };
 
-  const handleCopyMarkdown = () => {
+  const copy = async () => {
     if (!activeReport) return;
-    navigator.clipboard.writeText(activeReport);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try { await navigator.clipboard.writeText(activeReport); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* clipboard blocked: nothing to do */ }
   };
 
-  const handleDownloadMarkdown = () => {
+  const download = () => {
     if (!activeReport) return;
-    const blob = new Blob([activeReport], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(new Blob([activeReport], { type: 'text/markdown;charset=utf-8' }));
     const link = document.createElement('a');
     link.href = url;
     link.download = `AFFERENT_${role.toUpperCase()}_Executive_Report_${new Date().toISOString().slice(0, 10)}.md`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
-  const handleExportPdf = async () => {
-    if (onExportPdf) {
-      onExportPdf();
-      return;
-    }
+  const exportPdf = async () => {
+    if (onExportPdf) { onExportPdf(); return; }
     if (!activeReport) return;
-    setPdfGenerating(true);
-    try {
-      await exportExecutivePdf(role, activeReport);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'PDF belum dapat diekspor.');
-    } finally {
-      setPdfGenerating(false);
-    }
+    setPdfBusy(true);
+    try { await exportExecutivePdf(role, activeReport); } catch { setError(t('ai.err.pdf')); } finally { setPdfBusy(false); }
   };
 
-  // Filtered & Sorted User List (DANGER first -> VULNERABLE -> SAFE)
   const divisions = Array.from(new Set(classifications.map(c => c.divisi).filter(Boolean)));
-  const filteredUsers = classifications.filter(u => {
-    const matchesSearch = u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          u.divisi.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          u.one_line_assessment.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesDiv = selectedDivision === 'ALL' || u.divisi === selectedDivision;
-    const matchesRisk = selectedRiskFilter === 'ALL' || u.risk_level === selectedRiskFilter;
-    return matchesSearch && matchesDiv && matchesRisk;
-  });
+  const text = query.toLowerCase();
+  const users = classifications
+    .filter(u => (u.email.toLowerCase().includes(text) || u.divisi.toLowerCase().includes(text) || u.one_line_assessment.toLowerCase().includes(text)) && (division === 'ALL' || u.divisi === division) && (level === 'ALL' || u.risk_level === level))
+    .sort((a, b) => (RANK[a.risk_level] ?? 1) - (RANK[b.risk_level] ?? 1) || b.risk_score - a.risk_score);
+  const active = classifications.find(u => u.email === selected);
 
-  const sortedUsers = [...filteredUsers].sort((a, b) => {
-    const riskRank = { DANGER: 0, VULNERABLE: 1, SAFE: 2 };
-    const rankDiff = (riskRank[a.risk_level] ?? 1) - (riskRank[b.risk_level] ?? 1);
-    if (rankDiff !== 0) return rankDiff;
-    return b.risk_score - a.risk_score;
-  });
+  const levelBadge = (value: Level) => <SeverityBadge level={SEVERITY[value] ?? 'unknown'} label={t(`ai.level.${value}` as MessageKey)} />;
+  const sourceText = source === 'llm' ? t('ai.source.llm') : source === 'baseline' ? t('ai.source.baseline') : source || (heatmapLoading ? t('ai.source.loading') : t('ai.source.default'));
 
-  // Selected Employee object from classification list (instant preview before deep-dive finishes)
-  const activeSelectedUser = classifications.find(u => u.email === selectedUserEmail);
+  const columns: Column<UserClassification>[] = [
+    { key: 'email', header: t('ai.col.person'), render: u => <span className="cell-clip" title={u.email}>{u.email}</span> },
+    { key: 'division', header: t('ai.col.division'), secondary: true, sortValue: u => u.divisi, render: u => u.divisi || t('ai.general') },
+    { key: 'level', header: t('ai.col.level'), render: u => levelBadge(u.risk_level) },
+    { key: 'score', header: t('ai.col.score'), align: 'right', sortValue: u => u.risk_score, render: u => u.risk_score },
+  ];
 
-  // Custom Markdown Parser with Explicit Cyber-Security Styling Tokens
-  const renderFormattedMarkdown = (content: string) => {
-    if (!content) return null;
-    const lines = content.split('\n');
-    const elements: React.ReactNode[] = [];
-    let tableBuffer: string[] = [];
-
-    const flushTable = (keyIndex: number) => {
-      if (tableBuffer.length < 2) {
-        tableBuffer = [];
-        return;
-      }
-      const headers = tableBuffer[0].split('|').map(h => h.trim()).filter(Boolean);
-      const rows = tableBuffer.slice(2).map(r => r.split('|').map(cell => cell.trim()).filter(Boolean));
-
-      elements.push(
-        <div key={`table-${keyIndex}`} style={{ margin: '20px 0', overflow: 'hidden', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-surface)', boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', textAlign: 'left', fontSize: '12px', color: 'var(--text-primary)', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: 'var(--bg-elevated)', color: 'var(--accent)', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.05em', borderBottom: '1px solid var(--border)' }}>
-                  {headers.map((h, idx) => (
-                    <th key={idx} style={{ padding: '12px 16px', borderRight: '1px solid var(--border)', fontWeight: 700 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row, rIdx) => (
-                  <tr key={rIdx} style={{ borderBottom: '1px solid var(--border)' }}>
-                    {row.map((cell, cIdx) => {
-                      let badgeStyle: React.CSSProperties | null = null;
-                      if (cell.includes('HIGH') || cell.includes('DANGER') || cell.includes('CRITICAL')) {
-                        badgeStyle = { background: 'var(--bg-danger)', color: 'var(--text-danger)', border: '1px solid var(--border-danger)', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, fontSize: '10px', display: 'inline-block' };
-                      } else if (cell.includes('MODERATE') || cell.includes('VULNERABLE')) {
-                        badgeStyle = { background: 'var(--bg-warning)', color: 'var(--text-warning)', border: '1px solid var(--border-warning)', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, fontSize: '10px', display: 'inline-block' };
-                      } else if (cell.includes('SAFE')) {
-                        badgeStyle = { background: 'var(--bg-success)', color: 'var(--text-success)', border: '1px solid var(--border-success)', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, fontSize: '10px', display: 'inline-block' };
-                      }
-                      return (
-                        <td key={cIdx} style={{ padding: '12px 16px', borderRight: '1px solid var(--border)' }}>
-                          {badgeStyle ? <span style={badgeStyle}>{cell}</span> : cell}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      );
-      tableBuffer = [];
-    };
-
-    lines.forEach((line, idx) => {
-      if (line.trim().startsWith('|')) {
-        tableBuffer.push(line);
-        return;
-      } else if (tableBuffer.length > 0) {
-        flushTable(idx);
-      }
-
-      if (line.startsWith('# ')) {
-        elements.push(
-          <h1 key={idx} className="font-heading" style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)', margin: '24px 0 12px 0', borderBottom: '2px solid var(--border)', paddingBottom: '8px' }}>
-            {line.replace('# ', '')}
-          </h1>
-        );
-      } else if (line.startsWith('## ')) {
-        elements.push(
-          <h2 key={idx} className="font-heading" style={{ fontSize: '16px', fontWeight: 600, color: 'var(--accent)', margin: '20px 0 10px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ width: '4px', height: '16px', background: '#2196F3', borderRadius: '2px', display: 'inline-block' }} />
-            {line.replace('## ', '')}
-          </h2>
-        );
-      } else if (line.startsWith('### ')) {
-        elements.push(
-          <h3 key={idx} className="font-heading" style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: '14px 0 6px 0' }}>
-            {line.replace('### ', '')}
-          </h3>
-        );
-      } else if (line.startsWith('- ') || line.startsWith('* ')) {
-        elements.push(
-          <div key={idx} className="font-body" style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', margin: '4px 0', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-            <span style={{ color: '#2196F3', fontWeight: 800, marginTop: '-1px' }}>•</span>
-            <span>{line.substring(2)}</span>
-          </div>
-        );
-      } else if (line.trim().length > 0) {
-        elements.push(
-          <p key={idx} className="font-body" style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '8px 0', lineHeight: 1.6 }}>
-            {line}
-          </p>
-        );
-      }
-    });
-
-    if (tableBuffer.length > 0) flushTable(lines.length);
-    return elements;
-  };
+  const detail = active && (
+    <div className="ai-detail">
+      <div>
+        <h3 style={{ fontSize: 16, fontWeight: 600, overflowWrap: 'anywhere' }}>{active.email}</h3>
+        <p className="emp-muted">{t('ai.detail.division', { division: active.divisi || t('ai.general') })}</p>
+      </div>
+      <div className="incident-detail-head">{levelBadge(active.risk_level)}<span>{t('ai.detail.score')}: <b>{active.risk_score}</b> / 100</span></div>
+      <div className="ai-meter" aria-hidden="true"><i style={{ width: `${Math.max(0, Math.min(100, active.risk_score))}%` }} /></div>
+      <div className="ai-callout"><strong>{t('ai.detail.assessment')}</strong>{active.one_line_assessment}</div>
+      {deepLoading ? <StateMessage variant="loading" compact title={t('ai.detail.loading')} />
+        : deepDive ? (
+          <>
+            {deepDive.priority_action && <div className="ai-callout"><strong>{t('ai.detail.priority')}</strong>{deepDive.priority_action}</div>}
+            {deepDive.education_message && <div className="ai-callout"><strong>{t('ai.detail.education')}</strong>{deepDive.education_message}</div>}
+            <div className="ai-two">
+              <div><h4>{t('ai.detail.risks')}</h4>{deepDive.risk_factors?.length ? <ul>{deepDive.risk_factors.map((f, i) => <li key={i}>{f}</li>)}</ul> : <p className="emp-muted">{t('ai.detail.risks.none')}</p>}</div>
+              <div><h4>{t('ai.detail.positives')}</h4>{deepDive.positive_factors?.length ? <ul>{deepDive.positive_factors.map((f, i) => <li key={i}>{f}</li>)}</ul> : <p className="emp-muted">{t('ai.detail.positives.none')}</p>}</div>
+            </div>
+            {deepDive.recommendations?.length > 0 && <div><h4>{t('ai.detail.recs')}</h4><ul>{deepDive.recommendations.map((r, i) => <li key={i}>{r}</li>)}</ul></div>}
+          </>
+        ) : <p className="emp-muted">{t('ai.detail.pending')}</p>}
+    </div>
+  );
 
   return (
-    <div className="font-body" style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      {/* Top Banner Navigation & Sub-Tabs */}
-      <div className="panel glass-card" style={{
-        padding: '18px 24px',
-        display: 'flex',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '16px',
-        borderRadius: '16px',
-        marginBottom: 0
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: '#0D47A1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <ShieldCheck style={{ width: '22px', height: '22px', color: '#ffffff' }} />
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h2 className="font-heading" style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-                Team risk analysis
-              </h2>
-              <span className="font-body" style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', padding: '2px 8px', borderRadius: '4px', background: 'rgba(33,150,243,0.12)', color: 'var(--accent)', border: '1px solid var(--border)' }}>
-                ROLE: {role}
-              </span>
-            </div>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--text-success)', fontWeight: 600 }}>
-                <ShieldCheck style={{ width: '14px', height: '14px', color: 'var(--text-success)' }} /> AFFERENT data
-              </span>
-              <span>•</span>
-              <span>{sourceNotice || 'Loading analysis sources…'}</span>
-            </p>
-          </div>
+    <div className="ops-page">
+      <div className="ops-intro">
+        <div>
+          <h3 style={{ fontSize: 16, fontWeight: 600 }}>{t('ai.title')}</h3>
+          <p className="emp-muted">{sourceText}</p>
         </div>
-
-        {/* Sub-Tab Navigation Switcher */}
-        <div style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-elevated)', padding: '4px', borderRadius: '10px', border: '1px solid var(--border)' }}>
-          <button
-            onClick={() => setActiveSubTab('heatmap')}
-            className="font-body"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '8px 16px',
-              borderRadius: '8px',
-              fontSize: '12px',
-              fontWeight: 700,
-              border: 'none',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              background: activeSubTab === 'heatmap' ? 'var(--accent)' : 'transparent',
-              color: activeSubTab === 'heatmap' ? '#ffffff' : 'var(--text-secondary)',
-              boxShadow: 'none'
-            }}
-          >
-            <Users style={{ width: '14px', height: '14px' }} />
-            Team risk
-          </button>
-          <button
-            onClick={() => {
-              setActiveSubTab('report');
-              if (!markdownReport && !internalReport && !isReportBusy) void fetchReportData();
-            }}
-            className="font-body"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '8px 16px',
-              borderRadius: '8px',
-              fontSize: '12px',
-              fontWeight: 700,
-              border: 'none',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              background: activeSubTab === 'report' ? 'var(--accent)' : 'transparent',
-              color: activeSubTab === 'report' ? '#ffffff' : 'var(--text-secondary)',
-              boxShadow: 'none'
-            }}
-          >
-            <FileText style={{ width: '14px', height: '14px' }} />
-            Reports & PDF
-          </button>
+        <div className="seg" role="group" aria-label={t('ai.tab.label')}>
+          <button type="button" aria-pressed={tab === 'heatmap'} onClick={() => setTab('heatmap')}>{t('ai.tab.heatmap')}</button>
+          <button type="button" aria-pressed={tab === 'report'} onClick={() => { setTab('report'); if (!markdownReport && !report && !reportBusy) void fetchReport(); }}><FileText size={14} aria-hidden="true" />{t('ai.tab.report')}</button>
         </div>
       </div>
 
-      {/* SUB-TAB 1: HEATMAP & USER CLASSIFICATION — MASTER-DETAIL SPLIT CONSOLE */}
-      {error && <p role="alert" className="debt-error">{error}</p>}
-      {activeSubTab === 'heatmap' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Org Metrics Overview Cards */}
-          {orgSummary && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
-              <div className="stat-card glass-card font-body" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '14px' }}>
-                <div>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, fontWeight: 600 }}>Safe scores</p>
-                  <p className="font-mono-data" style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-success)', margin: '2px 0 0 0' }}>{orgSummary.safe_count}</p>
-                </div>
-                <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--bg-success)', border: '1px solid var(--border-success)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-success)' }}>
-                  <ShieldCheck style={{ width: '20px', height: '20px' }} />
-                </div>
-              </div>
+      {error && <StateMessage variant="error" compact title={error} why=" " action={{ label: t('ai.err.retry'), onClick: () => { setError(''); if (tab === 'heatmap') void refresh(); else void fetchReport(true); } }} />}
 
-              <div className="stat-card glass-card font-body" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '14px' }}>
-                <div>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, fontWeight: 600 }}>Needs attention</p>
-                  <p className="font-mono-data" style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-warning)', margin: '2px 0 0 0' }}>{orgSummary.vulnerable_count}</p>
-                </div>
-                <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--bg-warning)', border: '1px solid var(--border-warning)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-warning)' }}>
-                  <ShieldAlert style={{ width: '20px', height: '20px' }} />
-                </div>
-              </div>
-
-              <div className="stat-card glass-card font-body" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '14px' }}>
-                <div>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, fontWeight: 600 }}>High risk</p>
-                  <p className="font-mono-data" style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-danger)', margin: '2px 0 0 0' }}>{orgSummary.danger_count}</p>
-                </div>
-                <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--bg-danger)', border: '1px solid var(--border-danger)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-danger)' }}>
-                  <Shield style={{ width: '20px', height: '20px' }} />
-                </div>
-              </div>
-
-              <div className="stat-card glass-card font-body" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '14px' }}>
-                <div>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, fontWeight: 600 }}>Priority division</p>
-                  <p style={{ fontSize: '14px', fontWeight: 800, color: 'var(--accent)', margin: '2px 0 0 0' }}>{orgSummary.most_at_risk_division || 'Network Operations'}</p>
-                </div>
-                <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(144,202,249,0.25)', border: '1px solid #90CAF9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0D47A1' }}>
-                  <AlertTriangle style={{ width: '20px', height: '20px' }} />
-                </div>
-              </div>
+      {tab === 'heatmap' && (
+        <>
+          {org && (
+            <div className="exec-kpis">
+              <KpiCard label={t('ai.sum.safe')} value={org.safe_count} />
+              <KpiCard label={t('ai.sum.attention')} value={org.vulnerable_count} />
+              <KpiCard label={t('ai.sum.high')} value={org.danger_count} />
+              <KpiCard label={t('ai.sum.division')} value={<span style={{ fontSize: 18 }}>{org.most_at_risk_division || '—'}</span>} />
             </div>
           )}
-
-          {/* ── MASTER-DETAIL SPLIT CONSOLE (WAZUH / CROWDSTRIKE STYLE) ── */}
-          <div style={{
-            display: 'flex',
-            gap: '18px',
-            minHeight: '600px',
-            height: 'calc(100vh - 280px)',
-            width: '100%'
-          }}>
-            {/* ── LEFT COLUMN: MASTER LIST (38% width, independent scroll) ── */}
-            <div className="panel glass-card" style={{
-              width: '38%',
-              minWidth: '320px',
-              maxWidth: '430px',
-              display: 'flex',
-              flexDirection: 'column',
-              padding: '16px',
-              borderRadius: '16px',
-              marginBottom: 0,
-              height: '100%',
-              overflow: 'hidden'
-            }}>
-              {/* Search & Quick Filters Header */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '14px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}>
-                {/* Search Bar */}
-                <div style={{ position: 'relative', width: '100%' }}>
-                  <Search style={{ width: '15px', height: '15px', color: 'var(--text-muted)', position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
-                  <input
-                    type="text"
-                    placeholder="Filter by name, email, division..."
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    className="font-body"
-                    style={{
-                      width: '100%',
-                      background: 'var(--bg-base)',
-                      border: '1px solid var(--border)',
-                      borderRadius: '8px',
-                      padding: '7px 10px 7px 32px',
-                      fontSize: '12px',
-                      color: 'var(--text-primary)',
-                      outline: 'none'
-                    }}
-                  />
-                </div>
-
-                {/* Filter Dropdowns & Refresh */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1 }}>
-                    <select
-                      value={selectedDivision}
-                      onChange={e => setSelectedDivision(e.target.value)}
-                      className="font-body"
-                      style={{
-                        flex: 1,
-                        background: 'var(--bg-base)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '6px',
-                        color: 'var(--text-secondary)',
-                        fontSize: '11px',
-                        padding: '5px 6px',
-                        outline: 'none',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      <option value="ALL">All Divisions</option>
-                      {divisions.map(d => (
-                        <option key={d} value={d}>{d}</option>
-                      ))}
-                    </select>
-
-                    <select
-                      value={selectedRiskFilter}
-                      onChange={e => setSelectedRiskFilter(e.target.value)}
-                      className="font-body"
-                      style={{
-                        background: 'var(--bg-base)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '6px',
-                        color: 'var(--text-secondary)',
-                        fontSize: '11px',
-                        padding: '5px 6px',
-                        outline: 'none',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      <option value="ALL">All Risk Levels</option>
-                      <option value="DANGER">DANGER</option>
-                      <option value="VULNERABLE">VULNERABLE</option>
-                      <option value="SAFE">SAFE</option>
-                    </select>
-                  </div>
-
-                  <button
-                    onClick={() => fetchHeatmapData(true)}
-                    disabled={isHeatmapLoading}
-                    title="Refresh AI telemetry"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: '28px',
-                      height: '28px',
-                      borderRadius: '6px',
-                      background: 'var(--bg-base)',
-                      border: '1px solid var(--border)',
-                      color: 'var(--accent)',
-                      cursor: 'pointer',
-                      flexShrink: 0
-                    }}
-                  >
-                    <RefreshCw style={{ width: '13px', height: '13px', animation: isHeatmapLoading ? 'spin 1s linear infinite' : 'none' }} />
-                  </button>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: 'var(--text-muted)' }}>
-                  <span>Priority: Highest Risk (Danger First)</span>
-                  <span className="font-mono-data" style={{ fontWeight: 700, color: 'var(--accent)' }}>{sortedUsers.length} Personnel</span>
-                </div>
-              </div>
-
-              {/* Scrollable Master List */}
-              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', paddingRight: '4px' }}>
-                {isHeatmapLoading ? (
-                  <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
-                    <RefreshCw style={{ width: '24px', height: '24px', color: '#2196F3', animation: 'spin 1s linear infinite', margin: '0 auto 10px auto' }} />
-                    Loading risk telemetry profiles...
-                  </div>
-                ) : sortedUsers.length === 0 ? (
-                  <div style={{ padding: '40px 10px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
-                    No employees matched the active search filters.
-                  </div>
-                ) : (
-                  sortedUsers.map(user => {
-                    const isSelected = selectedUserEmail === user.email;
-                    const displayName = user.email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                    const initials = displayName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-
-                    let badgeBg = 'var(--bg-success)';
-                    let badgeColor = 'var(--text-success)';
-                    let badgeBorder = 'var(--border-success)';
-                    let avatarBg = 'var(--bg-success)';
-                    let avatarColor = 'var(--text-success)';
-
-                    if (user.risk_level === 'DANGER') {
-                      badgeBg = 'var(--bg-danger)';
-                      badgeColor = 'var(--text-danger)';
-                      badgeBorder = 'var(--border-danger)';
-                      avatarBg = 'var(--bg-danger)';
-                      avatarColor = 'var(--text-danger)';
-                    } else if (user.risk_level === 'VULNERABLE') {
-                      badgeBg = 'var(--bg-warning)';
-                      badgeColor = 'var(--text-warning)';
-                      badgeBorder = 'var(--border-warning)';
-                      avatarBg = 'var(--bg-warning)';
-                      avatarColor = 'var(--text-warning)';
-                    }
-
-                    return (
-                      <div
-                        key={user.email}
-                        onClick={() => handleSelectUser(user.email)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '10px 12px',
-                          borderRadius: '10px',
-                          cursor: 'pointer',
-                          transition: 'all 0.15s ease',
-                          background: isSelected ? 'var(--bg-elevated)' : 'var(--bg-surface)',
-                          border: isSelected ? '1px solid var(--accent)' : '1px solid var(--border)',
-                          borderLeft: isSelected ? '4px solid #2196F3' : '1px solid var(--border)',
-                          boxShadow: 'none'
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
-                          <div className="font-mono-data" style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '8px',
-                            background: avatarBg,
-                            color: avatarColor,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontWeight: 800,
-                            fontSize: '11px',
-                            flexShrink: 0
-                          }}>
-                            {initials}
-                          </div>
-
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <div className="font-mono-data" style={{
-                              fontSize: '13px',
-                              fontWeight: 700,
-                              color: isSelected ? 'var(--accent)' : 'var(--text-primary)',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              lineHeight: 1.2
-                            }}>
-                              {user.email}
-                            </div>
-                            <div style={{
-                              fontSize: '11px',
-                              color: 'var(--text-muted)',
-                              marginTop: '2px',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis'
-                            }}>
-                              {user.divisi || 'General'}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', flexShrink: 0, marginLeft: '8px' }}>
-                          <span className="font-body" style={{
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            fontSize: '9px',
-                            fontWeight: 800,
-                            textTransform: 'uppercase',
-                            background: badgeBg,
-                            color: badgeColor,
-                            border: `1px solid ${badgeBorder}`
-                          }}>
-                            {user.risk_level}
-                          </span>
-                          <span className="font-mono-data" style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                            {user.risk_score} pts
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-            {/* ── RIGHT COLUMN: DETAIL CONSOLE (62% width, independent scroll) ── */}
-            <div className="panel glass-card" style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              padding: '24px',
-              borderRadius: '16px',
-              marginBottom: 0,
-              height: '100%',
-              overflowY: 'auto'
-            }}>
-              {!selectedUserEmail || !activeSelectedUser ? (
-                /* Empty State */
-                <div style={{
-                  flex: 1,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  textAlign: 'center',
-                  padding: '40px 20px',
-                  color: 'var(--text-muted)'
-                }}>
-                  <div style={{
-                    width: '64px',
-                    height: '64px',
-                    borderRadius: '16px',
-                    background: 'rgba(33,150,243,0.10)',
-                    border: '1px solid rgba(33,150,243,0.25)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginBottom: '16px',
-                    color: '#2196F3'
-                  }}>
-                    <Users style={{ width: '32px', height: '32px' }} />
-                  </div>
-                  <h3 className="font-heading" style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 6px 0' }}>
-                    Select an Employee for Live AI Risk Analysis
-                  </h3>
-                  <p style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '420px', margin: 0, lineHeight: 1.5 }}>
-                    Select an employee entity from the left investigation list to inspect behavioral risk profiling, vulnerability factors, and AI-tailored educational interventions.
-                  </p>
-                </div>
-              ) : (
-                /* In-Place Detail View */
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                  {/* Entity Header Banner */}
-                  <div style={{
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '16px',
-                    paddingBottom: '18px',
-                    borderBottom: '1px solid var(--border)'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                      <div className="font-mono-data" style={{
-                        width: '46px',
-                        height: '46px',
-                        borderRadius: '12px',
-                        background: activeSelectedUser.risk_level === 'DANGER' ? 'var(--bg-danger)' : activeSelectedUser.risk_level === 'VULNERABLE' ? 'var(--bg-warning)' : 'var(--bg-success)',
-                        color: activeSelectedUser.risk_level === 'DANGER' ? 'var(--text-danger)' : activeSelectedUser.risk_level === 'VULNERABLE' ? 'var(--text-warning)' : 'var(--text-success)',
-                        border: `1px solid ${activeSelectedUser.risk_level === 'DANGER' ? 'var(--border-danger)' : activeSelectedUser.risk_level === 'VULNERABLE' ? 'var(--border-warning)' : 'var(--border-success)'}`,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: 800,
-                        fontSize: '15px'
-                      }}>
-                        {activeSelectedUser.email.substring(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <h3 className="font-mono-data" style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
-                            {activeSelectedUser.email}
-                          </h3>
-                          <span className="font-body" style={{
-                            padding: '3px 8px',
-                            borderRadius: '4px',
-                            fontSize: '10px',
-                            fontWeight: 800,
-                            textTransform: 'uppercase',
-                            background: activeSelectedUser.risk_level === 'DANGER' ? 'var(--bg-danger)' : activeSelectedUser.risk_level === 'VULNERABLE' ? 'var(--bg-warning)' : 'var(--bg-success)',
-                            color: activeSelectedUser.risk_level === 'DANGER' ? 'var(--text-danger)' : activeSelectedUser.risk_level === 'VULNERABLE' ? 'var(--text-warning)' : 'var(--text-success)',
-                            border: `1px solid ${activeSelectedUser.risk_level === 'DANGER' ? 'var(--border-danger)' : activeSelectedUser.risk_level === 'VULNERABLE' ? 'var(--border-warning)' : 'var(--border-success)'}`
-                          }}>
-                            {activeSelectedUser.risk_level}
-                          </span>
-                        </div>
-                        <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
-                          Division: <strong style={{ color: 'var(--text-primary)' }}>{activeSelectedUser.divisi || 'General'}</strong> • Human Risk Telemetry Profile
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Risk Score Meter */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '10px', padding: '8px 14px' }}>
-                      <div>
-                        <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Security score</span>
-                        <div className="font-mono-data" style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>
-                          {activeSelectedUser.risk_score} <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 400 }}>/ 100</span>
-                        </div>
-                      </div>
-                      <div style={{ width: '70px', background: 'var(--bg-elevated)', height: '8px', borderRadius: '4px', overflow: 'hidden', border: '1px solid var(--border)' }}>
-                        <div style={{
-                          width: `${activeSelectedUser.risk_score}%`,
-                          height: '100%',
-                          background: activeSelectedUser.risk_level === 'DANGER' ? 'var(--danger)' : activeSelectedUser.risk_level === 'VULNERABLE' ? 'var(--warning)' : 'var(--success)',
-                          borderRadius: '4px'
-                        }} />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* AI Quick Assessment Quote Box */}
-                  <div style={{
-                    padding: '14px 18px',
-                    borderRadius: '10px',
-                    background: 'var(--bg-elevated)',
-                    border: '1px solid var(--border)',
-                    fontSize: '13px',
-                    color: 'var(--text-secondary)',
-                    lineHeight: 1.5,
-                    fontStyle: 'italic'
-                  }}>
-                    <span style={{ fontWeight: 700, fontStyle: 'normal', color: 'var(--accent)', display: 'block', marginBottom: '2px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      AI Executive Assessment
-                    </span>
-                    &quot;{activeSelectedUser.one_line_assessment}&quot;
-                  </div>
-
-                  {/* Deep-Dive Analysis Content */}
-                  {isDeepDiveLoading ? (
-                    <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
-                      <RefreshCw style={{ width: '28px', height: '28px', color: '#2196F3', animation: 'spin 1s linear infinite', margin: '0 auto 10px auto' }} />
-                      <p style={{ fontSize: '13px', margin: 0, fontWeight: 600 }}>Loading employee analysis…</p>
-                    </div>
-                  ) : userDeepDive ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                      {/* Priority Action Alert Box */}
-                      {userDeepDive.priority_action && (
-                        <div style={{
-                          padding: '14px 16px',
-                          borderRadius: '10px',
-                          background: 'var(--bg-danger)',
-                          border: '1px solid var(--border-danger)',
-                          color: 'var(--text-danger)'
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            <AlertTriangle style={{ width: '14px', height: '14px' }} />
-                            Priority SOC / Admin Action
-                          </div>
-                          <p style={{ fontSize: '13px', fontWeight: 700, margin: '6px 0 0 0', lineHeight: 1.4 }}>
-                            {userDeepDive.priority_action}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Education & Coaching Guidance */}
-                      {userDeepDive.education_message && (
-                        <div style={{
-                          padding: '14px 16px',
-                          borderRadius: '10px',
-                          background: 'rgba(33,150,243,0.08)',
-                          border: '1px solid rgba(33,150,243,0.25)',
-                          color: 'var(--accent)'
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            <Info style={{ width: '14px', height: '14px' }} />
-                            Targeted Education &amp; Coaching Insight
-                          </div>
-                          <p style={{ fontSize: '13px', margin: '6px 0 0 0', lineHeight: 1.5, color: 'var(--text-primary)' }}>
-                            {userDeepDive.education_message}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Two-Column Telemetry Factors: Vulnerabilities vs Resilience */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                        {/* Risk Factors / Vulnerabilities */}
-                        <div style={{
-                          padding: '14px',
-                          borderRadius: '10px',
-                          background: 'var(--bg-base)',
-                          border: '1px solid var(--border)'
-                        }}>
-                          <div style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-danger)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <ShieldAlert style={{ width: '14px', height: '14px' }} />
-                            Identified Risk &amp; Vulnerability Factors
-                          </div>
-                          {userDeepDive.risk_factors && userDeepDive.risk_factors.length > 0 ? (
-                            <ul style={{ paddingLeft: '16px', margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                              {userDeepDive.risk_factors.map((factor, fIdx) => (
-                                <li key={fIdx} style={{ margin: '4px 0' }}>{factor}</li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>
-                              No critical vulnerability anomalies detected.
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Positive Resilience Factors */}
-                        <div style={{
-                          padding: '14px',
-                          borderRadius: '10px',
-                          background: 'var(--bg-base)',
-                          border: '1px solid var(--border)'
-                        }}>
-                          <div style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-success)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <CheckCircle2 style={{ width: '14px', height: '14px', color: 'var(--text-success)' }} />
-                            Positive Resilience Factors
-                          </div>
-                          {userDeepDive.positive_factors && userDeepDive.positive_factors.length > 0 ? (
-                            <ul style={{ paddingLeft: '16px', margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                              {userDeepDive.positive_factors.map((factor, fIdx) => (
-                                <li key={fIdx} style={{ margin: '4px 0' }}>{factor}</li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>
-                              No positive resilience streak tracked yet.
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Tailored Remediation Recommendations */}
-                      {userDeepDive.recommendations && userDeepDive.recommendations.length > 0 && (
-                        <div style={{
-                          padding: '16px',
-                          borderRadius: '10px',
-                          background: 'var(--bg-surface)',
-                          border: '1px solid var(--border)',
-                          boxShadow: 'var(--shadow-sm)'
-                        }}>
-                          <div style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-primary)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <Zap style={{ width: '14px', height: '14px', color: '#2196F3' }} />
-                            AI Remediation &amp; Coaching Recommendations
-                          </div>
-                          <ul style={{ paddingLeft: '18px', margin: 0, fontSize: '12.5px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                            {userDeepDive.recommendations.map((rec, rIdx) => (
-                              <li key={rIdx} style={{ margin: '4px 0' }}>{rec}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
-                      Deep telemetry data is being prepared.
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+          <FilterBar
+            search={{ value: query, onChange: setQuery, placeholder: t('ai.search') }}
+            selects={[
+              { id: 'division', label: t('ai.filter.division'), value: division, onChange: setDivision, options: [{ value: 'ALL', label: t('ai.division.all') }, ...divisions.map(d => ({ value: d, label: d }))] },
+              { id: 'level', label: t('ai.filter.level'), value: level, onChange: setLevel, options: [{ value: 'ALL', label: t('ai.level.all') }, ...(['DANGER', 'VULNERABLE', 'SAFE'] as Level[]).map(v => ({ value: v, label: t(`ai.level.${v}` as MessageKey) }))] },
+            ]}
+            activeCount={(query ? 1 : 0) + (division !== 'ALL' ? 1 : 0) + (level !== 'ALL' ? 1 : 0)}
+            onClear={() => { setQuery(''); setDivision('ALL'); setLevel('ALL'); }}
+          />
+          <div className="ops-intro">
+            <span className="emp-muted">{t('ai.count', { n: users.length })}</span>
+            <button type="button" className="btn" onClick={refresh} disabled={heatmapLoading}><RefreshCw size={14} aria-hidden="true" /> {t('ai.refresh')}</button>
           </div>
-        </div>
+          {heatmapLoading ? <StateMessage variant="loading" /> : (
+            <div className="incident-split" data-wide={wide}>
+              <DataTable caption={t('ai.title')} columns={columns} rows={users} rowKey={u => u.email} selectedKey={selected} onRowClick={u => void selectUser(u.email)} empty={<StateMessage variant="empty" title={t('ai.empty.title')} why={t('ai.empty.why')} />} />
+              {wide
+                ? <aside className="incident-panel" aria-live="polite">{detail ?? <StateMessage variant="empty" compact title={t('ai.select.title')} why={t('ai.select.why')} />}</aside>
+                : <Dialog open={Boolean(active)} onClose={() => setSelected(null)} size="lg" title={active?.email ?? ''}>{detail}</Dialog>}
+            </div>
+          )}
+        </>
       )}
 
-      {/* SUB-TAB 2: EXECUTIVE GFM MARKDOWN & PDF REPORT */}
-      {activeSubTab === 'report' && (
-        <div className="panel glass-card" style={{ padding: '24px', borderRadius: '16px' }}>
-          {/* Action Bar */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '16px', paddingBottom: '18px', borderBottom: '1px solid var(--border)', marginBottom: '24px' }}>
-            <div>
-              <h3 className="font-heading" style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <FileText style={{ width: '18px', height: '18px', color: '#2196F3' }} />
-                Executive GFM Markdown &amp; Vector PDF Report Generator
-              </h3>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
-                Generates a formal, audit-ready Markdown document and compiles it into a high-res vector PDF.
-              </p>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-              <button
-                onClick={() => fetchReportData(true)}
-                disabled={isReportBusy}
-                className="font-body"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid var(--border)', cursor: 'pointer' }}
-              >
-                <RefreshCw style={{ width: '14px', height: '14px', animation: isReportBusy ? 'spin 1s linear infinite' : 'none' }} />
-                Regenerate
-              </button>
-
-              <button
-                onClick={handleCopyMarkdown}
-                disabled={!activeReport}
-                className="font-body"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid var(--border)', cursor: 'pointer' }}
-              >
-                {copied ? <Check style={{ width: '14px', height: '14px', color: 'var(--text-success)' }} /> : <Copy style={{ width: '14px', height: '14px', color: 'var(--accent)' }} />}
-                {copied ? 'Copied .md!' : 'Copy .md'}
-              </button>
-
-              <button
-                onClick={handleDownloadMarkdown}
-                disabled={!activeReport}
-                className="font-body"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid var(--border)', cursor: 'pointer' }}
-              >
-                <Download style={{ width: '14px', height: '14px', color: '#2196F3' }} />
-                Download .md
-              </button>
-
-              <button
-                onClick={() => void handleExportPdf()}
-                disabled={isPdfLoading || pdfGenerating || !activeReport}
-                className="font-body"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '9px 18px',
-                  borderRadius: '8px',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  background: 'var(--accent)',
-                  color: '#ffffff',
-                  border: 'none',
-                  boxShadow: 'none',
-                  cursor: 'pointer'
-                }}
-              >
-                <FileText style={{ width: '16px', height: '16px' }} />
-                {isPdfLoading || pdfGenerating ? 'Exporting Vector PDF...' : 'Export Executive PDF'}
-              </button>
-            </div>
+      {tab === 'report' && (
+        <section className="ops-block" aria-labelledby="ai-report">
+          <div className="ops-intro">
+            <div><h3 id="ai-report" style={{ fontSize: 16, fontWeight: 600 }}>{t('ai.report.title')}</h3><p className="emp-muted">{t('ai.report.desc')}</p></div>
+            <span className="ops-actions" style={{ flexWrap: 'wrap' }}>
+              <button type="button" className="btn" onClick={() => fetchReport(true)} disabled={reportBusy}><RefreshCw size={14} aria-hidden="true" /> {t('ai.report.regen')}</button>
+              <button type="button" className="btn" onClick={copy} disabled={!activeReport}>{copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />} {copied ? t('ai.report.copied') : t('ai.report.copy')}</button>
+              <button type="button" className="btn" onClick={download} disabled={!activeReport}><Download size={14} aria-hidden="true" /> {t('ai.report.download')}</button>
+              <button type="button" className="btn btn-primary" onClick={() => void exportPdf()} disabled={isPdfLoading || pdfBusy || !activeReport}><FileText size={14} aria-hidden="true" /> {isPdfLoading || pdfBusy ? t('ai.report.pdf.busy') : t('ai.report.pdf')}</button>
+            </span>
           </div>
-
-          {/* Report Body */}
-          {isReportBusy ? (
-            <div style={{ padding: '60px 0', textAlign: 'center' }}>
-              <RefreshCw style={{ width: '32px', height: '32px', color: '#2196F3', animation: 'spin 1s linear infinite', margin: '0 auto 12px auto' }} />
-              <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0, fontWeight: 600 }}>Menyiapkan laporan…</p>
-            </div>
-          ) : !activeReport ? (
-            <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
-              No report available yet. Click &quot;Regenerate&quot; to trigger AI analysis.
-            </div>
-          ) : (
-            <div>
-              {renderFormattedMarkdown(activeReport)}
-            </div>
-          )}
-        </div>
+          {reportBusy ? <StateMessage variant="loading" title={t('ai.report.loading')} />
+            : !activeReport ? <StateMessage variant="empty" title={t('ai.report.empty.title')} why={t('ai.report.empty.why')} />
+            : <MarkdownReport content={activeReport} />}
+        </section>
       )}
     </div>
   );

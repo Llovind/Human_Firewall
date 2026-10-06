@@ -1,8 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { Fish, Play, RefreshCw, Mail, Eye, MousePointer, Plus, Pencil, Trash2, StopCircle, X, Globe, ExternalLink } from 'lucide-react';
+import { useState } from 'react';
+import { Fish, Play, RefreshCw, Mail, Eye, Plus, Pencil, Trash2, StopCircle, Globe, ExternalLink } from 'lucide-react';
 import type { Division, EmployeeAccount, GoPhishCampaign, GoPhishResource } from './types';
+import DataTable, { type Column } from '@/components/ui/DataTable';
+import Dialog from '@/components/ui/Dialog';
+import KpiCard from '@/components/ui/KpiCard';
+import StateMessage from '@/components/ui/StateMessage';
+import StatusChip from '@/components/ui/StatusChip';
 import { useI18n } from '@/i18n/I18nProvider';
 import { formatWIB } from './types';
 
@@ -49,33 +54,26 @@ export default function GophishCampaignSection(props: Props) {
   const [action, setAction] = useState<{ campaign: GoPhishCampaign; type: 'stop' | 'delete' } | null>(null);
   const [working, setWorking] = useState(false);
   const [actionError, setActionError] = useState('');
-  const detailDialog = useRef<HTMLDialogElement>(null);
-  const actionDialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => { if (detail) detailDialog.current?.showModal(); }, [detail]);
-  useEffect(() => { if (action) actionDialog.current?.showModal(); }, [action]);
+
   const eligible = employees.filter(e => e.is_active && (!e.role || e.role === 'employee'));
   const filtered = eligible.filter(e => (division === 'ALL' || e.divisi === division) && e.email.toLowerCase().includes(search.toLowerCase()));
   const total = campaigns.reduce((acc, c) => {
     const s = getCampaignStats(c);
-    return { sent: acc.sent + s.sent, opened: acc.opened + s.opened, clicked: acc.clicked + s.clicked, submitted: acc.submitted + s.submitted_data };
-  }, { sent: 0, opened: 0, clicked: 0, submitted: 0 });
+    return { sent: acc.sent + s.sent, opened: acc.opened + s.opened, clicked: acc.clicked + s.clicked };
+  }, { sent: 0, opened: 0, clicked: 0 });
   const ready = !!(resources?.templates.length && resources.pages.length && resources.profiles.some(p => p.host === 'mailpit:1025'));
-  const metrics = [
-    { label: 'Campaign', value: campaigns.length, Icon: Fish },
-    { label: 'Emails sent', value: total.sent, Icon: Mail },
-    { label: 'Emails opened', value: total.opened, Icon: Eye },
-    { label: 'Links clicked', value: total.clicked, Icon: MousePointer },
-  ];
+
   async function view(c: GoPhishCampaign) {
     setActionError('');
     try {
       const response = await fetch('/api/admin/gophish/campaigns/' + c.id + '?source=' + (c.source || 'gophish'));
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Campaign details unavailable.');
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error('detail');
       setDetail(result);
       props.onViewCampaignDetail?.(c.id);
-    } catch (err) { setActionError(err instanceof Error ? err.message : 'Details unavailable.'); }
+    } catch { setActionError(t('cmpg.err.detail')); }
   }
+
   async function confirmAction() {
     if (!action) return;
     setWorking(true); setActionError('');
@@ -83,14 +81,14 @@ export default function GophishCampaignSection(props: Props) {
       if (action.type === 'delete') await props.onDeleteCampaign(action.campaign.id, action.campaign.source);
       else {
         const response = await fetch('/api/admin/gophish/campaigns/' + action.campaign.id + '/complete?source=' + (action.campaign.source || 'gophish'), { method: 'POST' });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || 'Could not stop the campaign.');
+        if (!response.ok) throw new Error('stop');
         await props.onCompleteCampaign?.(action.campaign.id);
       }
       setAction(null);
-    } catch (err) { setActionError(err instanceof Error ? err.message : 'Action failed.'); }
+    } catch (err) { setActionError(err instanceof Error && err.message === 'stop' ? t('cmpg.err.stop') : t('cmpg.err.action')); }
     finally { setWorking(false); }
   }
+
   function createCampaign() {
     const missing: ('resources' | 'recipients')[] = [];
     if (!ready) missing.push('resources');
@@ -99,55 +97,143 @@ export default function GophishCampaignSection(props: Props) {
     if (!missing.length) props.onOpenLaunchModal();
   }
   const goToRecipients = () => document.getElementById('campaign-recipients')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  return <section className="campaign-workspace">
-    <header className="campaign-hero glass-card">
-      <div><span className="campaign-kicker">Email simulations</span><h2><Fish size={25} />Phishing simulations</h2><p>Build awareness with simulated phishing emails.</p></div>
-      <div className="campaign-actions">
-        {props.onRefresh && <button className="btn" onClick={props.onRefresh} disabled={props.busy}><RefreshCw size={15} />Refresh</button>}
-        {resources?.adminUrl && <a className="btn" href={resources.adminUrl} target="_blank" rel="noopener noreferrer"><ExternalLink size={15} />GoPhish</a>}
-        {!readOnly && <button className="btn btn-primary" onClick={createCampaign} disabled={props.busy}><Play size={15} />Create campaign</button>}
+
+  const statusLabel = (status: string) => (status === 'Completed' ? t('cmpg.status.Completed') : status);
+  const columns: Column<GoPhishCampaign>[] = [
+    { key: 'name', header: t('cmpg.col.campaign'), render: c => <span className="cell-clip"><strong>{c.name}</strong><span className="cell-sub">{c.source === 'local' ? t('cmpg.source.local') : t('cmpg.source.gophish')} · #{c.id}</span></span> },
+    { key: 'status', header: t('cmpg.col.status'), render: c => { const s = getCampaignStats(c); return <><StatusChip tone={c.status === 'Completed' ? 'neutral' : 'open'}>{statusLabel(c.status)}</StatusChip>{s.error > 0 && <span className="cell-sub">{t('cmpg.failures', { n: s.error })}</span>}</>; } },
+    { key: 'sent', header: t('cmpg.col.sent'), secondary: true, render: c => { const s = getCampaignStats(c); return `${s.sent} / ${s.total}`; } },
+    { key: 'opened', header: t('cmpg.col.opened'), secondary: true, align: 'right', render: c => getCampaignStats(c).opened },
+    { key: 'clicked', header: t('cmpg.col.clicked'), secondary: true, align: 'right', render: c => getCampaignStats(c).clicked },
+    { key: 'submitted', header: t('cmpg.col.submitted'), secondary: true, align: 'right', render: c => getCampaignStats(c).submitted_data },
+    { key: 'actions', header: t('cmpg.col.actions'), align: 'right', render: c => (
+      <span className="ops-actions">
+        <button type="button" className="btn iconbtn" onClick={() => void view(c)} aria-label={t('cmpg.btn.detail', { name: c.name })} title={t('cmpg.btn.detail', { name: c.name })}><Eye size={14} aria-hidden="true" /></button>
+        {!readOnly && c.status !== 'Completed' && <button type="button" className="btn iconbtn" onClick={() => { setAction({ campaign: c, type: 'stop' }); setActionError(''); }} aria-label={t('cmpg.btn.stop', { name: c.name })} title={t('cmpg.btn.stop', { name: c.name })}><StopCircle size={14} aria-hidden="true" /></button>}
+        {!readOnly && <button type="button" className="btn iconbtn" onClick={() => { setAction({ campaign: c, type: 'delete' }); setActionError(''); }} aria-label={t('cmpg.btn.delete', { name: c.name })} title={t('cmpg.btn.delete', { name: c.name })}><Trash2 size={14} aria-hidden="true" /></button>}
+      </span>
+    ) },
+  ];
+
+  return (
+    <section className="ops-page" aria-labelledby="cmpg-title">
+      <div className="ops-intro">
+        <div><h3 id="cmpg-title" style={{ fontSize: 16, fontWeight: 600 }}><Fish size={16} aria-hidden="true" /> {t('cmpg.title')}</h3><p className="emp-muted">{t('cmpg.desc')}</p></div>
+        <span className="ops-actions" style={{ flexWrap: 'wrap' }}>
+          {props.onRefresh && <button type="button" className="btn" onClick={props.onRefresh} disabled={props.busy}><RefreshCw size={14} aria-hidden="true" /> {t('cmpg.refresh')}</button>}
+          {resources?.adminUrl && <a className="btn" href={resources.adminUrl} target="_blank" rel="noopener noreferrer"><ExternalLink size={14} aria-hidden="true" /> GoPhish</a>}
+          {!readOnly && <button type="button" className="btn btn-primary" onClick={createCampaign} disabled={props.busy}><Play size={14} aria-hidden="true" /> {t('cmpg.create')}</button>}
+        </span>
       </div>
-    </header>
-    {(props.error || (actionError && !action)) && <p className="debt-error" role="alert">{props.error || actionError}</p>}
-    {props.notice && <p className="debt-notice" role="status">{props.notice}</p>}
-    {blockers.length > 0 && <div className="debt-error" role="alert"><strong>{t('adm.blocked.title')}</strong>
-      <ul style={{ margin: '6px 0 0 18px' }}>{blockers.includes('resources') && <li>{t('adm.blocked.resources')}</li>}{blockers.includes('recipients') && <li>{t('adm.blocked.recipients')} <button type="button" className="emp-link" onClick={goToRecipients}>{t('adm.blocked.go')}</button></li>}</ul></div>}
-    {!readOnly && <div className="campaign-readiness glass-card"><Mail size={20} /><div><strong>{ready ? 'GoPhish + Mailpit ready' : 'Set up campaign resources first'}</strong><p>Demo emails are captured by Mailpit only.</p></div>
-      <div className="campaign-actions">{props.onSetupResources && <button className="btn" onClick={() => props.onSetupResources?.()} disabled={props.busy}><Plus size={15} />Set up lab demo</button>}{resources?.mailpitUrl && <a className="btn" href={resources.mailpitUrl} target="_blank" rel="noopener noreferrer"><Mail size={15} />Mailpit (host)</a>}</div>
-    </div>}
-    <div className="campaign-metrics">{metrics.map(({ label, value, Icon }) => <div className="glass-card" key={label}><Icon size={18} /><strong>{value}</strong><span>{label}</span></div>)}</div>
-    {!readOnly && <section className="glass-card campaign-panel" id="campaign-recipients">
-      <div className="campaign-section-heading"><div><span className="campaign-kicker">STEP 1 · RECIPIENTS</span><h3>Target employees <span className="badge badge-info">{selectedEmails.length} selected</span></h3></div><div className="campaign-actions"><button className="btn" onClick={() => onSelectedEmailsChange(Array.from(new Set([...selectedEmails, ...filtered.map(e => e.email)])))}>Select filtered</button><button className="btn" onClick={() => onSelectedEmailsChange([])}>Clear</button></div></div>
-      <div className="campaign-filters"><label>Search email<input type="search" placeholder="Search employees…" value={search} onChange={e => setSearch(e.target.value)} /></label><label>Division<select value={division} onChange={e => setDivision(e.target.value)}><option value="ALL">All divisions</option>{divisions.map(d => <option key={d.name} value={d.name}>{d.name}</option>)}</select></label></div>
-      <div className="campaign-recipient-list">{filtered.map(e => <label className="campaign-recipient" key={e.email}><input type="checkbox" checked={selectedEmails.includes(e.email)} onChange={event => onSelectedEmailsChange(event.target.checked ? [...selectedEmails, e.email] : selectedEmails.filter(email => email !== e.email))} /><span><strong>{e.email}</strong><small>{e.divisi}</small></span></label>)}</div>
-      {!filtered.length && <p className="campaign-empty">No matching active employees.</p>}
-      <p className="debt-help">Recipients are synced when the campaign starts.</p>
-    </section>}
-    {!readOnly && <section className="glass-card campaign-panel">
-      <div className="campaign-section-heading"><div><span className="campaign-kicker">STEP 2 · CHOOSE CONTENT</span><h3>Simulation content</h3></div><span className="badge badge-info">No password storage</span></div>
-      <div className="campaign-material-options">
-        <article><Mail size={24} /><h4>Password reset request</h4><p>Ready-to-use demo email and form. No extra API needed.</p><button className="btn btn-primary" disabled={props.busy} onClick={() => props.onSetupResources?.('password-reset')}>Use this template</button></article>
-        <article><Globe size={24} /><h4>Page clone · Firecrawl</h4><p>Clone an authorized public page. Demo submissions lead to education.</p><button className="btn" onClick={() => props.onOpenTemplateBuilder('new', 'page')}>Open clone editor</button></article>
+
+      {(props.error || (actionError && !action)) && <p className="field-error" role="alert">{props.error || actionError}</p>}
+      {props.notice && <p className="inline-note" role="status">{props.notice}</p>}
+      {blockers.length > 0 && <div className="inline-note" role="alert"><div><strong>{t('adm.blocked.title')}</strong>
+        <ul style={{ margin: '6px 0 0 18px' }}>{blockers.includes('resources') && <li>{t('adm.blocked.resources')}</li>}{blockers.includes('recipients') && <li>{t('adm.blocked.recipients')} <button type="button" className="emp-link" onClick={goToRecipients}>{t('adm.blocked.go')}</button></li>}</ul></div></div>}
+
+      {!readOnly && (
+        <div className="inline-note"><Mail size={18} aria-hidden="true" />
+          <div style={{ flex: 1 }}><strong>{ready ? t('cmpg.ready') : t('cmpg.notReady')}</strong><p>{t('cmpg.readyNote')}</p></div>
+          <span className="ops-actions" style={{ flexWrap: 'wrap' }}>
+            {props.onSetupResources && <button type="button" className="btn" onClick={() => props.onSetupResources?.()} disabled={props.busy}><Plus size={14} aria-hidden="true" /> {t('cmpg.setupDemo')}</button>}
+            {resources?.mailpitUrl && <a className="btn" href={resources.mailpitUrl} target="_blank" rel="noopener noreferrer"><Mail size={14} aria-hidden="true" /> {t('cmpg.mailpit')}</a>}
+          </span>
+        </div>
+      )}
+
+      <div className="exec-kpis">
+        <KpiCard label={t('cmpg.m.campaigns')} value={campaigns.length} />
+        <KpiCard label={t('cmpg.m.sent')} value={total.sent} />
+        <KpiCard label={t('cmpg.m.opened')} value={total.opened} />
+        <KpiCard label={t('cmpg.m.clicked')} value={total.clicked} />
       </div>
-      <p className="debt-help">Click: −10 points · Submit: −20 more points. Each event is counted once.</p>
-    </section>}
-    {!readOnly && <details className="glass-card campaign-panel campaign-resources">
-      <summary><span className="campaign-kicker">CONTENT LIBRARY</span><h3>Template & landing page</h3><span>{resources?.templates.length || 0} template · {resources?.pages.length || 0} landing page</span></summary>
-      <div className="campaign-resource-grid">{(['template', 'page'] as const).map(type => {
-        const items = type === 'template' ? resources?.templates || [] : resources?.pages || [];
-        const Icon = type === 'template' ? Mail : Globe;
-        return <div key={type}><div className="campaign-section-heading"><h4><Icon size={16} />{type === 'template' ? 'Email template' : 'Landing page'}</h4><button className="btn" onClick={() => props.onOpenTemplateBuilder('new', type)}><Plus size={14} />Add</button></div>
-          {!items.length && <p className="campaign-empty">No saved content yet.</p>}
-          {items.map(item => <article className="campaign-resource" key={item.id}><div><strong>{item.name}</strong><small>{'subject' in item ? item.subject : 'Simulation page'}</small></div><div className="campaign-actions"><button className="btn" aria-label={'Edit ' + item.name} onClick={() => props.onOpenTemplateBuilder('edit', type, item)}><Pencil size={14} /></button><button className="btn" aria-label={'Delete ' + item.name} onClick={() => type === 'template' ? props.onDeleteTemplate(item.id) : props.onDeletePage(item.id)}><Trash2 size={14} /></button></div></article>)}</div>;
-      })}</div>
-    </details>}
-    <section className="glass-card campaign-panel"><div className="campaign-section-heading"><div><span className="campaign-kicker">STEP 3 · MONITORING</span><h3>Campaigns & responses</h3></div><span className="badge badge-neutral">{campaigns.length} campaign</span></div>
-      <div className="campaign-table-scroll"><table className="campaign-table"><thead><tr><th>Campaign</th><th>Status</th><th>Sent / target</th><th>Opened</th><th>Clicked</th><th>Submit</th><th>Actions</th></tr></thead><tbody>
-      {campaigns.map(c => { const s = getCampaignStats(c); return <tr key={(c.source || 'gophish') + ':' + c.id}><td><strong>{c.name}</strong><small>{c.source === 'local' ? 'Legacy simulation archive' : 'GoPhish → Mailpit'} · #{c.id}</small></td><td><span className={'badge ' + (c.status === 'Completed' ? 'badge-neutral' : 'badge-info')}>{c.status}</span>{s.error > 0 && <small className="campaign-failure">{s.error} delivery failures</small>}</td><td>{s.sent} / {s.total}</td><td>{s.opened}</td><td>{s.clicked}</td><td>{s.submitted_data}</td><td><div className="campaign-actions"><button className="btn" onClick={() => void view(c)} aria-label={'Detail ' + c.name}><Eye size={14} /></button>{!readOnly && c.status !== 'Completed' && <button className="btn" onClick={() => { setAction({ campaign: c, type: 'stop' }); setActionError(''); }} aria-label={'Stop ' + c.name}><StopCircle size={14} /></button>}{!readOnly && <button className="btn" onClick={() => { setAction({ campaign: c, type: 'delete' }); setActionError(''); }} aria-label={'Delete ' + c.name}><Trash2 size={14} /></button>}</div></td></tr>; })}
-      {!campaigns.length && <tr><td colSpan={7} className="campaign-empty">No campaigns yet. Select recipients to create one.</td></tr>}
-      </tbody></table></div>
+
+      {!readOnly && (
+        <section className="ops-block" id="campaign-recipients" aria-labelledby="cmpg-s1">
+          <div className="ops-intro">
+            <div><p className="emp-muted">{t('cmpg.step1')}</p><h3 id="cmpg-s1" style={{ fontSize: 16, fontWeight: 600 }}>{t('cmpg.targets')} <StatusChip tone="open">{t('cmpg.selected', { n: selectedEmails.length })}</StatusChip></h3></div>
+            <span className="ops-actions" style={{ flexWrap: 'wrap' }}>
+              <button type="button" className="btn" onClick={() => onSelectedEmailsChange(Array.from(new Set([...selectedEmails, ...filtered.map(e => e.email)])))}>{t('cmpg.selectFiltered')}</button>
+              <button type="button" className="btn" onClick={() => onSelectedEmailsChange([])}>{t('cmpg.clear')}</button>
+            </span>
+          </div>
+          <div className="filter-bar">
+            <label className="filter-search"><span className="visually-hidden">{t('cmpg.search')}</span><input type="search" placeholder={t('cmpg.search')} value={search} onChange={e => setSearch(e.target.value)} /></label>
+            <label className="filter-select"><span className="visually-hidden">{t('cmpg.division')}</span>
+              <select value={division} onChange={e => setDivision(e.target.value)}><option value="ALL">{t('cmpg.division.all')}</option>{divisions.map(d => <option key={d.name} value={d.name}>{d.name}</option>)}</select></label>
+          </div>
+          {filtered.length > 0 ? (
+            <div className="recipient-list">{filtered.map(e => (
+              <label key={e.email}><input type="checkbox" checked={selectedEmails.includes(e.email)} onChange={event => onSelectedEmailsChange(event.target.checked ? [...selectedEmails, e.email] : selectedEmails.filter(email => email !== e.email))} /><span>{e.email}<small>{e.divisi}</small></span></label>
+            ))}</div>
+          ) : <StateMessage variant="empty" compact title={t('cmpg.noMatch')} why=" " />}
+          <p className="emp-muted">{t('cmpg.synced')}</p>
+        </section>
+      )}
+
+      {!readOnly && (
+        <section className="ops-block" aria-labelledby="cmpg-s2">
+          <div className="ops-intro"><div><p className="emp-muted">{t('cmpg.step2')}</p><h3 id="cmpg-s2" style={{ fontSize: 16, fontWeight: 600 }}>{t('cmpg.content')}</h3></div><StatusChip>{t('cmpg.noPasswords')}</StatusChip></div>
+          <div className="option-grid">
+            <article><Mail size={22} aria-hidden="true" /><h4>{t('cmpg.opt.reset')}</h4><p>{t('cmpg.opt.reset.desc')}</p><div><button type="button" className="btn btn-primary" disabled={props.busy} onClick={() => props.onSetupResources?.('password-reset')}>{t('cmpg.opt.reset.btn')}</button></div></article>
+            <article><Globe size={22} aria-hidden="true" /><h4>{t('cmpg.opt.clone')}</h4><p>{t('cmpg.opt.clone.desc')}</p><div><button type="button" className="btn" onClick={() => props.onOpenTemplateBuilder('new', 'page')}>{t('cmpg.opt.clone.btn')}</button></div></article>
+          </div>
+          <p className="emp-muted">{t('cmpg.points')}</p>
+        </section>
+      )}
+
+      {!readOnly && (
+        <details className="exec-more campaign-details">
+          <summary><span>{t('cmpg.library.title')}</span><small>{t('cmpg.library.count', { templates: resources?.templates.length || 0, pages: resources?.pages.length || 0 })}</small></summary>
+          <div className="library-grid">{(['template', 'page'] as const).map(type => {
+            const items = type === 'template' ? resources?.templates || [] : resources?.pages || [];
+            const Icon = type === 'template' ? Mail : Globe;
+            return (
+              <div key={type}>
+                <div className="ops-head"><h4 style={{ fontSize: 14, fontWeight: 600 }}><Icon size={14} aria-hidden="true" /> {t(type === 'template' ? 'cmpg.library.template' : 'cmpg.library.page')}</h4><button type="button" className="btn" onClick={() => props.onOpenTemplateBuilder('new', type)}><Plus size={14} aria-hidden="true" /> {t('cmpg.library.add')}</button></div>
+                {!items.length && <p className="emp-muted">{t('cmpg.library.empty')}</p>}
+                {items.map(item => (
+                  <div className="library-item" key={item.id}>
+                    <span><strong>{item.name}</strong><small>{'subject' in item ? item.subject : t('cmpg.library.page.default')}</small></span>
+                    <span className="ops-actions">
+                      <button type="button" className="btn iconbtn" aria-label={t('cmpg.edit', { name: item.name })} title={t('cmpg.edit', { name: item.name })} onClick={() => props.onOpenTemplateBuilder('edit', type, item)}><Pencil size={14} aria-hidden="true" /></button>
+                      <button type="button" className="btn iconbtn" aria-label={t('cmpg.delete', { name: item.name })} title={t('cmpg.delete', { name: item.name })} onClick={() => (type === 'template' ? props.onDeleteTemplate(item.id) : props.onDeletePage(item.id))}><Trash2 size={14} aria-hidden="true" /></button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            );
+          })}</div>
+        </details>
+      )}
+
+      <section className="ops-block" aria-labelledby="cmpg-s3">
+        <div className="ops-intro"><div><p className="emp-muted">{t('cmpg.step3')}</p><h3 id="cmpg-s3" style={{ fontSize: 16, fontWeight: 600 }}>{t('cmpg.monitor')}</h3></div><span className="emp-muted">{t('cmpg.count', { n: campaigns.length })}</span></div>
+        <DataTable caption={t('cmpg.monitor')} columns={columns} rows={campaigns} rowKey={c => `${c.source || 'gophish'}:${c.id}`} density="comfortable" empty={<StateMessage variant="empty" title={t('cmpg.empty.title')} why={t('cmpg.empty.why')} />} />
+      </section>
+
+      <Dialog open={detail !== null} onClose={() => setDetail(null)} size="lg" title={detail?.name ?? t('cmpg.detail.title')} description={detail ? `${statusLabel(detail.status)} · ${formatWIB(detail.created_date)}` : undefined}>
+        {detail && <>
+          <DataTable caption={t('cmpg.detail.title')} rows={detail.results || []} rowKey={r => r.email} columns={[
+            { key: 'email', header: t('cmpg.detail.recipient'), render: r => r.email },
+            { key: 'status', header: t('cmpg.detail.response'), render: r => r.status },
+          ]} />
+          <details className="campaign-details">
+            <summary>{t('cmpg.detail.timeline', { n: detail.timeline?.length || 0 })}</summary>
+            {detail.timeline?.map((event, i) => <p key={i}><strong>{event.message}</strong> · {event.email || t('cmpg.detail.campaign')} <small className="emp-muted">{formatWIB(event.time)}</small></p>)}
+          </details>
+        </>}
+      </Dialog>
+
+      <Dialog open={action !== null} onClose={() => setAction(null)} busy={working} tone={action?.type === 'delete' ? 'danger' : 'default'} size="sm"
+        title={action ? t(action.type === 'stop' ? 'cmpg.stop.title' : 'cmpg.delete.title') : ''}
+        description={action ? t(action.type === 'stop' ? 'cmpg.stop.body' : 'cmpg.delete.body', { name: action.campaign.name }) : undefined}
+        footer={<>
+          <button type="button" className="btn" disabled={working} onClick={() => setAction(null)}>{t('common.cancel')}</button>
+          <button type="button" className={`btn ${action?.type === 'delete' ? 'btn-danger' : 'btn-primary'}`} disabled={working} onClick={() => void confirmAction()}>{working ? t('cmpg.processing') : t('cmpg.confirm')}</button>
+        </>}>
+        {actionError && <p className="field-error" role="alert">{actionError}</p>}
+      </Dialog>
     </section>
-    {detail && <dialog ref={detailDialog} className="campaign-dialog" aria-labelledby="campaign-detail-title" onCancel={() => setDetail(null)}><button className="account-close" aria-label="Close details" onClick={() => setDetail(null)}><X size={20} /></button><span className="campaign-kicker">CAMPAIGN DETAIL</span><h2 id="campaign-detail-title">{detail.name}</h2><p className="debt-help">{detail.status} · {formatWIB(detail.created_date)}</p><div className="campaign-table-scroll"><table className="campaign-table"><thead><tr><th>Recipient</th><th>Response</th></tr></thead><tbody>{(detail.results || []).map(r => <tr key={r.email}><td>{r.email}</td><td>{r.status}</td></tr>)}</tbody></table></div><details className="campaign-timeline"><summary>Timeline ({detail.timeline?.length || 0})</summary>{detail.timeline?.map((event, i) => <p key={i}><strong>{event.message}</strong> · {event.email || 'Campaign'}<small>{formatWIB(event.time)}</small></p>)}</details></dialog>}
-    {action && <dialog ref={actionDialog} className="campaign-dialog campaign-confirm" aria-labelledby="campaign-action-title" onCancel={e => { if (working) e.preventDefault(); else setAction(null); }}><button className="account-close" aria-label="Close" disabled={working} onClick={() => setAction(null)}><X size={20} /></button><h2 id="campaign-action-title">{action.type === 'stop' ? 'Stop this campaign?' : 'Delete this campaign?'}</h2><p className="debt-help"><strong>{action.campaign.name}</strong>{action.type === 'stop' ? ' will stop. Unsent emails are cancelled; existing telemetry is retained.' : ' will be deleted from this campaign source. Employee accounts are not deleted.'}</p>{actionError && <p className="debt-error" role="alert">{actionError}</p>}<div className="campaign-actions"><button className="btn" disabled={working} onClick={() => setAction(null)}>Cancel</button><button className="btn btn-primary" disabled={working} onClick={() => void confirmAction()}>{working ? 'Processing…' : 'Confirm'}</button></div></dialog>}
-  </section>;
+  );
 }

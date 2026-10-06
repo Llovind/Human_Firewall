@@ -3,22 +3,31 @@
 import { useEffect, useState, useRef } from 'react';
 import { Search, Flag, FileText, RefreshCw, ShieldCheck, ShieldAlert, Send, Loader2 } from 'lucide-react';
 import { useI18n } from '@/i18n/I18nProvider';
+import type { MessageKey } from '@/i18n/messages';
 import ThreatEvidence, { EmployeeReport, FileScan, ThreatAnalysis } from './ThreatEvidence';
 
-function fileScanLabel(scan: FileScan) {
-  if (scan.status === 'pending') return 'Scanning in progress';
-  return { malicious: 'Threat detected', suspicious: 'Suspicious file', clean: 'No known threats detected' }[scan.verdict] || 'Result unavailable';
+type T = (key: MessageKey, vars?: Record<string, string | number>) => string;
+
+function fileScanLabel(scan: FileScan, t: T) {
+  if (scan.status === 'pending') return t('scan2.file.pending');
+  const key = ({ malicious: 'scan2.file.malicious', suspicious: 'scan2.file.suspicious', clean: 'scan2.file.clean' } as Record<string, MessageKey>)[scan.verdict];
+  return t(key ?? 'scan2.file.unknown');
 }
 
+/** Failures throw a short code ("results"); the component turns it into a sentence in the current language. */
 async function loadResults(path: string, signal?: AbortSignal) {
   const res = await fetch(path, { cache: 'no-store', signal });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Results unavailable. Please refresh.');
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error('results');
   return data;
 }
 
 export default function EmployeeUrlScanner({ onReportComplete }: { onReportComplete?: () => void }) {
   const { t } = useI18n();
+  const describe = (err: unknown, fallback: MessageKey) => t(err instanceof Error && err.message === 'results' ? 'scan2.err.results' : fallback);
+  // Effects below run once; they read the latest translator through this ref instead of restarting on a language change.
+  const translate = useRef(t);
+  useEffect(() => { translate.current = t; });
   const [mode, setMode] = useState<'scan' | 'report' | 'file'>('scan');
   const [file, setFile] = useState<File | null>(null);
   const [consent, setConsent] = useState(false);
@@ -47,7 +56,7 @@ export default function EmployeeUrlScanner({ onReportComplete }: { onReportCompl
       setFileScans(fileData.scans || []);
       setFileMaxBytes(fileData.maxBytes || 10 * 1024 * 1024);
     } catch (err) {
-      if (!signal?.aborted) setError(err instanceof Error ? err.message : 'Could not load results.');
+      if (!signal?.aborted) setError(describe(err, 'scan2.err.load'));
     }
   }
   useEffect(() => {
@@ -59,7 +68,7 @@ export default function EmployeeUrlScanner({ onReportComplete }: { onReportCompl
         setFileScans(fileData.scans || []);
         setFileMaxBytes(fileData.maxBytes || 10 * 1024 * 1024);
       })
-      .catch(err => { if (!controller.signal.aborted) setError(err instanceof Error ? err.message : 'Could not load results.'); });
+      .catch(err => { if (!controller.signal.aborted) setError(translate.current(err instanceof Error && err.message === 'results' ? 'scan2.err.results' : 'scan2.err.load')); });
     return () => controller.abort();
   }, []);
   useEffect(() => {
@@ -73,7 +82,7 @@ export default function EmployeeUrlScanner({ onReportComplete }: { onReportCompl
         const data = await loadResults('/api/threat/file-scan', controller.signal);
         if (!controller.signal.aborted) setFileScans(data.scans || []);
       } catch {
-        if (!controller.signal.aborted) setError('File results could not be refreshed. Please try Refresh.');
+        if (!controller.signal.aborted) setError(translate.current('scan2.err.refreshFiles'));
       } finally { inFlight = false; }
     }, 3000);
     return () => { window.clearInterval(timer); controller.abort(); };
@@ -85,8 +94,8 @@ export default function EmployeeUrlScanner({ onReportComplete }: { onReportCompl
       let body: BodyInit;
       let headers: HeadersInit | undefined;
       if (mode === 'file') {
-        if (!file || !file.size || file.size > fileMaxBytes) throw new Error('Choose a non-empty file within the size limit.');
-        if (!consent) throw new Error('Confirm that this file may be shared with VirusTotal.');
+        if (!file || !file.size || file.size > fileMaxBytes) throw new Error(t('scan2.err.fileSize'));
+        if (!consent) throw new Error(t('scan2.err.consent'));
         const form = new FormData();
         form.set('file', file); form.set('consent', 'true');
         body = form;
@@ -98,26 +107,26 @@ export default function EmployeeUrlScanner({ onReportComplete }: { onReportCompl
         method: 'POST', headers, body,
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Request failed. Try again.');
+      if (!res.ok) throw new Error(t('scan2.err.request'));
       if (mode === 'scan') setScan(data.data);
       else if (mode === 'file') {
         setFileScans(previous => [data.scan, ...previous.filter(item => item.id !== data.scan.id)].slice(0, 100));
         setSelectedFileId(data.scan.id);
         setHistory('files');
-        setNotice(data.duplicate ? 'Showing your existing file scan.' : 'File queued. Results update automatically.');
+        setNotice(data.duplicate ? t('scan2.notice.fileExisting') : t('scan2.notice.fileQueued'));
         setFile(null); setConsent(false);
         if (fileInput.current) fileInput.current.value = '';
       }
       else {
         setHistory('reports');
-        setNotice(data.duplicate ? 'Already reported. See your report below.' : 'Report received. Awaiting SOC review.');
+        setNotice(data.duplicate ? t('scan2.notice.reportDup') : t('scan2.notice.reportOk'));
         onReportComplete?.();
         if (data.reward?.awarded) {
-          setNotice('Report received. +' + data.reward.points_awarded + ' points · reports ' + data.reward.daily_count + '/' + data.reward.daily_cap + ' today.');
+          setNotice(t('scan2.notice.reward', { points: data.reward.points_awarded, count: data.reward.daily_count, cap: data.reward.daily_cap }));
         }
         await refresh();
       }
-    } catch (err) { setError(err instanceof Error ? err.message : 'Could not reach the server.'); }
+    } catch (err) { setError(err instanceof TypeError ? t('scan2.err.network') : err instanceof Error ? describe(err, 'scan2.err.network') : t('scan2.err.network')); }
     finally { setBusy(false); }
   }
   return <section className="panel glass-card employee-threat-tools">
@@ -130,10 +139,10 @@ export default function EmployeeUrlScanner({ onReportComplete }: { onReportCompl
     </div>
     <p className="debt-help">{mode === 'scan' ? t('scan.help.check') : mode === 'file' ? t('scan.help.file') : t('scan.help.report')}</p>
     <form className="debt-form" onSubmit={submit}>
-      {mode === 'file' ? <label className="file-upload">Choose a file<input ref={fileInput} type="file" required onChange={event => { setFile(event.target.files?.[0] || null); setSelectedFileId(''); setNotice(''); }} /><small>{file ? file.name + ' · ' + (file.size / 1024).toFixed(0) + ' KB' : 'PDF, documents, images, archives and other files · up to ' + Math.floor(fileMaxBytes / 1024 / 1024) + ' MB'}</small></label>
+      {mode === 'file' ? <label className="file-upload">{t('scan2.file.choose')}<input ref={fileInput} type="file" required onChange={event => { setFile(event.target.files?.[0] || null); setSelectedFileId(''); setNotice(''); }} /><small>{file ? file.name + ' · ' + (file.size / 1024).toFixed(0) + ' KB' : t('scan2.file.hint', { mb: Math.floor(fileMaxBytes / 1024 / 1024) })}</small></label>
         : <label>{t('scan.url')}<input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://example.com/path" required maxLength={4096} autoComplete="off" /></label>}
-      {mode === 'report' && <label>Description (optional)<textarea value={description} onChange={e => setDescription(e.target.value)} maxLength={2000} rows={3} /></label>}
-      {mode === 'file' ? <label className="upload-consent"><input type="checkbox" required checked={consent} onChange={event => setConsent(event.target.checked)} /><span>This file is not confidential. I agree to share it with VirusTotal and its security partners.</span></label>
+      {mode === 'report' && <label>{t('scan2.description')} ({t('scan2.optional')})<textarea value={description} onChange={e => setDescription(e.target.value)} maxLength={2000} rows={3} /></label>}
+      {mode === 'file' ? <label className="upload-consent"><input type="checkbox" required checked={consent} onChange={event => setConsent(event.target.checked)} /><span>{t('scan2.consent')}</span></label>
         : <small>{t('scan.privacy')}</small>}
       <button className="btn btn-primary" disabled={busy}>{busy ? <Loader2 size={16} className="spin" aria-hidden="true" /> : mode === 'report' ? <Send size={16} aria-hidden="true" /> : <Search size={16} aria-hidden="true" />}{busy ? t('scan.processing') : mode === 'scan' ? t('scan.submit.check') : mode === 'file' ? t('scan.submit.file') : t('scan.submit.report')}</button>
     </form>
@@ -141,25 +150,25 @@ export default function EmployeeUrlScanner({ onReportComplete }: { onReportCompl
     {notice && <p role="status" className="debt-notice">{notice}</p>}
     {fileResult && (mode === 'file' || fileThreat) && <div className="file-scan-result" data-verdict={fileResult.status === 'pending' ? 'pending' : fileResult.verdict} role={fileThreat ? 'alert' : 'status'}>
       {fileThreat ? <ShieldAlert size={24} aria-hidden="true" /> : fileResult.status === 'pending' ? <Loader2 size={24} className="spin" aria-hidden="true" /> : fileResult.verdict === 'clean' ? <ShieldCheck size={24} aria-hidden="true" /> : <FileText size={24} aria-hidden="true" />}
-      <div><strong>{fileScanLabel(fileResult)}</strong><p>{fileResult.file_name}</p>
-      <p>{fileThreat ? 'VirusTotal flagged this file. Do not open or run it.' : fileResult.status === 'pending' ? 'Waiting for VirusTotal. You can leave this page and check your scans later.' : fileResult.verdict === 'clean' ? 'No engine detections were reported. This is not a guarantee of safety.' : 'No reliable verdict is available. Do not treat this file as safe.'}</p>
+      <div><strong>{fileScanLabel(fileResult, t)}</strong><p>{fileResult.file_name}</p>
+      <p>{fileThreat ? t('scan2.file.flagged') : fileResult.status === 'pending' ? t('scan2.file.waiting') : fileResult.verdict === 'clean' ? t('scan2.file.cleanNote') : t('scan2.file.noVerdict')}</p>
       <ThreatEvidence analysis={fileResult.analysis} /></div>
     </div>}
     {scan && <div className="debt-result" role="status">
-      <strong>{scan.verdict === 'unknown' ? 'Unknown — review needed' : scan.verdict.toUpperCase()}</strong>
+      <strong>{scan.verdict === 'unknown' ? t('scan2.url.unknown') : (['malicious', 'suspicious', 'clean'].includes(scan.verdict) ? t(`scan2.url.verdict.${scan.verdict}` as MessageKey) : scan.verdict)}</strong>
       <ThreatEvidence analysis={scan} />
-      <p>This result is not a Block/Allow decision.</p>
+      <p>{t('scan2.url.notDecision')}</p>
     </div>}
     </div><aside className="url-report-history">
     <div className="panel-header"><h3>{t('scan.history')}</h3><button type="button" className="btn" onClick={() => void refresh()}><RefreshCw size={14} />{t('common.refresh')}</button></div>
     <div className="debt-tabs" aria-label={t('scan.history')}><button type="button" className={'btn ' + (history === 'reports' ? 'btn-primary' : '')} aria-pressed={history === 'reports'} onClick={() => setHistory('reports')}>{t('scan.reports')}</button><button type="button" className={'btn ' + (history === 'files' ? 'btn-primary' : '')} aria-pressed={history === 'files'} onClick={() => setHistory('files')}>{t('scan.files')}</button></div>
     {history === 'reports' ? <>
       {!reports.length && <p className="debt-help">{t('scan.none.reports')}</p>}
-      <ul className="employee-report-list">{reports.map(report => <li key={report.id}><div><strong>{report.url}</strong><small>Evidence: {report.verdict} · {report.created_at} UTC</small><ThreatEvidence analysis={report.analysis} /></div><span className="badge" data-status={report.status}>{report.status.replaceAll('_', ' ')}</span></li>)}</ul>
+      <ul className="employee-report-list">{reports.map(report => <li key={report.id}><div><strong>{report.url}</strong><small>{t('scan2.evidence', { verdict: report.verdict, time: report.created_at })}</small><ThreatEvidence analysis={report.analysis} /></div><span className="badge" data-status={report.status}>{['pending_review', 'open', 'resolved'].includes(report.status) ? t(`scan2.report.status.${report.status}` as MessageKey) : report.status.replaceAll('_', ' ')}</span></li>)}</ul>
     </> : <>
       <p className="debt-help">{t('scan.files.hint')}</p>
       {!fileScans.length && <p className="debt-help">{t('scan.none.files')}</p>}
-      <ul className="employee-report-list">{fileScans.map(item => <li key={item.id}><div><strong>{item.file_name}</strong><small>{Math.ceil(item.file_size / 1024)} KB · {item.created_at} UTC</small><span className="file-scan-label" data-verdict={item.verdict}>{fileScanLabel(item)}</span><ThreatEvidence analysis={item.analysis} /><button type="button" className="btn" onClick={() => { setSelectedFileId(item.id); setMode('file'); setError(''); setNotice(''); }}>View result</button></div><span className="badge">{item.status === 'pending' ? 'Scanning' : item.status === 'unknown' ? 'No verdict' : 'Scanned'}</span></li>)}</ul>
+      <ul className="employee-report-list">{fileScans.map(item => <li key={item.id}><div><strong>{item.file_name}</strong><small>{Math.ceil(item.file_size / 1024)} KB · {item.created_at} UTC</small><span className="file-scan-label" data-verdict={item.verdict}>{fileScanLabel(item, t)}</span><ThreatEvidence analysis={item.analysis} /><button type="button" className="btn" onClick={() => { setSelectedFileId(item.id); setMode('file'); setError(''); setNotice(''); }}>{t('scan2.view')}</button></div><span className="badge">{item.status === 'pending' ? t('scan2.state.pending') : item.status === 'unknown' ? t('scan2.state.unknown') : t('scan2.state.done')}</span></li>)}</ul>
     </>}
     </aside></div>
   </section>;

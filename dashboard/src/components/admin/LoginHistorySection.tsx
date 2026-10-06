@@ -1,8 +1,11 @@
 'use client';
 
-import React from 'react';
 import { Server } from 'lucide-react';
 import { AdminLoginEvent } from '@/components/admin/types';
+import DataTable, { type Column } from '@/components/ui/DataTable';
+import SeverityBadge from '@/components/ui/SeverityBadge';
+import StateMessage from '@/components/ui/StateMessage';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface LoginHistorySectionProps {
   readOnly: boolean;
@@ -10,96 +13,32 @@ interface LoginHistorySectionProps {
 }
 
 export default function LoginHistorySection({ loginHistory }: LoginHistorySectionProps) {
-  const logs = Array.isArray(loginHistory)
-    ? loginHistory
-    : loginHistory?.logs || loginHistory?.loginHistory || [];
+  const { t } = useI18n();
+  const logs = Array.isArray(loginHistory) ? loginHistory : loginHistory?.logs || loginHistory?.loginHistory || [];
+
+  const columns: Column<AdminLoginEvent>[] = [
+    { key: 'email', header: t('login.col.person'), render: log => <span className="cell-clip" title={log.reason}>{log.email}</span> },
+    { key: 'division', header: t('login.col.division'), secondary: true, render: log => log.division },
+    { key: 'time', header: t('login.col.time'), render: log => log.login_time },
+    { key: 'device', header: t('login.col.device'), secondary: true, render: log => log.device },
+    { key: 'location', header: t('login.col.location'), secondary: true, render: log => log.location },
+    { key: 'network', header: t('login.col.network'), secondary: true, render: log => <>{log.network}{log.vpn && <span className="chip" data-tone="ok"><i aria-hidden="true" />{t('login.vpn')}</span>}</> },
+    { key: 'risk', header: t('login.col.risk'), render: log => <SeverityBadge value={log.risk} /> },
+  ];
 
   return (
-    <>
-      {/* Central Login & Device Anomaly Audit Log */}
-      <div className="panel glass-card fade-up font-body" style={{
-        marginTop: '24px',
-        padding: '24px'
-      }}>
-        <div className="panel-header" style={{ marginBottom: '18px', borderBottom: '1px solid var(--border)', paddingBottom: '14px' }}>
-          <h2 className="panel-title font-heading" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-            <Server size={20} style={{ color: '#2196F3' }} /> Login &amp; Device Audit Trail (Identity Security)
-          </h2>
-          <span className="font-mono-data" style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent)', background: 'rgba(33, 150, 243, 0.1)', padding: '4px 10px', borderRadius: '12px', border: '1px solid var(--border)' }}>
-            {logs.length} logs detected
-          </span>
-        </div>
-        <div className="threat-table-wrap" style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border)' }}>
-          <table className="threat-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                <th style={{ width: '20%', textAlign: 'left', padding: '12px 16px', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>Employee</th>
-                <th style={{ width: '15%', textAlign: 'left', padding: '12px 16px', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>Division</th>
-                <th style={{ width: '15%', textAlign: 'left', padding: '12px 16px', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>Access Timestamp</th>
-                <th style={{ width: '15%', textAlign: 'left', padding: '12px 16px', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>Device</th>
-                <th style={{ width: '15%', textAlign: 'left', padding: '12px 16px', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>Location</th>
-                <th style={{ width: '10%', textAlign: 'left', padding: '12px 16px', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>Connection</th>
-                <th style={{ width: '10%', textAlign: 'left', padding: '12px 16px', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>Risk</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logs.length === 0 ? (
-                <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '30px', fontSize: '13px' }}>
-                    No login audit records found.
-                  </td>
-                </tr>
-              ) : (
-                logs.map((log, idx) => {
-                  let badgeBg = 'var(--bg-success)';
-                  let badgeColor = 'var(--text-success)';
-                  let badgeBorder = 'var(--border-success)';
-
-                  if (log.risk === 'HIGH' || log.risk === 'CRITICAL' || log.risk === 'DANGER') {
-                    badgeBg = 'var(--bg-danger)';
-                    badgeColor = 'var(--text-danger)';
-                    badgeBorder = 'var(--border-danger)';
-                  } else if (log.risk === 'MEDIUM' || log.risk === 'WARNING') {
-                    badgeBg = 'var(--bg-warning)';
-                    badgeColor = 'var(--text-warning)';
-                    badgeBorder = 'var(--border-warning)';
-                  }
-
-                  return (
-                    <tr key={log.id || idx} title={log.reason} style={{ borderBottom: idx < logs.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                      <td className="font-mono-data" style={{ fontWeight: 600, color: 'var(--text-primary)', padding: '12px 16px', fontSize: '13px' }}>{log.email}</td>
-                      <td style={{ color: 'var(--text-secondary)', padding: '12px 16px', fontSize: '12px' }}>{log.division}</td>
-                      <td className="font-mono-data" style={{ color: 'var(--text-muted)', padding: '12px 16px', fontSize: '12px' }}>{log.login_time}</td>
-                      <td style={{ color: 'var(--text-secondary)', padding: '12px 16px', fontSize: '12px' }}>{log.device}</td>
-                      <td style={{ color: 'var(--text-secondary)', padding: '12px 16px', fontSize: '12px' }}>{log.location}</td>
-                      <td style={{ padding: '12px 16px', fontSize: '12px' }}>
-                        <span style={{ color: 'var(--text-secondary)' }}>{log.network}</span>
-                        {log.vpn && (
-                          <span className="font-mono-data" style={{ fontSize: '9px', padding: '2px 6px', background: 'var(--bg-success)', color: 'var(--text-success)', border: '1px solid var(--border-success)', borderRadius: '4px', marginLeft: '6px', fontWeight: 700 }}>VPN</span>
-                        )}
-                      </td>
-                      <td style={{ padding: '12px 16px' }}>
-                        <span className="font-body" style={{
-                          padding: '3px 8px',
-                          borderRadius: '6px',
-                          fontSize: '10px',
-                          fontWeight: 700,
-                          background: badgeBg,
-                          color: badgeColor,
-                          border: `1px solid ${badgeBorder}`,
-                          display: 'inline-block'
-                        }}>
-                          {log.risk}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+    <section className="ops-block" aria-labelledby="login-history-title">
+      <div className="ops-head">
+        <h3 id="login-history-title"><Server size={16} aria-hidden="true" /> {t('login.title')}</h3>
+        <span className="emp-muted">{t('login.count', { n: logs.length })}</span>
       </div>
-    </>
+      <DataTable
+        caption={t('login.title')}
+        columns={columns}
+        rows={logs}
+        rowKey={log => String(log.id)}
+        empty={<StateMessage variant="empty" title={t('login.empty.title')} why={t('login.empty.why')} />}
+      />
+    </section>
   );
 }

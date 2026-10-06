@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import Dialog from '@/components/ui/Dialog';
+import Field from '@/components/ui/Field';
+import type { MessageKey } from '@/i18n/messages';
 import { useToast } from '@/components/ui/Toast';
 import { useI18n } from '@/i18n/I18nProvider';
 import { useRouter } from 'next/navigation';
@@ -12,7 +14,7 @@ import LeaderboardSection from '@/components/admin/LeaderboardSection';
 import AIIntelligenceSection from '@/components/admin/AIIntelligenceSection';
 import { usePolling } from '@/hooks/usePolling';
 import type { Division, EmployeeAccount, GoPhishCampaign, GoPhishResource, LeaderboardResponse } from '@/components/admin/types';
-import { X, Play, Download, Send, Target } from 'lucide-react';
+import { Download, Send, Target } from 'lucide-react';
 
 type EditableGoPhishResource = {
   id: number;
@@ -26,7 +28,7 @@ type EditableGoPhishResource = {
 };
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'An unexpected error occurred';
+  return error instanceof Error ? error.message : '';
 }
 
 export default function PhishingAdminDashboard() {
@@ -66,10 +68,6 @@ export default function PhishingAdminDashboard() {
   const [launchPage, setLaunchPage] = useState('');
   const [launchUrl, setLaunchUrl] = useState('');
   const [isLaunching, setIsLaunching] = useState(false);
-  const launchDialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    if (isLaunchModalOpen && !launchDialog.current?.open) launchDialog.current?.showModal();
-  }, [isLaunchModalOpen]);
 
   // 2. Template Builder Modal
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
@@ -117,7 +115,7 @@ export default function PhishingAdminDashboard() {
     try {
       const res = await fetch('/api/admin/gophish/campaigns');
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Could not load campaigns.');
+      if (!res.ok) throw new Error(data.error || t('adm3.err.campaigns'));
       setCampaigns(Array.isArray(data) ? data : data?.campaigns || []);
       setCampaignError('');
     } catch (err) {
@@ -129,7 +127,7 @@ export default function PhishingAdminDashboard() {
     try {
       const res = await fetch('/api/admin/gophish/resources');
       const data: GoPhishResource & { error?: string } = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Could not load GoPhish resources.');
+      if (!res.ok) throw new Error(data.error || t('adm3.err.resources'));
       setResources(data);
       setResourceError('');
       setLaunchTemplate(previous => data.templates.some(t => String(t.id) === previous) ? previous : String(data.templates[0]?.id ?? ''));
@@ -177,6 +175,7 @@ export default function PhishingAdminDashboard() {
     const refresh = window.setInterval(() => void loadCampaigns(), 10000);
     return () => { window.clearTimeout(initialLoad); window.clearInterval(refresh); };
     // Loaders intentionally use the initial filter/resource selections.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── Actions & Handlers ───────────────────────────────────────────────────
@@ -194,7 +193,7 @@ export default function PhishingAdminDashboard() {
   const handleDeleteCampaign = async (id: number, source: 'local' | 'gophish' = 'gophish') => {
     const res = await fetch(`/api/admin/gophish/campaigns/${id}?source=${source}`, { method: 'DELETE' });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Could not delete the campaign.');
+    if (!res.ok) throw new Error(data.error || t('adm3.err.deleteCampaign'));
     setCampaigns(c => c.filter(item => !(item.id === id && (item.source || 'gophish') === source)));
   };
 
@@ -203,7 +202,7 @@ export default function PhishingAdminDashboard() {
     try {
       const res = await fetch('/api/admin/gophish/resources/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ preset }) });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Could not set up campaign resources.');
+      if (!res.ok) throw new Error(data.error || t('adm3.err.setup'));
       await loadResources();
       if (data.template_id) setLaunchTemplate(String(data.template_id));
       if (data.page_id) setLaunchPage(String(data.page_id));
@@ -242,15 +241,15 @@ export default function PhishingAdminDashboard() {
 
       const data = await res.json();
       if (res.ok) {
-        setCampaignNotice(data.message || 'Campaign diterima GoPhish. Pantau status pengiriman dan Mailpit.');
+        setCampaignNotice(data.message || t('adm3.notice.launched'));
         setIsLaunchModalOpen(false);
         setLaunchName('');
         await loadCampaigns();
       } else {
-        setLaunchError(data.error || 'Could not create the campaign.');
+        setLaunchError(data.error || t('adm3.err.launch'));
       }
     } catch (err: unknown) {
-      setLaunchError(`Connection failed: ${errorMessage(err)}. Check the campaign list before retrying.`);
+      setLaunchError(t('adm3.err.connection', { detail: errorMessage(err) }));
     } finally {
       setIsLaunching(false);
     }
@@ -360,7 +359,7 @@ export default function PhishingAdminDashboard() {
   const handleImportSite = async () => {
     setCloneError(''); setCloneNotice('');
     if (!importSiteUrl.trim() || !cloneAuthorized) {
-      setCloneError('Enter a public URL and confirm permission to use the page.');
+      setCloneError(t('adm3.err.cloneInput'));
       return;
     }
     setIsImportingSite(true);
@@ -376,7 +375,7 @@ export default function PhishingAdminDashboard() {
         setLandingRedirectUrl(data.redirect_url);
         setCloneNotice(data.message);
       } else {
-        setCloneError(data.error || 'Check that the URL is valid and reachable');
+        setCloneError(data.error || t('adm3.err.cloneFetch'));
       }
     } catch (err: unknown) {
       setCloneError(`Connection failed: ${errorMessage(err)}`);
@@ -455,7 +454,7 @@ export default function PhishingAdminDashboard() {
   };
 
   const requireFreshAdminLogin = async () => {
-    setEmpFormError('Administrator session expired or changed. Redirecting to sign-in…');
+    setEmpFormError(t('adm3.err.session'));
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
     } finally {
@@ -466,7 +465,7 @@ export default function PhishingAdminDashboard() {
   const handleAddEmployeeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!empEmail.trim() || !empPassword) {
-      setEmpFormError('Email and initial password are required.');
+      setEmpFormError(t('adm3.err.empRequired'));
       return;
     }
 
@@ -492,7 +491,7 @@ export default function PhishingAdminDashboard() {
       } else if (res.status === 401 || res.status === 403) {
         await requireFreshAdminLogin();
       } else {
-        setEmpFormError(data.error || 'Could not create the employee account.');
+        setEmpFormError(data.error || t('adm3.err.empCreate'));
       }
     } catch (err: unknown) {
       setEmpFormError(`Connection failed: ${errorMessage(err)}`);
@@ -531,7 +530,7 @@ export default function PhishingAdminDashboard() {
       } else if (res.status === 401 || res.status === 403) {
         await requireFreshAdminLogin();
       } else {
-        setEmpFormError(data.error || 'Could not update the employee account.');
+        setEmpFormError(data.error || t('adm3.err.empUpdate'));
       }
     } catch (err: unknown) {
       setEmpFormError(`Connection failed: ${errorMessage(err)}`);
@@ -634,507 +633,97 @@ export default function PhishingAdminDashboard() {
         <AIIntelligenceSection role="phishing_admin" readOnly={false} />
       )}
 
-      {/* ── MODAL 1: Launch Phishing Simulation ── */}
-      {isLaunchModalOpen && (
-        <dialog ref={launchDialog} className="campaign-dialog campaign-launch" aria-labelledby="campaign-launch-title" onCancel={event => { if (isLaunching) event.preventDefault(); else setIsLaunchModalOpen(false); }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-              <h3 id="campaign-launch-title" style={{ fontSize: '16px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-primary)' }}>
-                <Play size={18} style={{ color: 'var(--accent)' }} /> Create lab campaign
-              </h3>
-              <button disabled={isLaunching} aria-label="Close" onClick={() => setIsLaunchModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleLaunchCampaign} className="debt-form">
-              <p className="debt-help">Emails are captured in Mailpit only. Use a server URL that recipients can reach.</p>
-              {launchError && <p className="debt-error" role="alert">{launchError}</p>}
-              <div>
-                <label htmlFor="launch-name" style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  Campaign Name *
-                </label>
-                <input
-                  type="text"
-                  id="launch-name"
-                  required maxLength={150}
-                  placeholder="e.g. Q3 Urgent Security Verification"
-                  value={launchName}
-                  onChange={(e) => setLaunchName(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="launch-template" style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  Email Pretext Template *
-                </label>
-                <select
-                  id="launch-template"
-                  required
-                  value={launchTemplate}
-                  onChange={(e) => setLaunchTemplate(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
-                >
-                  {(resources?.templates || []).map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="launch-profile" style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  Sending Profile (SMTP) *
-                </label>
-                <select
-                  id="launch-profile"
-                  required
-                  value={launchProfile}
-                  onChange={(e) => setLaunchProfile(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
-                >
-                  {(resources?.profiles || []).filter(p => p.host === 'mailpit:1025').map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="launch-page" style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  Landing Page Portal *
-                </label>
-                <select
-                  id="launch-page"
-                  required
-                  value={launchPage}
-                  onChange={(e) => setLaunchPage(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
-                >
-                  {(resources?.pages || []).map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="launch-url" style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  URL server GoPhish untuk penerima *
-                </label>
-                <input
-                  type="url" required placeholder="http://IP-SERVER:8080"
-                  id="launch-url"
-                  value={launchUrl}
-                  onChange={(e) => setLaunchUrl(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
-                />
-              </div>
-
-              {selectedEmails.length > 0 && (
-                <div style={{ padding: '8px 12px', borderRadius: '6px', background: 'rgba(33, 150, 243, 0.08)', border: '1px solid var(--accent)', fontSize: '12px', color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Target size={14} /> Targeting {selectedEmails.length} specifically selected employee(s).
-                </div>
-              )}
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
-                <button
-                  type="button"
-                  disabled={isLaunching}
-                  onClick={() => setIsLaunchModalOpen(false)}
-                  style={{ padding: '8px 16px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-secondary)', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isLaunching}
-                  className="btn btn-primary"
-                  style={{ padding: '8px 18px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                >
-                  {isLaunching ? 'Creating campaign…' : <><Send size={14} /> Send to Mailpit</>}
-                </button>
-              </div>
-            </form>
-        </dialog>
-      )}
-
-      {/* ── MODAL 2: Template Builder (Create / Edit) ── */}
-      <Dialog open={isTemplateModalOpen} onClose={() => setIsTemplateModalOpen(false)} title={templateModalMode === 'edit' ? 'Edit email template' : 'Create email template'} size="lg" busy={isSavingTemplate}>
-        <form onSubmit={handleSaveTemplate} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {templateError && <p className="debt-error" role="alert">{templateError}</p>}
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  Template Name *
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. IT Helpdesk Password Reset"
-                  value={templateName}
-                  onChange={(e) => setTemplateName(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  Email Subject *
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. [URGENT] Action Required: Password Expiry Notice"
-                  value={templateSubject}
-                  onChange={(e) => setTemplateSubject(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  HTML Content (supports GoPhish tags e.g. {"{{.URL}}"}, {"{{.FirstName}}"})
-                </label>
-                <textarea
-                  rows={8}
-                  value={templateHtml}
-                  onChange={(e) => setTemplateHtml(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '12px', fontFamily: 'monospace', outline: 'none' }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
-                <button
-                  type="button"
-                  onClick={() => setIsTemplateModalOpen(false)}
-                  style={{ padding: '8px 16px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-secondary)', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSavingTemplate}
-                  className="btn btn-primary"
-                  style={{ padding: '8px 18px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '13px' }}
-                >
-                  {isSavingTemplate ? 'Saving...' : 'Save Template'}
-                </button>
-              </div>
-            </form>
+      {/* Launch a lab campaign */}
+      <Dialog open={isLaunchModalOpen} onClose={() => setIsLaunchModalOpen(false)} busy={isLaunching} title={t('adm2.launch.title')} description={t('adm2.launch.help')} size="md"
+        footer={<>
+          <button type="button" className="btn" disabled={isLaunching} onClick={() => setIsLaunchModalOpen(false)}>{t('common.cancel')}</button>
+          <button type="submit" form="launch-form" className="btn btn-primary" disabled={isLaunching}>{isLaunching ? t('adm2.launch.submitting') : <><Send size={14} aria-hidden="true" /> {t('adm2.launch.submit')}</>}</button>
+        </>}>
+        <form id="launch-form" onSubmit={handleLaunchCampaign} className="ui-form">
+          {launchError && <p className="field-error" role="alert">{launchError}</p>}
+          <Field label={t('adm2.launch.name')}>{c => <input {...c} type="text" required maxLength={150} placeholder={t('adm2.launch.name.ph')} value={launchName} onChange={e => setLaunchName(e.target.value)} />}</Field>
+          <Field label={t('adm2.launch.template')}>{c => <select {...c} required value={launchTemplate} onChange={e => setLaunchTemplate(e.target.value)}>{(resources?.templates || []).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}</Field>
+          <Field label={t('adm2.launch.profile')}>{c => <select {...c} required value={launchProfile} onChange={e => setLaunchProfile(e.target.value)}>{(resources?.profiles || []).filter(p => p.host === 'mailpit:1025').map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}</Field>
+          <Field label={t('adm2.launch.page')}>{c => <select {...c} required value={launchPage} onChange={e => setLaunchPage(e.target.value)}>{(resources?.pages || []).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}</Field>
+          <Field label={t('adm2.launch.url')}>{c => <input {...c} type="url" required placeholder={t('adm2.launch.url.ph')} value={launchUrl} onChange={e => setLaunchUrl(e.target.value)} />}</Field>
+          {selectedEmails.length > 0 && <p className="inline-note"><Target size={14} aria-hidden="true" />{t('adm2.launch.targets', { n: selectedEmails.length })}</p>}
+        </form>
       </Dialog>
 
-      {/* ── MODAL 3: Landing Page Builder (Create / Edit / Clone) ── */}
-      <Dialog open={isLandingModalOpen} onClose={() => setIsLandingModalOpen(false)} title={landingModalMode === 'edit' ? 'Edit landing page' : 'Create landing page'} size="lg" busy={isSavingLanding || isImportingSite}>
-                    {/* Import / Clone Site Helper */}
-        <div style={{ padding: '12px 14px', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', marginBottom: '16px' }}>
-          <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '6px' }}>
-            Clone login page · Firecrawl
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <input
-              type="text"
-              placeholder="https://domain-milik-anda.com/login"
-              value={importSiteUrl}
-              onChange={(e) => setImportSiteUrl(e.target.value)}
-              style={{ flex: 1, padding: '8px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '12px', outline: 'none' }}
-            />
-            <button
-              type="button"
-              onClick={handleImportSite}
-              disabled={isImportingSite || !cloneAuthorized || !importSiteUrl.trim()}
-              style={{ padding: '8px 14px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <Download size={13} /> {isImportingSite ? 'Fetching HTML…' : 'Clone Firecrawl'}
-            </button>
-          </div>
-          <label className="campaign-clone-consent"><input type="checkbox" checked={cloneAuthorized} onChange={e => setCloneAuthorized(e.target.checked)} />I own this page or have permission to use it for simulation.</label>
-          <p className="debt-help">Clones static visuals only. Source scripts and forms are removed; SPA/OAuth pages may not be supported.</p>
-          {cloneError && <p className="debt-error" role="alert">{cloneError}</p>}
-          {cloneNotice && <p className="debt-notice" role="status">{cloneNotice}</p>}
+      {/* Email template */}
+      <Dialog open={isTemplateModalOpen} onClose={() => setIsTemplateModalOpen(false)} busy={isSavingTemplate} size="lg" title={t(templateModalMode === 'edit' ? 'adm2.tpl.edit' : 'adm2.tpl.create')}
+        footer={<>
+          <button type="button" className="btn" disabled={isSavingTemplate} onClick={() => setIsTemplateModalOpen(false)}>{t('common.cancel')}</button>
+          <button type="submit" form="template-form" className="btn btn-primary" disabled={isSavingTemplate}>{isSavingTemplate ? t('adm2.tpl.saving') : t('adm2.tpl.save')}</button>
+        </>}>
+        <form id="template-form" onSubmit={handleSaveTemplate} className="ui-form">
+          {templateError && <p className="field-error" role="alert">{templateError}</p>}
+          <Field label={t('adm2.tpl.name')}>{c => <input {...c} type="text" placeholder={t('adm2.tpl.name.ph')} value={templateName} onChange={e => setTemplateName(e.target.value)} />}</Field>
+          <Field label={t('adm2.tpl.subject')}>{c => <input {...c} type="text" placeholder={t('adm2.tpl.subject.ph')} value={templateSubject} onChange={e => setTemplateSubject(e.target.value)} />}</Field>
+          <Field label={t('adm2.tpl.html')}>{c => <textarea {...c} rows={8} style={{ fontFamily: 'var(--font-mono, monospace)' }} value={templateHtml} onChange={e => setTemplateHtml(e.target.value)} />}</Field>
+        </form>
+      </Dialog>
+
+      {/* Landing page (create, edit, copy a site) */}
+      <Dialog open={isLandingModalOpen} onClose={() => setIsLandingModalOpen(false)} busy={isSavingLanding || isImportingSite} size="lg" title={t(landingModalMode === 'edit' ? 'adm2.land.edit' : 'adm2.land.create')}
+        footer={<>
+          <button type="button" className="btn" disabled={isSavingLanding || isImportingSite} onClick={() => setIsLandingModalOpen(false)}>{t('common.cancel')}</button>
+          <button type="submit" form="landing-form" className="btn btn-primary" disabled={isSavingLanding}>{isSavingLanding ? t('adm2.common.saving') : t('adm2.land.save')}</button>
+        </>}>
+        <div className="ai-callout">
+          <strong>{t('adm2.land.clone.title')}</strong>
+          <Field label={t('adm2.land.clone.url')}>{c => <input {...c} type="text" placeholder={t('adm2.land.clone.ph')} value={importSiteUrl} onChange={e => setImportSiteUrl(e.target.value)} />}</Field>
+          <div><button type="button" className="btn" onClick={handleImportSite} disabled={isImportingSite || !cloneAuthorized || !importSiteUrl.trim()}><Download size={14} aria-hidden="true" /> {isImportingSite ? t('adm2.land.clone.busy') : t('adm2.land.clone.btn')}</button></div>
+          <label className="campaign-clone-consent"><input type="checkbox" checked={cloneAuthorized} onChange={e => setCloneAuthorized(e.target.checked)} /> {t('adm2.land.clone.consent')}</label>
+          <p className="emp-muted">{t('adm2.land.clone.note')}</p>
+          {cloneError && <p className="field-error" role="alert">{cloneError}</p>}
+          {cloneNotice && <p className="emp-muted" role="status">{cloneNotice}</p>}
         </div>
-
-        
-        <form onSubmit={handleSaveLandingPage} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {landingError && <p className="debt-error" role="alert">{landingError}</p>}
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  Page Name *
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Demo Password Verification"
-                  value={landingName}
-                  onChange={(e) => setLandingName(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  HTML Content *
-                </label>
-                <textarea
-                  rows={8}
-                  value={landingHtml}
-                  onChange={(e) => setLandingHtml(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '12px', fontFamily: 'monospace', outline: 'none' }}
-                />
-              </div>
-
-              <p className="debt-notice">Only submission events are recorded. Saved pages use a demo form that does not send credentials. Never use real passwords.</p>
-
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  Redirect URL (After Submission)
-                </label>
-                <input
-                  type="text"
-                  placeholder={resources?.educationUrl || 'AFFERENT education page URL'}
-                  value={landingRedirectUrl}
-                  onChange={(e) => setLandingRedirectUrl(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
-                <button
-                  type="button"
-                  onClick={() => setIsLandingModalOpen(false)}
-                  style={{ padding: '8px 16px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-secondary)', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSavingLanding}
-                  className="btn btn-primary"
-                  style={{ padding: '8px 18px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '13px' }}
-                >
-                  {isSavingLanding ? 'Saving...' : 'Save Landing Page'}
-                </button>
-              </div>
-            </form>
+        <form id="landing-form" onSubmit={handleSaveLandingPage} className="ui-form">
+          {landingError && <p className="field-error" role="alert">{landingError}</p>}
+          <Field label={t('adm2.land.name')}>{c => <input {...c} type="text" placeholder={t('adm2.land.name.ph')} value={landingName} onChange={e => setLandingName(e.target.value)} />}</Field>
+          <Field label={t('adm2.land.html')}>{c => <textarea {...c} rows={8} style={{ fontFamily: 'var(--font-mono, monospace)' }} value={landingHtml} onChange={e => setLandingHtml(e.target.value)} />}</Field>
+          <p className="inline-note">{t('adm2.land.note')}</p>
+          <Field label={t('adm2.land.redirect')}>{c => <input {...c} type="text" placeholder={resources?.educationUrl || t('adm2.land.redirect.ph')} value={landingRedirectUrl} onChange={e => setLandingRedirectUrl(e.target.value)} />}</Field>
+        </form>
       </Dialog>
 
-      {/* ── MODAL 4A: Add Employee ── */}
-      <Dialog open={isAddEmployeeModalOpen} onClose={() => setIsAddEmployeeModalOpen(false)} title={'Create employee account'} size="md" busy={isSavingEmp}>
-        <form onSubmit={handleAddEmployeeSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  Email Address *
-                </label>
-                <input
-                  type="email"
-                  placeholder="employee@corp.local"
-                  value={empEmail}
-                  onChange={(e) => setEmpEmail(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
-                />
-              </div>
+      {/* Employee account (create and edit share one form) */}
+      {([
+        { open: isAddEmployeeModalOpen, close: () => setIsAddEmployeeModalOpen(false), submit: handleAddEmployeeSubmit, mode: 'create' as const },
+        { open: isEditEmployeeModalOpen, close: () => setIsEditEmployeeModalOpen(false), submit: handleEditEmployeeSubmit, mode: 'edit' as const },
+      ]).map(({ open, close, submit, mode }) => (
+        <Dialog key={mode} open={open} onClose={close} busy={isSavingEmp} size="md" title={t(mode === 'create' ? 'adm2.emp.create' : 'adm2.emp.edit')}
+          footer={<>
+            <button type="button" className="btn" disabled={isSavingEmp} onClick={close}>{t('common.cancel')}</button>
+            <button type="submit" form={`employee-form-${mode}`} className="btn btn-primary" disabled={isSavingEmp}>{isSavingEmp ? t(mode === 'create' ? 'adm2.emp.create.submitting' : 'adm2.common.saving') : t(mode === 'create' ? 'adm2.emp.create.submit' : 'adm2.emp.edit.submit')}</button>
+          </>}>
+          <form id={`employee-form-${mode}`} onSubmit={submit} className="ui-form">
+            <Field label={t('adm2.emp.email')}>{c => <input {...c} type="email" placeholder={mode === 'create' ? t('adm2.emp.email.ph') : undefined} value={empEmail} onChange={e => setEmpEmail(e.target.value)} />}</Field>
+            <Field label={t('adm2.emp.role')}>{c => (
+              <select {...c} value={empRole} onChange={e => setEmpRole(e.target.value)}>
+                {(['employee', 'phishing_admin', 'soc', 'grc', 'ciso'] as const).map(role => <option key={role} value={role}>{t(`adm2.role.${role}` as MessageKey)}</option>)}
+              </select>
+            )}</Field>
+            <Field label={t(mode === 'create' ? 'adm2.emp.password' : 'adm2.emp.reset')} hint={mode === 'create' ? t('adm2.emp.password.hint') : undefined}>{c => <input {...c} type="password" autoComplete="new-password" placeholder={t(mode === 'create' ? 'adm2.emp.password.ph' : 'adm2.emp.reset.ph')} value={empPassword} onChange={e => setEmpPassword(e.target.value)} />}</Field>
+            <Field label={t('adm2.emp.division')}>{c => <select {...c} value={empDivisi} onChange={e => setEmpDivisi(e.target.value)}>{divisions.map(d => <option key={d.name} value={d.name}>{d.name}</option>)}</select>}</Field>
+            <label className="campaign-clone-consent"><input type="checkbox" checked={empActive === 1} onChange={e => setEmpActive(e.target.checked ? 1 : 0)} /> {t(mode === 'create' ? 'adm2.emp.active.create' : 'adm2.emp.active')}</label>
+            {empFormError && <p className="field-error" role="alert">{empFormError}</p>}
+          </form>
+        </Dialog>
+      ))}
 
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  Access Role *
-                </label>
-                <select
-                  value={empRole}
-                  onChange={(e) => setEmpRole(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
-                >
-                  <option value="employee">Employee</option>
-                  <option value="phishing_admin">Administrator</option>
-                  <option value="soc">SOC Analyst</option>
-                  <option value="grc">GRC Specialist</option>
-                  <option value="ciso">CISO Executive</option>
-                </select>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  Initial Password *
-                </label>
-                <input
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="Minimum 12 characters"
-                  value={empPassword}
-                  onChange={(e) => setEmpPassword(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
-                />
-                <p style={{ color: 'var(--text-muted)', fontSize: '10px', margin: '6px 0 0' }}>Use uppercase, lowercase, and numbers. The password is stored using Argon2id.</p>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  Division *
-                </label>
-                <select
-                  value={empDivisi}
-                  onChange={(e) => setEmpDivisi(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
-                >
-                  {divisions.map(d => (
-                    <option key={d.name} value={d.name}>{d.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer', marginTop: '4px' }}>
-                <input
-                  type="checkbox"
-                  checked={empActive === 1}
-                  onChange={(e) => setEmpActive(e.target.checked ? 1 : 0)}
-                  style={{ accentColor: 'var(--accent)' }}
-                />
-                Active Employee (Receives simulation campaigns)
-              </label>
-
-              {empFormError && <div className="auth-form-error" role="alert">{empFormError}</div>}
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
-                <button
-                  type="button"
-                  onClick={() => setIsAddEmployeeModalOpen(false)}
-                  style={{ padding: '8px 16px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-secondary)', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSavingEmp}
-                  className="btn btn-primary"
-                  style={{ padding: '8px 18px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '13px' }}
-                >
-                  {isSavingEmp ? 'Creating account...' : 'Create account'}
-                </button>
-              </div>
-            </form>
+      {/* Add division */}
+      <Dialog open={isAddDivisionModalOpen} onClose={() => setIsAddDivisionModalOpen(false)} busy={isSavingDivision} size="sm" title={t('adm2.div.title')}
+        footer={<>
+          <button type="button" className="btn" disabled={isSavingDivision} onClick={() => setIsAddDivisionModalOpen(false)}>{t('common.cancel')}</button>
+          <button type="submit" form="division-form" className="btn btn-primary" disabled={isSavingDivision}>{isSavingDivision ? t('adm2.common.saving') : t('adm2.div.submit')}</button>
+        </>}>
+        <form id="division-form" onSubmit={handleAddDivisionSubmit} className="ui-form">
+          <Field label={t('adm2.div.name')} error={divisionError}>{c => <input {...c} type="text" placeholder={t('adm2.div.name.ph')} value={newDivisionName} onChange={e => setNewDivisionName(e.target.value)} />}</Field>
+        </form>
       </Dialog>
 
-      {/* ── MODAL 4B: Edit Employee ── */}
-      <Dialog open={isEditEmployeeModalOpen} onClose={() => setIsEditEmployeeModalOpen(false)} title={'Edit employee account'} size="md" busy={isSavingEmp}>
-        <form onSubmit={handleEditEmployeeSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  Email Address *
-                </label>
-                <input
-                  type="email"
-                  value={empEmail}
-                  onChange={(e) => setEmpEmail(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  Access Role *
-                </label>
-                <select
-                  value={empRole}
-                  onChange={(e) => setEmpRole(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
-                >
-                  <option value="employee">Employee</option>
-                  <option value="phishing_admin">Administrator</option>
-                  <option value="soc">SOC Analyst</option>
-                  <option value="grc">GRC Specialist</option>
-                  <option value="ciso">CISO Executive</option>
-                </select>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  Reset Password
-                </label>
-                <input
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="Leave blank to keep current password"
-                  value={empPassword}
-                  onChange={(e) => setEmpPassword(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  Division *
-                </label>
-                <select
-                  value={empDivisi}
-                  onChange={(e) => setEmpDivisi(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
-                >
-                  {divisions.map(d => (
-                    <option key={d.name} value={d.name}>{d.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer', marginTop: '4px' }}>
-                <input
-                  type="checkbox"
-                  checked={empActive === 1}
-                  onChange={(e) => setEmpActive(e.target.checked ? 1 : 0)}
-                  style={{ accentColor: 'var(--accent)' }}
-                />
-                Active Employee
-              </label>
-
-              {empFormError && <div className="auth-form-error" role="alert">{empFormError}</div>}
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
-                <button
-                  type="button"
-                  onClick={() => setIsEditEmployeeModalOpen(false)}
-                  style={{ padding: '8px 16px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-secondary)', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSavingEmp}
-                  className="btn btn-primary"
-                  style={{ padding: '8px 18px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '13px' }}
-                >
-                  {isSavingEmp ? 'Saving...' : 'Update Employee'}
-                </button>
-              </div>
-            </form>
-      </Dialog>
-
-      {/* ── MODAL 5: Add Division ── */}
-      <Dialog open={isAddDivisionModalOpen} onClose={() => setIsAddDivisionModalOpen(false)} title={'Add division'} size="sm" busy={isSavingDivision}>
-        <form onSubmit={handleAddDivisionSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {divisionError && <p className="debt-error" role="alert">{divisionError}</p>}
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  Division Name *
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Cyber Threat Intelligence"
-                  value={newDivisionName}
-                  onChange={(e) => setNewDivisionName(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
-                <button
-                  type="button"
-                  onClick={() => setIsAddDivisionModalOpen(false)}
-                  style={{ padding: '8px 16px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-secondary)', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSavingDivision}
-                  className="btn btn-primary"
-                  style={{ padding: '8px 18px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '13px' }}
-                >
-                  {isSavingDivision ? 'Saving...' : 'Add Division'}
-                </button>
-              </div>
-            </form>
-      </Dialog>
       <Dialog
         open={confirmDelete !== null}
         onClose={() => { if (!deleting) setConfirmDelete(null); }}

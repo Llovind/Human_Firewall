@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/admin/DashboardLayout';
+import { useI18n } from '@/i18n/I18nProvider';
 import OverviewSection from '@/components/admin/OverviewSection';
 import IncidentQueue from '@/components/admin/IncidentQueue';
 import ThreatCacheSection from '@/components/admin/ThreatCacheSection';
@@ -13,6 +14,7 @@ import ProxyOperationsSection from '@/components/admin/ProxyOperationsSection';
 import SecurityInboxSection from '@/components/admin/SecurityInboxSection';
 
 export default function SOCDashboard() {
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState('overview');
   const [threatTypeFilter, setThreatTypeFilter] = useState('ALL');
   const [threatActionFilter, setThreatActionFilter] = useState('ALL');
@@ -43,7 +45,7 @@ export default function SOCDashboard() {
       {activeTab === 'overview' && (
         <>
           <IncidentQueue incidents={incidents} canResolve onChanged={refreshIncidents} loading={incidentsLoading} error={Boolean(incidentsError) && !incidentData} />
-          {(summaryError || behaviorError) && <p className="debt-error" role="alert">Telemetry belum dapat diperbarui. Snapshot terakhir ditampilkan, tanpa data contoh.</p>}
+          {(summaryError || behaviorError) && <p className="debt-error" role="alert">{t('soc.err.telemetry')}</p>}
           <OverviewSection
             onRefreshSummary={refreshSummary}
             readOnly={false}

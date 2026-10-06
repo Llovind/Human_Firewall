@@ -2,6 +2,8 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { Shield, Flame, Trophy, ShieldAlert } from 'lucide-react';
+import { useI18n } from '@/i18n/I18nProvider';
+import type { MessageKey } from '@/i18n/messages';
 
 interface BadgeItem {
   id: string;
@@ -24,29 +26,24 @@ interface ReportsSummary {
   next_badge: NextBadge | null;
 }
 
-// ── Legacy behavior badges (from myScore.badges, points-based) ──
+// Behaviour badges (from myScore.badges, points-based). Words come from the message table.
 const LEGACY_BADGES = [
-  { key: 'First Report', label: 'First Report', sub: 'First reported phishing threat', icon: 'flag', color: 'var(--success)' },
-  { key: 'Streak Master', label: 'Streak Master', sub: '4+ weeks incident-free', icon: 'flame-link', color: 'var(--warning)' },
-  { key: 'Guardian', label: 'Guardian', sub: 'Behavior score >= 60', icon: 'shield-check', color: 'var(--info)' },
-  { key: 'Quiz Champion', label: 'Quiz Champion', sub: 'Won Spot the Fake challenge', icon: 'target-check', color: 'var(--accent)' },
-  { key: 'Sentinel', label: 'Sentinel', sub: 'Behavior score >= 130', icon: 'radar', color: 'var(--accent-dim)' },
+  { key: 'First Report', icon: 'flag', color: 'var(--sev-ok)' },
+  { key: 'Streak Master', icon: 'flame-link', color: 'var(--sev-medium)' },
+  { key: 'Guardian', icon: 'shield-check', color: 'var(--accent)' },
+  { key: 'Quiz Champion', icon: 'target-check', color: 'var(--accent)' },
+  { key: 'Sentinel', icon: 'radar', color: 'var(--accent-strong)' },
 ] as const;
 
-// ── Reporting badges (from reports_count_malicious) ──
-const REPORTING_RANKS: Record<string, { icon: string; color: string; sub: string }> = {
-  sentinel_troops: { icon: 'chevron-1', color: 'var(--brand-sky)', sub: '1 report' },
-  front_line_defender: { icon: 'chevron-2', color: 'var(--accent)', sub: '3 reports' },
-  the_front_man: { icon: 'chevron-3', color: 'var(--warning)', sub: '5 reports' },
-  cyber_shield_elite: { icon: 'chevron-star', color: 'var(--success)', sub: '10 reports' },
+// Reporting badges (from reports_count_malicious).
+const REPORTING_RANKS: Record<string, { icon: string; color: string; threshold: number }> = {
+  sentinel_troops: { icon: 'chevron-1', color: 'var(--accent)', threshold: 1 },
+  front_line_defender: { icon: 'chevron-2', color: 'var(--accent)', threshold: 3 },
+  the_front_man: { icon: 'chevron-3', color: 'var(--sev-medium)', threshold: 5 },
+  cyber_shield_elite: { icon: 'chevron-star', color: 'var(--sev-ok)', threshold: 10 },
 };
 
-const REPORTING_FALLBACK: BadgeItem[] = [
-  { id: 'sentinel_troops', label: 'Sentinel Troops', threshold: 1, achieved: false },
-  { id: 'front_line_defender', label: 'Front Line Defender', threshold: 3, achieved: false },
-  { id: 'the_front_man', label: 'The Front Man', threshold: 5, achieved: false },
-  { id: 'cyber_shield_elite', label: 'Cyber Shield Elite', threshold: 10, achieved: false },
-];
+const REPORTING_FALLBACK: BadgeItem[] = Object.entries(REPORTING_RANKS).map(([id, rank]) => ({ id, label: id, threshold: rank.threshold, achieved: false }));
 
 function BadgeIcon({ icon, size = 26 }: { icon: string; size?: number }) {
   const common = {
@@ -141,19 +138,6 @@ function BadgeIcon({ icon, size = 26 }: { icon: string; size?: number }) {
   }
 }
 
-function impactStatement(reportsCount: number): string {
-  if (reportsCount === 0) {
-    return 'No threat reports submitted yet. Every suspicious link or file you report is an attack vector closed: start with your first report today.';
-  }
-  if (reportsCount === 1) {
-    return `Your report has helped the security team neutralize 1 verified threat before reaching other colleagues. This is just the beginning.`;
-  }
-  if (reportsCount < 5) {
-    return `Thanks to your ${reportsCount} verified reports, security analysts neutralized incoming threats before reaching other team members. You are actively fortifying the defense line.`;
-  }
-  return `${reportsCount} verified reports from you have prevented threats from propagating across the organization. Your security posture is outstanding: a true front-line defender.`;
-}
-
 interface UnifiedBadge {
   id: string;
   label: string;
@@ -164,8 +148,9 @@ interface UnifiedBadge {
 }
 
 export default function ReportingBadgesWidget({ email, legacyBadges }: { email: string; legacyBadges: string[] }) {
+  const { t } = useI18n();
   const [data, setData] = useState<ReportsSummary | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     if (!email) return;
@@ -176,14 +161,13 @@ export default function ReportingBadgesWidget({ email, legacyBadges }: { email: 
         const res = await fetch(`/api/employee/${encodeURIComponent(email)}/reports-summary`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
-        if (!cancelled) setData(json);
-      } catch (err) {
-        if (!cancelled) setError('Failed to load reporting achievements.');
-        console.error('ReportingBadgesWidget fetch error:', err);
+        if (!cancelled) { setData(json); setFailed(false); }
+      } catch {
+        if (!cancelled) setFailed(true);
       }
     }
 
-    load();
+    void load();
     const interval = setInterval(load, 10000);
     return () => { cancelled = true; clearInterval(interval); };
   }, [email]);
@@ -191,104 +175,57 @@ export default function ReportingBadgesWidget({ email, legacyBadges }: { email: 
   const badges: UnifiedBadge[] = useMemo(() => {
     const behavior: UnifiedBadge[] = LEGACY_BADGES.map(b => ({
       id: b.key,
-      label: b.label,
-      sub: b.sub,
+      label: t(`bdg.b.${b.key}` as MessageKey),
+      sub: t(`bdg.b.${b.key}.sub` as MessageKey),
       icon: b.icon,
       color: b.color,
       achieved: (legacyBadges || []).includes(b.key),
     }));
-
     const reportingSource = data?.badges || REPORTING_FALLBACK;
     const reporting: UnifiedBadge[] = reportingSource.map(b => {
-      const rank = REPORTING_RANKS[b.id] || { icon: 'chevron-1', color: 'var(--accent)', sub: `${b.threshold} reports` };
+      const rank = REPORTING_RANKS[b.id] || { icon: 'chevron-1', color: 'var(--accent)', threshold: b.threshold };
+      const known = b.id in REPORTING_RANKS;
       return {
         id: b.id,
-        label: b.label,
-        sub: rank.sub,
+        label: known ? t(`bdg.r.${b.id}` as MessageKey) : b.label,
+        sub: rank.threshold === 1 ? t('bdg.r.sub1') : t('bdg.r.sub', { n: rank.threshold }),
         icon: rank.icon,
         color: rank.color,
         achieved: b.achieved,
       };
     });
-
     return [...behavior, ...reporting];
-  }, [data, legacyBadges]);
+  }, [data, legacyBadges, t]);
 
-  const achievedCount = badges.filter(b => b.achieved).length;
+  const achieved = badges.filter(b => b.achieved).length;
+  const count = data?.reports_count_malicious ?? 0;
+  const impact = count === 0 ? t('bdg.impact.0') : count === 1 ? t('bdg.impact.1') : count < 5 ? t('bdg.impact.few', { n: count }) : t('bdg.impact.many', { n: count });
 
   return (
-    <div className="panel glass-card font-body">
-      <div className="panel-header">
-        <h2 className="panel-title font-heading" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Shield size={18} /> Security Achievements
-        </h2>
-        <span className="panel-count font-mono-data">{achievedCount} / {badges.length}</span>
+    <section className="ops-block" aria-labelledby="bdg-title">
+      <div className="ops-head">
+        <h3 id="bdg-title"><Shield size={16} aria-hidden="true" /> {t('bdg.title')}</h3>
+        <span className="emp-muted">{achieved} / {badges.length}</span>
       </div>
-
-      {/* ── Impact statement ── */}
-      <div style={{
-        marginTop: '16px',
-        marginBottom: '20px',
-        padding: '14px 16px',
-        background: 'rgba(59, 130, 246, 0.05)',
-        border: '1px solid rgba(59, 130, 246, 0.15)',
-        borderRadius: '10px',
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: '10px',
-      }}>
-        <ShieldAlert size={18} style={{ color: 'var(--success)', flexShrink: 0, marginTop: '1px' }} />
-        <p style={{ fontSize: '13px', lineHeight: 1.5, color: 'var(--text-primary)', margin: 0 }}>
-          {data ? impactStatement(data.reports_count_malicious) : 'Loading threat prevention impact...'}
-        </p>
-      </div>
-
-      {/* ── Stats row ── */}
+      <p className="inline-note"><ShieldAlert size={16} aria-hidden="true" />{data ? impact : t('bdg.loading')}</p>
       {data && (
-        <div style={{ display: 'flex', gap: '24px', marginBottom: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Trophy size={16} style={{ color: 'var(--accent)' }} />
-            <span style={{ fontSize: '13px' }}><strong className="font-mono-data">{data.reports_count_malicious}</strong> verified reports</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Flame size={16} style={{ color: 'var(--warning)' }} />
-            <span style={{ fontSize: '13px' }}><strong className="font-mono-data">{data.daily_streak}</strong> day streak</span>
-          </div>
+        <div className="strip" role="group">
+          <span className="strip-static"><Trophy size={14} aria-hidden="true" /> {t('bdg.reports', { n: data.reports_count_malicious })}</span>
+          <span className="strip-static"><Flame size={14} aria-hidden="true" /> {t('bdg.streak', { n: data.daily_streak })}</span>
         </div>
       )}
-
-      {/* ── Badge Grid ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '16px', textAlign: 'center' }}>
+      <ul className="badge-grid">
         {badges.map(badge => (
-          <div key={badge.id} style={{
-            padding: '16px 12px',
-            background: badge.achieved ? 'rgba(255,255,255,0.04)' : 'rgba(11, 17, 32, 0.15)',
-            border: '1px solid',
-            borderColor: badge.achieved ? badge.color : 'rgba(255,255,255,0.05)',
-            borderRadius: '12px',
-            opacity: badge.achieved ? 1 : 0.4,
-            transition: 'all 0.3s ease',
-          }} title={badge.sub}>
-            <div style={{
-              width: '40px', height: '40px', margin: '0 auto 8px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: badge.achieved ? badge.color : 'var(--text-muted)',
-            }}>
-              <BadgeIcon icon={badge.icon} />
-            </div>
-            <div style={{ fontSize: '11px', fontWeight: 600, color: badge.achieved ? 'var(--text-primary)' : 'var(--text-muted)' }}>{badge.label}</div>
-            <div style={{ fontSize: '9px', color: 'var(--text-secondary)', marginTop: '4px', lineHeight: '1.2' }}>{badge.sub}</div>
-          </div>
+          <li key={badge.id} data-earned={badge.achieved} title={badge.sub}>
+            <span className="badge-icon" style={{ color: badge.achieved ? badge.color : undefined }}><BadgeIcon icon={badge.icon} /></span>
+            <strong>{badge.label}</strong>
+            <small>{badge.sub}</small>
+            <em>{badge.achieved ? t('bdg.earned') : t('bdg.locked')}</em>
+          </li>
         ))}
-      </div>
-
-      {data?.next_badge && (
-        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', textAlign: 'center', marginTop: '18px' }}>
-          Need <strong className="font-mono-data">{data.next_badge.remaining}</strong> more reports to unlock <strong>{data.next_badge.id.replace(/_/g, ' ')}</strong>
-        </div>
-      )}
-
-      {error && <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '12px' }}>{error}</p>}
-    </div>
+      </ul>
+      {data?.next_badge && <p className="emp-muted">{t('bdg.next', { n: data.next_badge.remaining, name: data.next_badge.id.replace(/_/g, ' ') })}</p>}
+      {failed && <p className="field-error" role="alert">{t('bdg.err')}</p>}
+    </section>
   );
 }
