@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Logo from '@/components/Logo';
 import AccountMenu from '@/components/AccountMenu';
 import NotificationBell from '@/components/NotificationBell';
+import FirstRunTour from '@/components/FirstRunTour';
 import { useI18n } from '@/i18n/I18nProvider';
 import { usePreference } from '@/hooks/usePreference';
 import { useTheme } from '@/hooks/useTheme';
@@ -15,7 +16,7 @@ import { ROLE_ROUTES } from '@/components/admin/types';
 import NoAccess from '@/components/ui/NoAccess';
 import {
   LayoutDashboard, ShieldAlert, Trophy, FileWarning, Fish,
-  Mail, Users, Brain, FileCheck, Globe, Moon, Sun, Menu, PanelLeft, X
+  Mail, Users, Brain, FileCheck, Globe, History, Moon, Sun, Menu, PanelLeft, X
 } from 'lucide-react';
 import '@/app/dashboard.css';
 
@@ -32,6 +33,7 @@ const TAB: Record<string, TabDef> = {
   compliance: { id: 'compliance', labelKey: 'nav.compliance', icon: <FileCheck size={ICON} aria-hidden="true" /> },
   policy: { id: 'policy', labelKey: 'nav.policies', icon: <FileWarning size={ICON} aria-hidden="true" /> },
   gophish: { id: 'gophish', labelKey: 'nav.phishing', icon: <Fish size={ICON} aria-hidden="true" /> },
+  audit: { id: 'audit', labelKey: 'nav.audit', icon: <History size={ICON} aria-hidden="true" /> },
   employees: { id: 'employees', labelKey: 'nav.accounts', icon: <Users size={ICON} aria-hidden="true" /> },
 };
 
@@ -42,9 +44,9 @@ const CISO_POSTURE: TabDef = { ...TAB.overview, labelKey: 'nav.posture' };
 
 const ROLE_TABS: Record<AdminRole, TabDef[]> = {
   phishing_admin: [TAB.gophish, TAB.employees, TAB.leaderboard],
-  soc: [SOC_INCIDENTS, TAB.inbox, TAB.threats, TAB.ai],
-  grc: [TAB.overview, TAB.inbox, TAB.leaderboard, TAB.compliance, TAB.ai, TAB.employees],
-  ciso: [CISO_POSTURE, TAB.threats, TAB.leaderboard, TAB.policy, TAB.gophish, TAB.employees, TAB.ai],
+  soc: [SOC_INCIDENTS, TAB.inbox, TAB.threats, TAB.ai, TAB.audit],
+  grc: [TAB.overview, TAB.inbox, TAB.leaderboard, TAB.compliance, TAB.ai, TAB.audit, TAB.employees],
+  ciso: [CISO_POSTURE, TAB.threats, TAB.leaderboard, TAB.policy, TAB.gophish, TAB.employees, TAB.ai, TAB.audit],
 };
 
 interface DashboardLayoutProps {
@@ -104,6 +106,7 @@ export default function DashboardLayout({ role, activeTab, onTabChange, children
 
   return (
     <div className="shell font-body" data-collapsed={collapsed} data-open={mobileOpen}>
+      <FirstRunTour role={role} />
       <a className="skip-link" href="#content">{t('shell.skip')}</a>
       <div className="shell-scrim" onClick={() => setMobileOpen(false)} aria-hidden="true" />
 

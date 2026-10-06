@@ -124,6 +124,20 @@ def session_info():
     return jsonify({"authenticated": True, "user": identity.as_dict()}), 200
 
 
+@auth_bp.route("/api/auth/language", methods=["POST"])
+def save_language():
+    identity = getattr(g, "auth_identity", None) or auth_service.get_identity(_session_token())
+    if not identity:
+        return jsonify({"error": "Session tidak valid", "code": "UNAUTHORIZED"}), 401
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "JSON object wajib diisi", "code": "INVALID_PAYLOAD"}), 400
+    try:
+        return jsonify({"language": auth_service.set_language(identity, body.get("language"))}), 200
+    except auth_service.AuthError as exc:
+        return _error_response(exc)
+
+
 @auth_bp.route("/api/auth/logout", methods=["POST"])
 def logout():
     token = _session_token()

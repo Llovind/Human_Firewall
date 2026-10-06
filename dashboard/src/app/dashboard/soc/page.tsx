@@ -9,6 +9,7 @@ import ThreatCacheSection from '@/components/admin/ThreatCacheSection';
 import LoginHistorySection from '@/components/admin/LoginHistorySection';
 import { usePolling } from '@/hooks/usePolling';
 import type { Incident, Stats, ThreatCacheEntry, AISummary, BehaviorScore, ComplianceSummary, AdminLoginEvent } from '@/components/admin/types';
+import AuditLogSection from '@/components/admin/AuditLogSection';
 import AIIntelligenceSection from '@/components/admin/AIIntelligenceSection';
 import ProxyOperationsSection from '@/components/admin/ProxyOperationsSection';
 import SecurityInboxSection from '@/components/admin/SecurityInboxSection';
@@ -80,6 +81,7 @@ export default function SOCDashboard() {
         </>
       )}
 
+      {activeTab === 'audit' && <AuditLogSection />}
       {activeTab === 'ai' && (
         <AIIntelligenceSection role="soc" readOnly={false} />
       )}

@@ -6,6 +6,8 @@ import { useI18n } from '@/i18n/I18nProvider';
 import type { MessageKey } from '@/i18n/messages';
 import ThreatEvidence, { EmployeeReport, FileScan, ThreatAnalysis } from './ThreatEvidence';
 
+const CODES = ['RATE_LIMITED', 'DESCRIPTION_TOO_LONG', 'IN_PROGRESS', 'CONSENT_REQUIRED', 'FILE_REQUIRED', 'FILE_TOO_LARGE', 'FILE_EMPTY', 'QUEUE_FULL', 'INVALID_URL'];
+
 type T = (key: MessageKey, vars?: Record<string, string | number>) => string;
 
 function fileScanLabel(scan: FileScan, t: T) {
@@ -107,7 +109,7 @@ export default function EmployeeUrlScanner({ onReportComplete }: { onReportCompl
         method: 'POST', headers, body,
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(t('scan2.err.request'));
+      if (!res.ok) throw new Error(CODES.includes(data.code) ? t(`scan2.code.${data.code}` as MessageKey) : t('scan2.err.request'));
       if (mode === 'scan') setScan(data.data);
       else if (mode === 'file') {
         setFileScans(previous => [data.scan, ...previous.filter(item => item.id !== data.scan.id)].slice(0, 100));

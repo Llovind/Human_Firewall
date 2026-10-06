@@ -14,6 +14,8 @@ export interface AuthUser {
   userName: string;
   division: string;
   role: 'employee' | 'phishing_admin' | 'soc' | 'grc' | 'ciso';
+  /** Chosen by the person and stored on the account; null until they choose. */
+  language?: 'en' | 'id' | null;
 }
 
 interface AuthContextType {

@@ -52,6 +52,7 @@ class AuthIdentity:
     role: str
     division: str
     session_id: str
+    language: str | None = None  # chosen by the person; None until they choose
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -60,6 +61,7 @@ class AuthIdentity:
             "userName": self.email.split("@", 1)[0].replace(".", " ").title(),
             "division": self.division or "General",
             "role": self.role,
+            "language": self.language,
         }
 
 
@@ -625,9 +627,10 @@ def verify_login_otp(
             success=True, request_id=request_id, ip_hash=ip_digest,
         )
         conn.commit()
+        language = conn.execute("SELECT language FROM employee_accounts WHERE id = ?", (row["account_id"],)).fetchone()["language"]
         identity = AuthIdentity(
             account_id=row["account_id"], email=row["email"], role=row["role"],
-            division=row["divisi"], session_id=session_id,
+            division=row["divisi"], session_id=session_id, language=language,
         )
         return raw_token, identity.as_dict(), ttl_seconds
     except Exception:
@@ -646,7 +649,7 @@ def get_identity(raw_token: str) -> AuthIdentity | None:
         row = conn.execute(
             """
             SELECT s.id AS session_id, s.expires_at, s.revoked_at,
-                   a.id AS account_id, a.email, a.role, a.is_active,
+                   a.id AS account_id, a.email, a.role, a.is_active, a.language,
                    COALESCE(u.divisi, 'General') AS divisi
             FROM auth_sessions s
             JOIN employee_accounts a ON a.id = s.account_id
@@ -666,8 +669,24 @@ def get_identity(raw_token: str) -> AuthIdentity | None:
         conn.commit()
         return AuthIdentity(
             account_id=row["account_id"], email=row["email"], role=row["role"],
-            division=row["divisi"], session_id=row["session_id"],
+            division=row["divisi"], session_id=row["session_id"], language=row["language"],
         )
+    finally:
+        conn.close()
+
+
+LANGUAGES = ("en", "id")
+
+
+def set_language(identity: AuthIdentity, language: str) -> str:
+    """Remember the language a person chose, so it follows them to other browsers and devices."""
+    if language not in LANGUAGES:
+        raise AuthError("INVALID_LANGUAGE", "Language must be en or id", 400)
+    conn = database.get_connection()
+    try:
+        conn.execute("UPDATE employee_accounts SET language = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (language, identity.account_id))
+        conn.commit()
+        return language
     finally:
         conn.close()
 

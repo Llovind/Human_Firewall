@@ -6,6 +6,7 @@ import "./ui.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { I18nProvider } from "@/i18n/I18nProvider";
 import { ToastProvider } from "@/components/ui/Toast";
+import LanguageSync from "@/components/LanguageSync";
 
 const plexSans = IBM_Plex_Sans({
   subsets: ["latin"],
@@ -42,6 +43,7 @@ export default function RootLayout({
         <I18nProvider>
           <ToastProvider>
             <AuthProvider>
+              <LanguageSync />
               {children}
             </AuthProvider>
           </ToastProvider>

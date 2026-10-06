@@ -11,6 +11,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useI18n } from '@/i18n/I18nProvider';
 import { useTheme } from '@/hooks/useTheme';
 import { ROLE_ROUTES } from '@/lib/authSession';
+import { tourKey, type TourRole } from '@/components/FirstRunTour';
+import { usePreference } from '@/hooks/usePreference';
 import type { MessageKey } from '@/i18n/messages';
 
 /** One place for the things a person decides about themselves: language, theme, password, signing out. */
@@ -19,6 +21,7 @@ export default function SettingsPage() {
   const { t, lang, setLang } = useI18n();
   const [theme, toggleTheme] = useTheme();
   const [passwordOpen, setPasswordOpen] = useState(false);
+  const [, setTourSeen] = usePreference(tourKey((user?.role ?? 'employee') as TourRole), '');
 
   if (isLoading) return <main className="settings-page"><div className="settings-main"><StateMessage variant="loading" title={t('settings.loading')} /></div></main>;
   if (!isAuthenticated || !user) redirect('/auth');
@@ -69,6 +72,7 @@ export default function SettingsPage() {
             <span>{t('settings.password')}<br /><small>{t('settings.password.hint')}</small></span>
             <button type="button" className="btn" onClick={() => setPasswordOpen(true)}><KeyRound size={14} aria-hidden="true" /> {t('account.changePassword')}</button>
           </div>
+          <div className="settings-row"><span>{t('tour.title')}</span><button type="button" className="btn" onClick={() => { setTourSeen(''); window.location.assign(home); }}>{t('tour.replay')}</button></div>
           <p className="emp-muted">{t('settings.session')}</p>
           <div><button type="button" className="btn" onClick={() => void logout()}><LogOut size={14} aria-hidden="true" /> {t('settings.signout')}</button></div>
         </section>

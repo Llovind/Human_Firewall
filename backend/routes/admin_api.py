@@ -111,6 +111,19 @@ def dashboard_summary():
     return jsonify(summary), 200
 
 
+@admin_api_bp.route('/api/admin/audit-log', methods=['GET'])
+@require_roles('soc', 'grc', 'ciso')
+def audit_log():
+    """Who decided what, when and why: incidents, access requests, education warnings and proxy block/allow."""
+    from services import audit_log_service
+    try:
+        limit = max(1, min(300, int(request.args.get('limit', 100))))
+        events = audit_log_service.list_events(limit, request.args.get('kind') or None)
+    except ValueError:
+        return jsonify({'error': 'limit must be a number and kind one of incident, access, warning, proxy'}), 400
+    return jsonify({'events': events}), 200
+
+
 @admin_api_bp.route('/api/admin/trends', methods=['GET'])
 @require_roles('soc', 'grc', 'ciso')
 def weekly_trends():

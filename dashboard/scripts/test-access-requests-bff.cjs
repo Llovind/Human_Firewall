@@ -8,8 +8,9 @@ const { NextResponse } = require('next/server');
 function load(file, backend) {
   const exports = {};
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, {
-    exports, Response, URL,
+    exports, Response, URL, URLSearchParams,
     require: name => name === '@/lib/backendClient' ? { fetchFlaskBackend: backend }
+      : name === '@/lib/authBackend' ? { fetchAuthBackend: (_request, path, options) => backend(path, options) }
       : name === '@/lib/authSession' ? { AUTH_SESSION_COOKIE: 'test_session' }
       : { NextResponse },
   });
@@ -86,5 +87,32 @@ function request(url, { method = 'GET', body, type = 'application/json', authent
   trends = load('src/app/api/admin/trends/route.ts', async () => { throw new Error('backend down'); });
   assert.equal((await trends.GET(request('/api/admin/trends'))).status, 503);
 
-  console.log('PASS: access request and trend routes need a session, accept JSON only, validate the id, encode filters and pass back end answers through');
+  // Audit log feed: session needed, kind and limit validated, back end answer passed through
+  calls.length = 0;
+  let audit = load('src/app/api/admin/audit-log/route.ts', backend(200, { events: [] }));
+  assert.equal((await audit.GET(request('/api/admin/audit-log', { authenticated: false }))).status, 401);
+  assert.equal((await audit.GET(request('/api/admin/audit-log?kind=bogus'))).status, 400);
+  assert.equal((await audit.GET(request('/api/admin/audit-log?limit=0'))).status, 400);
+  assert.equal((await audit.GET(request('/api/admin/audit-log?limit=999'))).status, 400);
+  assert.equal(calls.length, 0, 'bad filters never reach the back end');
+  assert.equal((await audit.GET(request('/api/admin/audit-log?kind=proxy&limit=50'))).status, 200);
+  assert.equal(calls[0].path, '/api/admin/audit-log?kind=proxy&limit=50');
+  audit = load('src/app/api/admin/audit-log/route.ts', backend(403, { error: 'Forbidden' }));
+  assert.equal((await audit.GET(request('/api/admin/audit-log'))).status, 403);
+  audit = load('src/app/api/admin/audit-log/route.ts', async () => { throw new Error('backend down'); });
+  assert.equal((await audit.GET(request('/api/admin/audit-log'))).status, 503);
+
+  // Language on the account: session needed, JSON only, only en or id reach the back end
+  calls.length = 0;
+  let language = load('src/app/api/auth/language/route.ts', backend(200, { language: 'id' }));
+  assert.equal((await language.POST(request('/api/auth/language', { method: 'POST', body: { language: 'id' }, authenticated: false }))).status, 401);
+  assert.equal((await language.POST(request('/api/auth/language', { method: 'POST', body: '{"language":"id"}', type: 'text/plain' }))).status, 415);
+  assert.equal((await language.POST(request('/api/auth/language', { method: 'POST', body: { language: 'fr' } }))).status, 400);
+  assert.equal(calls.length, 0, 'unsupported languages never reach the back end');
+  assert.equal((await language.POST(request('/api/auth/language', { method: 'POST', body: { language: 'id' } }))).status, 200);
+  assert.deepEqual(JSON.parse(calls[0].options.body), { language: 'id' });
+  language = load('src/app/api/auth/language/route.ts', async () => { throw new Error('backend down'); });
+  assert.equal((await language.POST(request('/api/auth/language', { method: 'POST', body: { language: 'id' } }))).status, 503);
+
+  console.log('PASS: access request, trend, audit and language routes need a session, accept JSON only, validate the id, encode filters and pass back end answers through');
 })().catch(error => { console.error(error); process.exit(1); });

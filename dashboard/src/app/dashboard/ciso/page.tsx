@@ -14,6 +14,7 @@ import EmployeeRosterSection from '@/components/admin/EmployeeRosterSection';
 import { usePolling } from '@/hooks/usePolling';
 import type { Incident, Stats, ThreatCacheEntry, AISummary, BehaviorScore, PolicyDecision, ComplianceSummary, GoPhishCampaign, LeaderboardResponse, EmployeeAccount, Division } from '@/components/admin/types';
 
+import AuditLogSection from '@/components/admin/AuditLogSection';
 import AIIntelligenceSection from '@/components/admin/AIIntelligenceSection';
 
 export default function CISODashboard() {
@@ -137,6 +138,7 @@ export default function CISODashboard() {
         />
       )}
 
+      {activeTab === 'audit' && <AuditLogSection />}
       {activeTab === 'ai' && (
         <AIIntelligenceSection role="ciso" readOnly={true} />
       )}

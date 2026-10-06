@@ -8,6 +8,7 @@ import EmployeeRosterSection from '@/components/admin/EmployeeRosterSection';
 import { usePolling } from '@/hooks/usePolling';
 import type { Incident, Stats, ThreatCacheEntry, AISummary, BehaviorScore, ComplianceSummary, LeaderboardResponse, EmployeeAccount, Division } from '@/components/admin/types';
 import { ComplianceReadinessSection } from '@/components/admin/ComplianceReadinessSection';
+import AuditLogSection from '@/components/admin/AuditLogSection';
 import AIIntelligenceSection from '@/components/admin/AIIntelligenceSection';
 import SecurityInboxSection from '@/components/admin/SecurityInboxSection';
 
@@ -73,6 +74,7 @@ export default function GCDashboard() {
         <ComplianceReadinessSection readOnly={false} />
       )}
 
+      {activeTab === 'audit' && <AuditLogSection />}
       {activeTab === 'ai' && (
         <AIIntelligenceSection role="grc" readOnly={false} />
       )}

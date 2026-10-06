@@ -63,7 +63,14 @@ export const routes: Route[] = [
   { method: 'GET', path: /^\/api\/auth\/session$/, alwaysOk: true, normal: ctx => (
     ctx.request.cookies.get(SIGNED_OUT_COOKIE)?.value === '1'
       ? NextResponse.json({ authenticated: false }, { status: 401 })
-      : { authenticated: true, user: f.MOCK_USERS[ctx.role] }) },
+      : { authenticated: true, user: { ...f.MOCK_USERS[ctx.role], language: ctx.request.cookies.get('afferent_mock_language')?.value ?? null } }) },
+  { method: 'POST', path: /^\/api\/auth\/language$/, alwaysOk: true, normal: async ctx => {
+    const body = await ctx.body();
+    if (body.language !== 'en' && body.language !== 'id') return fail(400, 'Language must be en or id');
+    const response = NextResponse.json({ language: body.language });
+    response.cookies.set('afferent_mock_language', String(body.language), { path: '/', sameSite: 'lax' });
+    return response;
+  } },
   { method: 'POST', path: /^\/api\/auth\/login$/, alwaysOk: true, normal: async ctx => {
     const body = await ctx.body();
     if (String(body.email || '').includes('bad')) return fail(401, 'Email or password is incorrect.');
@@ -120,6 +127,7 @@ export const routes: Route[] = [
 
   /* ── SOC / GRC / CISO dashboards ───────────────────── */
   { method: 'GET', path: /^\/api\/incident$/, normal: ctx => f.incidents(ctx.request.cookies.get(CLOSED_COOKIE)?.value, readJson(ctx.request, OWNERS_COOKIE, {}) as Record<string, string | null>), empty: () => ({ incidents: [], stats: emptyStats }) },
+  { method: 'GET', path: /^\/api\/admin\/audit-log$/, normal: ctx => f.auditLog(ctx.request.nextUrl.searchParams.get('kind')), empty: () => ({ events: [] }) },
   { method: 'GET', path: /^\/api\/admin\/trends$/, normal: () => f.weeklyTrends(), empty: () => ({ weeks: [] }) },
   { method: 'GET', path: /^\/api\/incident\/([A-Za-z0-9_-]{3,64})\/events$/, normal: ctx => f.incidentEvents(ctx.match[1], (readJson(ctx.request, EVENTS_COOKIE, []) as { ticket_id: string }[]).filter(e => e.ticket_id === ctx.match[1])), empty: () => ({ events: [] }) },
   { method: 'PATCH', path: /^\/api\/incident$/, normal: async ctx => {

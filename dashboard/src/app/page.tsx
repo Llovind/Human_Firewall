@@ -9,6 +9,7 @@ import ThemeToggle from '@/components/ThemeToggle';
 import LanguageSwitch from '@/components/ui/LanguageSwitch';
 import AccountMenu from '@/components/AccountMenu';
 import NotificationBell from '@/components/NotificationBell';
+import FirstRunTour from '@/components/FirstRunTour';
 import EmployeeHome, { type DivisionAverage, type EmployeeActivity, type EmployeeScore } from '@/components/employee/EmployeeHome';
 import TrainingPicker from '@/components/employee/TrainingPicker';
 import SpotTheFake from '@/components/employee/SpotTheFake';
@@ -96,6 +97,7 @@ export default function EmployeeDashboardPage() {
 
   return (
     <div className="app emp-page">
+      <FirstRunTour role="employee" />
       <header className="emp-top">
         <span className="brand"><Logo variant="mark" size={28} />AFFERENT</span>
         <span className="emp-top-tools">

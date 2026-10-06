@@ -101,6 +101,7 @@ export const quizToday = () => ({
   question_text: 'You receive an email from "IT Support" asking you to confirm your password within 30 minutes. What should you do?',
   options: ['Reply with your password so IT can verify it', 'Click the link and sign in quickly', 'Do not respond; report the email to the security team', 'Forward it to coworkers to warn them'],
   correct_answer_index: 2, category: 'Phishing', difficulty: 'easy',
+  explanation: 'Real IT teams never ask for your password, and a short deadline is a classic pressure trick. Report it so the security team can warn others.',
 });
 export const quizDone = () => ({ completed_today: true, daily_streak: 6, message: 'Anda sudah menyelesaikan kuis hari ini — Streak terjaga!' });
 export const quizComplete = (correct: boolean) => ({
@@ -406,3 +407,17 @@ export const weeklyTrends = () => {
     return { week_start: day.toISOString().slice(0, 10), avg_score: avg, people: 12, high_risk: high[i], open_incidents: open[i], reports: 10 + i * 2, clicks: 14 - i };
   }) };
 };
+
+export const auditLog = (kind: string | null) => {
+  const events = [
+    { id: 'incident-9', at: ago(25 * 60 * 1000), kind: 'incident', event: 'resolved', actor: 'rafi.pratama@afferent.local', actor_role: 'soc', subject: 'INC-2038', detail: 'Domain confirmed as the vendor’s new address.' },
+    { id: 'proxy-31', at: ago(70 * 60 * 1000), kind: 'proxy', event: 'block', actor: 'rafi.pratama@afferent.local', actor_role: 'soc', subject: 'secure-payroll-update.example', detail: 'Matches a known phishing kit.' },
+    { id: 'access-4', at: ago(3 * HOUR), kind: 'access', event: 'allowed', actor: 'rafi.pratama@afferent.local', actor_role: 'soc', subject: 'supplier-portal.example', detail: 'Verified with the supplier by phone.' },
+    { id: 'warning-2', at: ago(5 * HOUR), kind: 'warning', event: 'sent', actor: 'sari.dewi@afferent.local', actor_role: 'grc', subject: 'gilang.permana@afferent.local', detail: 'Please finish the security training this week.' },
+    { id: 'incident-8', at: ago(9 * HOUR), kind: 'incident', event: 'assigned', actor: 'rafi.pratama@afferent.local', actor_role: 'soc', subject: 'INC-2040', detail: 'rafi.pratama@afferent.local' },
+    { id: 'access-3', at: ago(26 * HOUR), kind: 'access', event: 'denied', actor: 'rafi.pratama@afferent.local', actor_role: 'soc', subject: 'free-giftcards.example', detail: 'Known scam site.' },
+    { id: 'proxy-30', at: ago(30 * HOUR), kind: 'proxy', event: 'allow', actor: 'rafi.pratama@afferent.local', actor_role: 'soc', subject: 'docs.partner.example', detail: 'Partner documentation.' },
+  ];
+  return { events: kind ? events.filter(e => e.kind === kind) : events };
+};
+

@@ -271,9 +271,12 @@ def init_db():
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 password_changed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                last_login_at TIMESTAMP
+                last_login_at TIMESTAMP,
+                language TEXT CHECK (language IN ('en', 'id'))
             )
         ''')
+        if not _column_exists(cursor, 'employee_accounts', 'language'):
+            cursor.execute("ALTER TABLE employee_accounts ADD COLUMN language TEXT CHECK (language IN ('en', 'id'))")
 
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS otp_challenges (
@@ -612,6 +615,9 @@ def init_db():
                 difficulty TEXT NOT NULL
             )
         ''')
+        # Added later: a short "why" shown after the answer. Older databases get the column and the seeded texts.
+        if 'explanation' not in [col[1] for col in cursor.execute('PRAGMA table_info(quiz_questions)').fetchall()]:
+            cursor.execute('ALTER TABLE quiz_questions ADD COLUMN explanation TEXT')
 
         # Auto-seed if empty
         row = cursor.execute('SELECT COUNT(*) FROM quiz_questions').fetchone()
@@ -838,6 +844,10 @@ def init_db():
                     INSERT INTO quiz_questions (question_text, options, correct_answer_index, category, difficulty)
                     VALUES (?, ?, ?, ?, ?)
                 ''', (q["question_text"], json.dumps(q["options"]), q["correct_answer_index"], q["category"], q["difficulty"]))
+
+        from quiz_explanations import EXPLANATIONS
+        for question_text, why in EXPLANATIONS.items():
+            cursor.execute('UPDATE quiz_questions SET explanation = ? WHERE explanation IS NULL AND substr(question_text, 1, 80) = ?', (why, question_text))
 
         conn.commit()
     finally:
@@ -3331,7 +3341,8 @@ def get_daily_question(email: str) -> dict:
                 "options": json.loads(q_row["options"]),
                 "correct_answer_index": q_row["correct_answer_index"],
                 "category": q_row["category"],
-                "difficulty": q_row["difficulty"]
+                "difficulty": q_row["difficulty"],
+                "explanation": q_row["explanation"],
             }
         return None
     finally:
