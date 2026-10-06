@@ -8,7 +8,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Parameter email wajib diisi' }, { status: 400 });
     }
 
-    const res = await fetchFlaskBackend(`/api/quiz/today?employee_id=${encodeURIComponent(email)}`, {
+    const lang = request.nextUrl.searchParams.get('lang') === 'en' ? 'en' : 'id';
+    const res = await fetchFlaskBackend(`/api/quiz/today?employee_id=${encodeURIComponent(email)}&lang=${lang}`, {
       method: 'GET',
     });
 

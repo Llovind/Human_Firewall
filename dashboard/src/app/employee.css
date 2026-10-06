@@ -2,7 +2,8 @@
    Spec: vault Redesign/Screen Briefs/Employee Home Brief.md */
 .emp-top { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 24px; background: var(--bg-surface); border-bottom: 1px solid var(--border); }
 .emp-top .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14px; letter-spacing: .12em; }
-.emp-top-tools { display: flex; align-items: center; gap: 8px; }
+.emp-top-tools { display: flex; align-items: center; gap: 8px; min-width: 0; }
+@media (max-width: 380px) { .emp-top .brand-name { display: none; } .emp-top-tools { gap: 4px; } }
 .emp-page { background: var(--bg-deep); min-height: 100dvh; color: var(--text-primary); display: flex; flex-direction: column; }
 .emp-main { width: 100%; max-width: 1040px; margin: 0 auto; padding: 24px 24px 56px; flex: 1; }
 .emp-home { display: grid; gap: 16px; }
@@ -146,3 +147,7 @@
 .quiz-revive { display: grid; gap: 6px; justify-items: start; padding: 12px 14px; background: var(--sev-medium-bg); border-radius: var(--radius-md); font-size: var(--text-sm); }
 .quiz-revive strong { display: inline-flex; align-items: center; gap: 6px; color: var(--sev-medium); font-size: var(--text-base); }
 @media (max-width: 640px) { .game-choices .btn { flex: 1 1 100%; } }
+
+/* Long activity text must wrap instead of widening the card on very narrow phones. */
+.emp-card, .emp-list, .emp-list li { min-width: 0; }
+.emp-list-main { overflow-wrap: anywhere; }

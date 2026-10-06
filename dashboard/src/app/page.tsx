@@ -99,7 +99,7 @@ export default function EmployeeDashboardPage() {
     <div className="app emp-page">
       <FirstRunTour role="employee" />
       <header className="emp-top">
-        <span className="brand"><Logo variant="mark" size={28} />AFFERENT</span>
+        <span className="brand"><Logo variant="mark" size={28} /><span className="brand-name">AFFERENT</span></span>
         <span className="emp-top-tools">
           <LanguageSwitch />
           <ThemeToggle />

@@ -23,6 +23,18 @@ class QuizExplanation(unittest.TestCase):
         self.assertIn('explanation', question)
         self.assertTrue(question['explanation'])
 
+    def test_every_seeded_question_has_an_english_version_with_matching_options(self):
+        conn = database.get_connection()
+        try:
+            rows = conn.execute('SELECT options, options_en, question_text_en, explanation_en FROM quiz_questions WHERE question_text_en IS NOT NULL').fetchall()
+        finally:
+            conn.close()
+        self.assertEqual(len(rows), 30)
+        import json
+        for row in rows:
+            self.assertEqual(len(json.loads(row['options'])), len(json.loads(row['options_en'])))
+            self.assertTrue(row['explanation_en'])
+
     def test_init_is_safe_to_repeat(self):
         database.init_db()
         database.init_db()

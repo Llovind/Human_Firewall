@@ -152,8 +152,8 @@ export default function DashboardLayout({ role, activeTab, onTabChange, children
           <Globe size={ICON} aria-hidden="true" />
           <span className="sb-label">{t('lang.label')}</span>
           <span className="sb-lang-buttons">
-            <button type="button" aria-pressed={lang === 'en'} aria-label={t('lang.en')} lang="en" onClick={() => setLang('en')}>EN</button>
-            <button type="button" aria-pressed={lang === 'id'} aria-label={t('lang.id')} lang="id" onClick={() => setLang('id')}>ID</button>
+            <button type="button" aria-pressed={lang === 'en'} aria-label={`EN, ${t('lang.en')}`} lang="en" onClick={() => setLang('en')}>EN</button>
+            <button type="button" aria-pressed={lang === 'id'} aria-label={`ID, ${t('lang.id')}`} lang="id" onClick={() => setLang('id')}>ID</button>
           </span>
         </div>
         <button type="button" className="sb-link" onClick={toggleTheme} title={collapsed ? themeLabel : undefined}>

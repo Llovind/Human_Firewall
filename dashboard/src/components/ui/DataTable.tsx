@@ -50,7 +50,7 @@ export default function DataTable<T>({ caption, columns, rows, rowKey, onRowClic
 
   if (rows.length === 0 && empty) return <>{empty}</>;
   return (
-    <div className="table-wrap" data-density={density}>
+    <div className="table-wrap" data-density={density} role="region" aria-label={caption} tabIndex={0}>
       <table className="data-table">
         <caption className="visually-hidden">{caption}</caption>
         <thead>

@@ -1241,7 +1241,7 @@ export const en = {
   'settings.signout': 'Sign out',
   'settings.loading': 'Loading your settings…',
   'notif.title': 'Notifications',
-  'notif.button': 'Notifications ({n} new)',
+  'notif.button': '{n} new notifications',
   'notif.button.none': 'Notifications',
   'notif.none': 'You are all caught up.',
   'notif.markRead': 'Mark all as read',
@@ -1332,6 +1332,7 @@ export const en = {
   'tour.phishing_admin.2.text': 'Create or edit accounts and divisions here.',
   'tour.phishing_admin.3.title': 'Leaderboard',
   'tour.phishing_admin.3.text': 'See who is doing well and who may need a reminder.',
+  'ops.dialog.placeholder': 'For example: matches a known phishing kit',
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -2562,7 +2563,7 @@ export const id: Record<MessageKey, string> = {
   'settings.signout': 'Keluar',
   'settings.loading': 'Memuat pengaturanmu…',
   'notif.title': 'Notifikasi',
-  'notif.button': 'Notifikasi ({n} baru)',
+  'notif.button': '{n} notifikasi baru',
   'notif.button.none': 'Notifikasi',
   'notif.none': 'Tidak ada yang baru.',
   'notif.markRead': 'Tandai semua sudah dibaca',
@@ -2653,6 +2654,7 @@ export const id: Record<MessageKey, string> = {
   'tour.phishing_admin.2.text': 'Buat atau ubah akun dan divisi di sini.',
   'tour.phishing_admin.3.title': 'Papan peringkat',
   'tour.phishing_admin.3.text': 'Lihat siapa yang berprestasi dan siapa yang mungkin perlu pengingat.',
+  'ops.dialog.placeholder': 'Contoh: cocok dengan kit phishing yang dikenal',
 };
 
 export type Language = 'en' | 'id';

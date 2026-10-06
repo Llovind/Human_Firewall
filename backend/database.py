@@ -618,11 +618,14 @@ def init_db():
         # Added later: a short "why" shown after the answer. Older databases get the column and the seeded texts.
         if 'explanation' not in [col[1] for col in cursor.execute('PRAGMA table_info(quiz_questions)').fetchall()]:
             cursor.execute('ALTER TABLE quiz_questions ADD COLUMN explanation TEXT')
+        # English version of each question, stored beside the Indonesian one (same option order, so one correct index).
+        for column in ('question_text_en', 'options_en', 'explanation_en'):
+            if not _column_exists(cursor, 'quiz_questions', column):
+                cursor.execute(f'ALTER TABLE quiz_questions ADD COLUMN {column} TEXT')
 
         # Auto-seed if empty
         row = cursor.execute('SELECT COUNT(*) FROM quiz_questions').fetchone()
         if row and row[0] == 0:
-            import json
             questions_to_seed = [
                 # Phishing (10 questions)
                 {
@@ -848,6 +851,15 @@ def init_db():
         from quiz_explanations import EXPLANATIONS
         for question_text, why in EXPLANATIONS.items():
             cursor.execute('UPDATE quiz_questions SET explanation = ? WHERE explanation IS NULL AND substr(question_text, 1, 80) = ?', (why, question_text))
+        # Older databases get the English texts too. Only empty fields are filled, so edits made by hand are kept.
+        from quiz_content_en import QUIZ_EN
+        for question_text, en in QUIZ_EN.items():
+            cursor.execute('''UPDATE quiz_questions SET
+                                  question_text_en = COALESCE(question_text_en, ?),
+                                  options_en = COALESCE(options_en, ?),
+                                  explanation_en = COALESCE(explanation_en, ?)
+                              WHERE substr(question_text, 1, 80) = ?''',
+                           (en['question'], json.dumps(en['options'], ensure_ascii=False), en['explanation'], question_text))
 
         conn.commit()
     finally:
@@ -3295,8 +3307,10 @@ def insert_incident(
         conn.close()
 
 
-def get_daily_question(email: str) -> dict:
-    """Retrieve 1 deterministic random question per day per user based on date + email seed."""
+def get_daily_question(email: str, lang: str = 'id') -> dict:
+    """Retrieve 1 deterministic random question per day per user based on date + email seed.
+
+    lang='en' returns the English text where it exists; questions without one are served in Indonesian."""
     conn = get_connection()
     try:
         today_str = date.today().isoformat()
@@ -3334,15 +3348,17 @@ def get_daily_question(email: str) -> dict:
 
         q_row = conn.execute('SELECT * FROM quiz_questions WHERE id = ?', (selected_id,)).fetchone()
         if q_row:
+            english = lang == 'en' and q_row["question_text_en"] and q_row["options_en"]
             return {
                 "completed_today": False,
                 "id": q_row["id"],
-                "question_text": q_row["question_text"],
-                "options": json.loads(q_row["options"]),
+                "question_text": q_row["question_text_en"] if english else q_row["question_text"],
+                "options": json.loads(q_row["options_en"] if english else q_row["options"]),
                 "correct_answer_index": q_row["correct_answer_index"],
                 "category": q_row["category"],
                 "difficulty": q_row["difficulty"],
-                "explanation": q_row["explanation"],
+                "explanation": (q_row["explanation_en"] or q_row["explanation"]) if english else q_row["explanation"],
+                "language": 'en' if english else 'id',
             }
         return None
     finally:

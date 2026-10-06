@@ -23,12 +23,12 @@ export default function AccountMenu({ variant = 'pill', roleLabel }: AccountMenu
   const [open, setOpen] = useState(false);
   const name = user?.userName || t('account.menu');
   const summary = variant === 'sidebar'
-    ? <><span className="avatar" aria-hidden="true">{initials(name)}</span><span className="sb-user-meta"><span>{name}</span>{roleLabel && <small>{roleLabel}</small>}</span><ChevronsUpDown className="sb-user-chev" size={16} aria-hidden="true" /></>
+    ? <><span className="avatar" aria-hidden="true" data-initials={initials(name)} /><span className="sb-user-meta"><span>{name}</span>{roleLabel && <>{' '}<small>{roleLabel}</small></>}</span><ChevronsUpDown className="sb-user-chev" size={16} aria-hidden="true" /></>
     : <><UserRound size={16} aria-hidden="true" /><span>{name}</span></>;
 
   return <>
     <details className="account-menu">
-      <summary className={variant === 'pill' ? 'user-badge' : undefined} aria-label={`${t('account.menu')}: ${name}`}>{summary}</summary>
+      <summary className={variant === 'pill' ? 'user-badge' : undefined} aria-label={[name, roleLabel].filter(Boolean).join(' ')}>{summary}</summary>
       <div className="account-dropdown">
         <p>{user?.email}</p>
         <Link href="/settings" className="account-link"><Settings size={16} aria-hidden="true" />{t('settings.title')}</Link>

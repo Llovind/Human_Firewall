@@ -114,5 +114,14 @@ function request(url, { method = 'GET', body, type = 'application/json', authent
   language = load('src/app/api/auth/language/route.ts', async () => { throw new Error('backend down'); });
   assert.equal((await language.POST(request('/api/auth/language', { method: 'POST', body: { language: 'id' } }))).status, 503);
 
-  console.log('PASS: access request, trend, audit and language routes need a session, accept JSON only, validate the id, encode filters and pass back end answers through');
+  // Quiz question language: only en or id reach the back end, anything else falls back to Indonesian
+  calls.length = 0;
+  const quiz = load('src/app/api/quiz/today/route.ts', backend(200, { id: 1 }));
+  assert.equal((await quiz.GET(request('/api/quiz/today'))).status, 400);
+  await quiz.GET(request('/api/quiz/today?email=a@b.test&lang=en'));
+  await quiz.GET(request('/api/quiz/today?email=a@b.test&lang=fr'));
+  await quiz.GET(request('/api/quiz/today?email=a@b.test'));
+  assert.deepEqual(calls.map(call => call.path.split('&lang=')[1]), ['en', 'id', 'id']);
+
+  console.log('PASS: access request, trend, audit, language and quiz routes need a session, accept JSON only, validate the id, encode filters and pass back end answers through');
 })().catch(error => { console.error(error); process.exit(1); });

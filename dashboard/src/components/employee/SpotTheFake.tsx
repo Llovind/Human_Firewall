@@ -36,7 +36,7 @@ function Portal({ name, kind, active, onPin }: { name: Side; kind: 'fake' | 'rea
   const { t } = useI18n();
   const data = kind === 'fake' ? FAKE : REAL;
   const pin = (n: Pin) => (
-    <button type="button" className="game-pin" aria-pressed={active === n} aria-label={t('game.compare.marker', { detail: t(PIN_KEY[n]), name })} onClick={() => onPin(n)}>{n}</button>
+    <button type="button" className="game-pin" aria-pressed={active === n} aria-label={`${n}. ${t('game.compare.marker', { detail: t(PIN_KEY[n]), name })}`} onClick={() => onPin(n)}>{n}</button>
   );
   return (
     <section className="game-portal" aria-label={t('game.page', { name })}>

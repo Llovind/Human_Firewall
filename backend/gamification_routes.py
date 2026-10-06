@@ -178,7 +178,8 @@ def get_quiz_today():
         return err
 
     try:
-        question = db.get_daily_question(validated_email)
+        lang = request.args.get("lang", "id")
+        question = db.get_daily_question(validated_email, lang if lang in ("en", "id") else "id")
         if question is None:
             return error_response(404, "QUESTION_NOT_FOUND", "Tidak ada pertanyaan kuis yang tersedia")
         return jsonify(question), 200

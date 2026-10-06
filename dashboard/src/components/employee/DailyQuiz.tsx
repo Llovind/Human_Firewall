@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, CheckCircle2, Flame, ShieldCheck, XCircle } from 'lucide-react';
 import StateMessage from '@/components/ui/StateMessage';
 import { useToast } from '@/components/ui/Toast';
@@ -24,10 +24,12 @@ interface DailyQuizProps {
 }
 
 export default function DailyQuiz({ email, fallbackStreak, onBack, onAnswered }: DailyQuizProps) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const toast = useToast();
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [attempt, setAttempt] = useState(0);
+  const langRef = useRef(lang);
+  const loadedLang = useRef(lang);
   const [choice, setChoice] = useState<number | null>(null);
   const [phase, setPhase] = useState<'playing' | 'saving' | 'result'>('playing');
   const [failed, setFailed] = useState(false);
@@ -36,12 +38,18 @@ export default function DailyQuiz({ email, fallbackStreak, onBack, onAnswered }:
 
   useEffect(() => {
     let active = true;
-    fetch(`/api/quiz/today?email=${encodeURIComponent(email)}`)
+    fetch(`/api/quiz/today?email=${encodeURIComponent(email)}&lang=${langRef.current}`)
       .then(async res => ({ ok: res.ok, body: await res.json().catch(() => ({})) }))
       .then(({ ok, body }) => { if (active) setLoad(ok ? { state: 'ready', question: body } : { state: 'error', message: typeof body.error === 'string' ? body.error : '' }); })
       .catch(() => { if (active) setLoad({ state: 'error', message: '' }); });
     return () => { active = false; };
   }, [email, attempt]);
+
+  // Reload the question in the new language, but never in the middle of saving or after the answer is shown.
+  useEffect(() => {
+    langRef.current = lang;
+    if (loadedLang.current !== lang && phase === 'playing' && load.state === 'ready') { loadedLang.current = lang; setAttempt(n => n + 1); }
+  }, [lang, phase, load.state]);
 
   const retry = () => { setLoad({ state: 'loading' }); setAttempt(n => n + 1); };
 

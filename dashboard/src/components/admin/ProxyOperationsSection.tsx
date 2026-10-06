@@ -114,8 +114,9 @@ export default function ProxyOperationsSection() {
     return () => stream.close();
   }, [load]);
 
-  const openReview = (next: NonNullable<typeof review>, defaultReason: string) => {
-    setReview(next); setReviewReason(defaultReason); setReviewError('');
+  // The reason starts empty on purpose: a pre-filled "Blocked by SOC" would satisfy the rule without saying anything.
+  const openReview = (next: NonNullable<typeof review>, startingReason = '') => {
+    setReview(next); setReviewReason(startingReason); setReviewError('');
   };
 
   const decideAlert = async (alert: Alert, nextAction: 'block' | 'allow', decisionReason: string) => {
@@ -240,8 +241,8 @@ export default function ProxyOperationsSection() {
                         <td data-narrow-hide title={new Date(alert.created_at).toLocaleString()}>{ago(alert.created_at)}</td>
                         <td>{alert.status === 'open'
                           ? <span className="ops-actions">
-                              <button type="button" className="btn" disabled={!!busy} onClick={() => openReview({ kind: 'alert', item: alert, action: 'allow' }, t('ops.dialog.defaultAllow'))}><CheckCircle2 size={14} aria-hidden="true" />{t('ops.action.allow')}</button>
-                              <button type="button" className="btn btn-danger" disabled={!!busy} onClick={() => openReview({ kind: 'alert', item: alert, action: 'block' }, t('ops.dialog.defaultBlock'))}><Ban size={14} aria-hidden="true" />{t('ops.action.block')}</button>
+                              <button type="button" className="btn" disabled={!!busy} onClick={() => openReview({ kind: 'alert', item: alert, action: 'allow' }, '')}><CheckCircle2 size={14} aria-hidden="true" />{t('ops.action.allow')}</button>
+                              <button type="button" className="btn btn-danger" disabled={!!busy} onClick={() => openReview({ kind: 'alert', item: alert, action: 'block' }, '')}><Ban size={14} aria-hidden="true" />{t('ops.action.block')}</button>
                             </span>
                           : <StatusChip tone={alert.status === 'blocked' ? 'bad' : 'ok'}>{t(alert.status === 'blocked' ? 'ops.status.blocked' : 'ops.status.allowed')}</StatusChip>}</td>
                       </tr>
@@ -267,7 +268,7 @@ export default function ProxyOperationsSection() {
                           ? <StatusChip tone="bad">{t('ops.status.blocked')}</StatusChip>
                           : ['soc', 'ml'].includes(item.decision_source) ? <StatusChip tone="ok">{t('ops.status.allowed')}</StatusChip> : <StatusChip tone="warn">{t('ops.traffic.unknownAllowed')}</StatusChip>}</td>
                         <td data-secondary><span className="cell-clip" title={item.reason}>{item.method} · {item.decision_source.toUpperCase()}</span></td>
-                        <td>{item.action !== 'block' && <button type="button" className="btn btn-danger" disabled={!!busy} onClick={() => openReview({ kind: 'traffic', item, action: 'block' }, t('ops.dialog.defaultTraffic'))}><Ban size={14} aria-hidden="true" />{t('ops.action.block')}</button>}</td>
+                        <td>{item.action !== 'block' && <button type="button" className="btn btn-danger" disabled={!!busy} onClick={() => openReview({ kind: 'traffic', item, action: 'block' }, '')}><Ban size={14} aria-hidden="true" />{t('ops.action.block')}</button>}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -308,7 +309,7 @@ export default function ProxyOperationsSection() {
           <form className="ui-form" onSubmit={submitReview}>
             <div className="field" data-invalid={Boolean(reviewError)}>
               <label htmlFor="decision-reason">{t('ops.dialog.reason')}</label>
-              <textarea id="decision-reason" autoFocus required minLength={5} maxLength={1000} rows={3} value={reviewReason} onChange={event => setReviewReason(event.target.value)} />
+              <textarea id="decision-reason" placeholder={t('ops.dialog.placeholder')} autoFocus required minLength={5} maxLength={1000} rows={3} value={reviewReason} onChange={event => setReviewReason(event.target.value)} />
               <small>{t('ops.dialog.hint')}</small>
               {reviewError && <small className="field-error" role="alert">{reviewError}</small>}
             </div>

@@ -208,7 +208,7 @@ export default function ProxyConnectionCard({ onStatus }: { onStatus?: (report: 
       </div>
       <div className="pxc-actions">
         <span className="emp-muted">{t('proxy.address')}</span>
-        <button type="button" className="pxc-address" onClick={copyProxy} title={t('proxy.copy')} aria-label={t('proxy.copy')}>
+        <button type="button" className="pxc-address" onClick={copyProxy} title={t('proxy.copy')} aria-label={`${proxyUrl}. ${t('proxy.copy')}`}>
           <Globe2 size={15} aria-hidden="true" /> <span>{proxyUrl}</span> {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
         </button>
         {!status.registered && (
