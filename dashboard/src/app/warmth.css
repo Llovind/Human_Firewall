@@ -2,7 +2,7 @@
    of the original design. Everything lives in this one file so it can be tuned or removed in one place. */
 :root {
   --accent: #2563eb; --accent-strong: #1d4ed8; --border-active: #2563eb;
-  --bg-deep: #e9f1ff; --bg-base: #f0f5ff; --bg-elevated: #e4edfd; --bg-hover: #dce8fb; --border: #cfdcf2;
+  --bg-deep: #f2f6fc; --bg-base: #f6f9fd; --bg-elevated: #ecf2fa; --bg-hover: #e4ecf7; --border: #d9e3f1;
   --pop-blue: #2563eb;   --pop-blue-bg: #e3edff;   --pop-blue-text: #1d4ed8;
   --pop-teal: #0d9488;   --pop-teal-bg: #d9f5ef;   --pop-teal-text: #0f766e;
   --pop-amber: #d97706;  --pop-amber-bg: #fdecc8;  --pop-amber-text: #92400e;
