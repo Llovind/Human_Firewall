@@ -139,10 +139,10 @@ export default function EmployeeUrlScanner({ onReportComplete }: { onReportCompl
     </div>
     <p className="debt-help">{mode === 'scan' ? t('scan.help.check') : mode === 'file' ? t('scan.help.file') : t('scan.help.report')}</p>
     <form className="debt-form" onSubmit={submit}>
-      {mode === 'file' ? <label className="file-upload">{t('scan2.file.choose')}<input ref={fileInput} type="file" required onChange={event => { setFile(event.target.files?.[0] || null); setSelectedFileId(''); setNotice(''); }} /><small>{file ? file.name + ' · ' + (file.size / 1024).toFixed(0) + ' KB' : t('scan2.file.hint', { mb: Math.floor(fileMaxBytes / 1024 / 1024) })}</small></label>
-        : <label>{t('scan.url')}<input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://example.com/path" required maxLength={4096} autoComplete="off" /></label>}
+      {mode === 'file' ? <label key="file" className="file-upload">{t('scan2.file.choose')}<input ref={fileInput} type="file" required onChange={event => { setFile(event.target.files?.[0] || null); setSelectedFileId(''); setNotice(''); }} /><small>{file ? file.name + ' · ' + (file.size / 1024).toFixed(0) + ' KB' : t('scan2.file.hint', { mb: Math.floor(fileMaxBytes / 1024 / 1024) })}</small></label>
+        : <label key="url">{t('scan.url')}<input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://example.com/path" required maxLength={4096} autoComplete="off" /></label>}
       {mode === 'report' && <label>{t('scan2.description')} ({t('scan2.optional')})<textarea value={description} onChange={e => setDescription(e.target.value)} maxLength={2000} rows={3} /></label>}
-      {mode === 'file' ? <label className="upload-consent"><input type="checkbox" required checked={consent} onChange={event => setConsent(event.target.checked)} /><span>{t('scan2.consent')}</span></label>
+      {mode === 'file' ? <label key="consent" className="upload-consent"><input type="checkbox" required checked={consent} onChange={event => setConsent(event.target.checked)} /><span>{t('scan2.consent')}</span></label>
         : <small>{t('scan.privacy')}</small>}
       <button className="btn btn-primary" disabled={busy}>{busy ? <Loader2 size={16} className="spin" aria-hidden="true" /> : mode === 'report' ? <Send size={16} aria-hidden="true" /> : <Search size={16} aria-hidden="true" />}{busy ? t('scan.processing') : mode === 'scan' ? t('scan.submit.check') : mode === 'file' ? t('scan.submit.file') : t('scan.submit.report')}</button>
     </form>

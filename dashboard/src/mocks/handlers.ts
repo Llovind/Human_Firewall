@@ -130,7 +130,7 @@ export const routes: Route[] = [
     const closed = new Set((ctx.request.cookies.get(CLOSED_COOKIE)?.value || '').split(',').filter(Boolean));
     const owners = readJson(ctx.request, OWNERS_COOKIE, {}) as Record<string, string | null>;
     const events = readJson(ctx.request, EVENTS_COOKIE, []) as Record<string, unknown>[];
-    const push = (event: string, text: string | null) => events.unshift({ id: Date.now(), ticket_id: id, actor_email: me, actor_role: ctx.role, event, note: text, created_at: new Date().toISOString() });
+    const push = (event: string, text: string | null) => events.unshift({ id: Date.now() * 100 + events.length, ticket_id: id, actor_email: me, actor_role: ctx.role, event, note: text, created_at: new Date().toISOString() });
     if (status === 'closed' && !closed.has(id)) { closed.add(id); push('resolved', String(note).trim()); }
     if (status === 'open' && closed.has(id)) { closed.delete(id); push('reopened', String(note || '').trim() || null); }
     if (assignee !== undefined) { owners[id] = assignee === 'me' ? me : null; push(assignee === 'me' ? 'assigned' : 'unassigned', assignee === 'me' ? me : null); }

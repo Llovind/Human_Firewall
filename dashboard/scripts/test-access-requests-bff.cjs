@@ -71,5 +71,20 @@ function request(url, { method = 'GET', body, type = 'application/json', authent
   const conflict = await post(id);
   assert.equal(conflict.status, 409);
   assert.equal((await conflict.json()).error, 'This request was already decided.');
-  console.log('PASS: access request routes need a session, accept JSON only, validate the id, encode filters and pass back end answers through');
+  // Weekly trend feed: session needed, weeks bounded, back end answer passed through
+  calls.length = 0;
+  let trends = load('src/app/api/admin/trends/route.ts', backend(200, { weeks: [] }));
+  assert.equal((await trends.GET(request('/api/admin/trends', { authenticated: false }))).status, 401);
+  assert.equal((await trends.GET(request('/api/admin/trends?weeks=1'))).status, 400);
+  assert.equal((await trends.GET(request('/api/admin/trends?weeks=99'))).status, 400);
+  assert.equal((await trends.GET(request('/api/admin/trends?weeks=abc'))).status, 400);
+  assert.equal(calls.length, 0, 'bad weeks values never reach the back end');
+  assert.equal((await trends.GET(request('/api/admin/trends?weeks=8'))).status, 200);
+  assert.equal(calls[0].path, '/api/admin/trends?weeks=8');
+  trends = load('src/app/api/admin/trends/route.ts', backend(403, { error: 'Forbidden' }));
+  assert.equal((await trends.GET(request('/api/admin/trends'))).status, 403);
+  trends = load('src/app/api/admin/trends/route.ts', async () => { throw new Error('backend down'); });
+  assert.equal((await trends.GET(request('/api/admin/trends'))).status, 503);
+
+  console.log('PASS: access request and trend routes need a session, accept JSON only, validate the id, encode filters and pass back end answers through');
 })().catch(error => { console.error(error); process.exit(1); });

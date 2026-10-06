@@ -314,7 +314,7 @@ export const securityInbox = () => ({
   threshold: 60, scoreScale: 200, deliveryMode: 'Mailpit (lab)', emailEnabled: true, automatic: false,
   employees: [
     { id: 105, email: 'gilang.permana@afferent.local', divisi: 'Operations', points: 41, canSend: true, delivery: null },
-    { id: 105, email: 'eko.prasetyo@afferent.local', divisi: 'Finance', points: 52, canSend: false, delivery: { sent_at: ago(3 * HOUR), last_error: null, created_at: ago(3 * HOUR), attempts: 1 } },
+    { id: 106, email: 'eko.prasetyo@afferent.local', divisi: 'Finance', points: 52, canSend: false, delivery: { sent_at: ago(3 * HOUR), last_error: null, created_at: ago(3 * HOUR), attempts: 1 } },
   ],
   reports: urlReports().reports.map(r => ({ ...r, email: 'sinta.maharani@afferent.local' })),
   audit: [{ id: 1, actor_email: MOCK_USERS.soc.email, actor_role: 'soc', recipient: 'eko.prasetyo@afferent.local', score: 52, reason: 'Please complete your security training.', created_at: ago(3 * HOUR) }],

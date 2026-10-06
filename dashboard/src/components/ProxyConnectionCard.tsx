@@ -171,9 +171,12 @@ export default function ProxyConnectionCard({ onStatus }: { onStatus?: (report: 
   };
 
   const copyProxy = async () => {
-    await navigator.clipboard.writeText(proxyUrl);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1500);
+    // Some browsers refuse clipboard writes (no permission, insecure page). The address stays visible to copy by hand.
+    try {
+      await navigator.clipboard.writeText(proxyUrl);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch { /* nothing to do: the address is on screen */ }
   };
 
   const proxyConnected = status.registered && probeState === 'connected';
