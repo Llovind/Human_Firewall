@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { usePolling } from '@/hooks/usePolling';
 import { useNow } from '@/hooks/useNow';
 import { useI18n } from '@/i18n/I18nProvider';
+import { serverMessage } from '@/lib/serverError';
 import { formatAgo } from '@/lib/relativeTime';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import Dialog from '@/components/ui/Dialog';
@@ -54,7 +55,7 @@ export default function AccessRequestsPanel({ canDecide, onChanged }: { canDecid
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ decision, note: note.trim() }),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(typeof body.error === 'string' ? body.error : t('acc.fail'));
+      if (!res.ok) throw new Error(serverMessage(body, t, 'acc.fail'));
       toast.show({ message: t(decision === 'allow' ? 'acc.toast.allowed' : 'acc.toast.denied'), tone: 'ok' });
       setSelected(null); refresh(); onChanged?.();
     } catch (err) { setFailure(err instanceof Error ? err.message : t('acc.fail')); }

@@ -13,6 +13,7 @@ const format = (template, vars = {}) => template.replace(/\{(\w+)\}/g, (match, n
 const stub = () => null;
 const shared = {
   '@/i18n/I18nProvider': { useI18n: () => ({ lang: 'en', t: (key, vars) => format(messageExports.en[key], vars) }) },
+  '@/lib/serverError': { serverMessage: (body, t, fallback) => t(fallback) },
   '@/components/ui/Dialog': { default: function Dialog() { return null; } },
   '@/components/ui/SeverityBadge': { default: stub },
   '@/components/ui/StateMessage': { default: stub },
@@ -80,7 +81,8 @@ async function check(kind, action) {
   await submit(); assert.equal(writes.length, 0, 'blank reason is rejected');
   textarea().props.onChange({ target: { value: '  Reviewed by SOC  ' } });
   await submit(); assert.ok(dialog(), 'API failure keeps the dialog open');
-  assert.ok(text(dialog()).includes('Policy rejected'), 'API error is visible');
+  assert.ok(text(dialog()).includes('The decision was not saved.'), 'a readable error is visible');
+  assert.ok(!text(dialog()).includes('Policy rejected'), 'the server text in another language is never shown raw');
   accepts = true; await submit(); assert.equal(dialog(), undefined, 'success closes the dialog');
   const write = writes.at(-1);
   assert.equal(write.body.reason, 'Reviewed by SOC'); assert.equal(write.body.action, action);

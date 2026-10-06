@@ -12,6 +12,7 @@ import StateMessage from '@/components/ui/StateMessage';
 import StatusChip, { type StatusTone } from '@/components/ui/StatusChip';
 import { useToast } from '@/components/ui/Toast';
 import { useI18n } from '@/i18n/I18nProvider';
+import { serverMessage } from '@/lib/serverError';
 import { useNow } from '@/hooks/useNow';
 import { formatAgo } from '@/lib/relativeTime';
 import type { MessageKey } from '@/i18n/messages';
@@ -48,7 +49,7 @@ export default function ThreatCacheSection({ readOnly, cacheData, threatTypeFilt
       const res = await fetch('/api/admin/threats/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ indicator: target, action: kind, reason: why }) });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) { toast.show({ message: t('threat.ok', { action: t(`threat.btn.${kind}` as MessageKey) }), tone: 'ok' }); return true; }
-      const message = data.error || t('threat.err.generic');
+      const message = serverMessage(data, t, 'threat.err.generic');
       if (adding) setFormError(message); else toast.show({ message, tone: 'bad' });
     } catch {
       if (adding) setFormError(t('threat.err.network')); else toast.show({ message: t('threat.err.network'), tone: 'bad' });

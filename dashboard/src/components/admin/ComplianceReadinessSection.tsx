@@ -7,6 +7,7 @@ import StateMessage from '@/components/ui/StateMessage';
 import StatusChip, { type StatusTone } from '@/components/ui/StatusChip';
 import { useToast } from '@/components/ui/Toast';
 import { useI18n } from '@/i18n/I18nProvider';
+import { serverMessage } from '@/lib/serverError';
 import type { MessageKey } from '@/i18n/messages';
 
 export interface ClauseEvidence {
@@ -97,7 +98,7 @@ export const ComplianceReadinessSection: React.FC<ComplianceReadinessSectionProp
       if (res.ok) { toast.show({ message: t('cmp.saved'), tone: 'ok' }); void load(); }
       else {
         const body = await res.json().catch(() => ({}));
-        toast.show({ message: t('cmp.save.err', { detail: body.detail || body.error || res.status }), tone: 'bad' });
+        toast.show({ message: t('cmp.save.err', { detail: serverMessage(body, t, 'srv.SERVER_ERROR') }), tone: 'bad' });
       }
     } catch {
       toast.show({ message: t('cmp.err.network'), tone: 'bad' });

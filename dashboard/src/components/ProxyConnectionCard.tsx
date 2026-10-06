@@ -5,6 +5,7 @@ import { useI18n } from '@/i18n/I18nProvider';
 import { BookOpen, Check, Copy, Download, Globe2, Loader2, Network, ShieldCheck, WifiOff } from 'lucide-react';
 import Dialog from '@/components/ui/Dialog';
 import type { MessageKey } from '@/i18n/messages';
+import { knownServerMessage } from '@/lib/serverError';
 
 type ProxyStatus = {
   registered: boolean;
@@ -34,10 +35,9 @@ async function probeSystemProxy(url: string) {
   }
 }
 
-async function responseError(response: Response, fallback: string) {
+async function responseError(response: Response, fallback: string, t: (key: MessageKey) => string) {
   try {
-    const payload = await response.json();
-    return String(payload.error || fallback);
+    return knownServerMessage(await response.json(), t) ?? fallback;
   } catch {
     return fallback;
   }
@@ -83,6 +83,7 @@ export default function ProxyConnectionCard({ onStatus }: { onStatus?: (report: 
         statusResponse.status === 401
           ? tRef.current('proxy.err.session')
           : tRef.current('proxy.err.status'),
+        tRef.current,
       ));
     }
     const statusPayload = await statusResponse.json();
@@ -95,7 +96,7 @@ export default function ProxyConnectionCard({ onStatus }: { onStatus?: (report: 
         body: JSON.stringify({ label: 'Perangkat utama' }),
       });
       if (!registration.ok) {
-        throw new Error(await responseError(registration, tRef.current('proxy.err.activate')));
+        throw new Error(await responseError(registration, tRef.current('proxy.err.activate'), tRef.current));
       }
       const registered = (await registration.json())?.status as ProxyStatus | undefined;
       if (!registered) throw new Error(tRef.current('proxy.err.activate'));
@@ -141,7 +142,7 @@ export default function ProxyConnectionCard({ onStatus }: { onStatus?: (report: 
           setStatus((await response.json()).status);
           setError('');
         } else {
-          setError(await responseError(response, tRef.current('proxy.err.lost')));
+          setError(await responseError(response, tRef.current('proxy.err.lost'), tRef.current));
         }
       } catch {
         setError(tRef.current('proxy.err.lost'));
@@ -161,7 +162,7 @@ export default function ProxyConnectionCard({ onStatus }: { onStatus?: (report: 
         body: JSON.stringify({ label: 'Perangkat utama' }),
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || tRef.current('proxy.err.activate'));
+      if (!response.ok) throw new Error(knownServerMessage(payload, tRef.current) ?? tRef.current('proxy.err.activate'));
       setStatus(payload.status);
     } catch (err) {
       setError(err instanceof Error ? err.message : tRef.current('proxy.err.activate'));

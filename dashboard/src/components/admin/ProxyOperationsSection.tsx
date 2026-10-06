@@ -9,6 +9,7 @@ import StateMessage from '@/components/ui/StateMessage';
 import StatusChip from '@/components/ui/StatusChip';
 import { useToast } from '@/components/ui/Toast';
 import { useI18n } from '@/i18n/I18nProvider';
+import { serverMessage } from '@/lib/serverError';
 import { useNow } from '@/hooks/useNow';
 import { formatAgo } from '@/lib/relativeTime';
 
@@ -129,7 +130,7 @@ export default function ProxyOperationsSection() {
       });
       const payload = await response.json();
       if (response.ok) { toast.show({ message: t('ops.toast.policy', { domain: alert.domain }), tone: 'ok' }); await load(); }
-      else setReviewError(payload.error || t('ops.fail.save'));
+      else setReviewError(serverMessage(payload, t, 'ops.fail.save'));
       return response.ok;
     } catch {
       setReviewError(t('ops.fail.unconfirmed'));
@@ -153,7 +154,7 @@ export default function ProxyOperationsSection() {
       if (response.ok) {
         toast.show({ message: t('ops.toast.applied', { action: t(action === 'block' ? 'ops.action.block' : 'ops.action.allow'), domain: payload.verdict?.domain || domain }), tone: 'ok' });
         setDomain(''); setReason(''); await load();
-      } else setPolicyError(payload.error || t('ops.fail.policy'));
+      } else setPolicyError(serverMessage(payload, t, 'ops.fail.policy'));
     } catch { setPolicyError(t('ops.fail.policy')); }
     finally { setBusy(''); }
   };
@@ -168,7 +169,7 @@ export default function ProxyOperationsSection() {
       });
       const payload = await response.json();
       if (response.ok) { toast.show({ message: t('ops.toast.blocked', { domain: payload.verdict?.domain || item.domain }), tone: 'ok' }); await load(); }
-      else setReviewError(payload.error || t('ops.fail.save'));
+      else setReviewError(serverMessage(payload, t, 'ops.fail.save'));
       return response.ok;
     } catch {
       setReviewError(t('ops.fail.unconfirmed'));

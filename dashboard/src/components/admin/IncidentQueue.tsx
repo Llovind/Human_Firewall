@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useI18n } from '@/i18n/I18nProvider';
+import { serverMessage } from '@/lib/serverError';
 import { useNow } from '@/hooks/useNow';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { formatAgo } from '@/lib/relativeTime';
@@ -102,7 +103,7 @@ export default function IncidentQueue({ incidents, canResolve, onChanged, loadin
     try {
       const res = await fetch('/api/incident', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ticket_id: incident.id, ...body }) });
       const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(typeof payload.error === 'string' ? payload.error : t('inc.fail'));
+      if (!res.ok) throw new Error(serverMessage(payload, t, 'inc.fail'));
       setDialog(null); setNote(''); setVersion(v => v + 1);
       onChanged();
       toast.show({ message: t(toastKey), tone: 'ok', ...(undoable ? { action: { label: t('inc.undo'), onClick: () => void undo(incident) }, durationMs: 8000 } : {}) });

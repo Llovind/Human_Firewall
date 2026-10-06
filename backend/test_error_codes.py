@@ -26,5 +26,33 @@ class ErrorCodes(unittest.TestCase):
         self.assertEqual(error_body(ValueError('Choose a file.')), {'error': 'Choose a file.', 'code': 'FILE_REQUIRED'})
 
 
+class ErrorCodesOnEveryRoute(unittest.TestCase):
+    """The app adds a code to plain-text JSON errors from any route, and leaves coded errors alone."""
+
+    def setUp(self):
+        import uuid
+        import test_technical_debt  # noqa: F401  (sets the safe test environment)
+        from test_technical_debt import login
+        from app import app
+        from services import auth_service
+        self.client = app.test_client()
+        email = uuid.uuid4().hex + '@demo.test'
+        auth_service.create_account(email=email, password='ErrorCodesTesting2026!', role='soc', division='IT')
+        self.soc = {'X-Afferent-Session': login(email, 'ErrorCodesTesting2026!')}
+
+    def test_uncoded_route_errors_gain_a_code(self):
+        missing = self.client.patch('/api/incidents/INC-DOES-NOT-EXIST', json={'status': 'closed', 'note': 'Reason that is long enough.'}, headers=self.soc)
+        self.assertEqual((missing.status_code, missing.get_json()['code']), (404, 'NOT_FOUND'))
+        empty = self.client.patch('/api/incidents/INC-X', json={}, headers=self.soc)
+        self.assertEqual((empty.status_code, empty.get_json()['code']), (400, 'INVALID_PAYLOAD'))
+        short = self.client.post('/api/admin/access-requests/00000000-0000-0000-0000-000000000000/decision', json={'decision': 'allow', 'note': 'x'}, headers=self.soc)
+        self.assertEqual((short.status_code, short.get_json()['code']), (400, 'TEXT_TOO_SHORT'))
+
+    def test_existing_codes_and_success_responses_are_untouched(self):
+        denied = self.client.get('/api/admin/trends')
+        self.assertEqual(denied.get_json()['code'], 'UNAUTHORIZED')
+        self.assertNotIn('code', self.client.get('/api/admin/trends', headers=self.soc).get_json())
+
+
 if __name__ == '__main__':
     unittest.main()

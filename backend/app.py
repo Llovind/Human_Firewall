@@ -5,6 +5,7 @@ app.py — Flask API untuk Human Firewall Lite.
 from flask import Flask, Request, g, request, jsonify, render_template, redirect
 from flask_cors import CORS
 import database
+import json
 import os
 from dotenv import load_dotenv
 from security import (
@@ -110,6 +111,23 @@ app.register_blueprint(threat_bp)
 app.register_blueprint(access_bp)
 app.register_blueprint(proxy_bp)
 app.register_blueprint(ai_bp)  # AI Behavioral: /api/ai/*
+
+
+@app.after_request
+def add_error_code(response):
+    """Every JSON error gets a stable `code` next to its text, so the dashboard can show it in the person's language.
+
+    Routes that already send a code keep it. Responses whose `error` is not a plain string (for example
+    the {code, message} envelope of the game routes) are left alone."""
+    if response.status_code >= 400 and response.is_json:
+        body = response.get_json(silent=True)
+        if isinstance(body, dict) and isinstance(body.get('error'), str) and 'code' not in body:
+            from services.error_codes import code_for
+            code = code_for(body['error'])
+            if code:
+                body['code'] = code
+                response.set_data(json.dumps(body))
+    return response
 
 # Public endpoints are deny-by-default. Entries below either perform their own
 # resource-level token validation or must be reachable before authentication.

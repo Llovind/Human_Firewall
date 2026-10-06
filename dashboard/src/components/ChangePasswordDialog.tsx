@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useI18n } from '@/i18n/I18nProvider';
+import { serverMessage } from '@/lib/serverError';
 import Dialog from '@/components/ui/Dialog';
 import Field from '@/components/ui/Field';
 
@@ -27,7 +28,7 @@ export default function ChangePasswordDialog({ open, onClose }: { open: boolean;
         body: JSON.stringify({ currentPassword, newPassword }),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(typeof body.error === 'string' ? body.error : t('account.failed'));
+      if (!res.ok) throw new Error(serverMessage(body, t, 'account.failed'));
       await logout();
     } catch (err) { setError(err instanceof Error ? err.message : t('account.unreachable')); }
     finally { setBusy(false); }

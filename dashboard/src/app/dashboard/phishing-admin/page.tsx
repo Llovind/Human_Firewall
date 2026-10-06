@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Dialog from '@/components/ui/Dialog';
+import { serverMessage } from '@/lib/serverError';
 import Field from '@/components/ui/Field';
 import type { MessageKey } from '@/i18n/messages';
 import { useToast } from '@/components/ui/Toast';
@@ -115,7 +116,7 @@ export default function PhishingAdminDashboard() {
     try {
       const res = await fetch('/api/admin/gophish/campaigns');
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || t('adm3.err.campaigns'));
+      if (!res.ok) throw new Error(serverMessage(data, t, 'adm3.err.campaigns'));
       setCampaigns(Array.isArray(data) ? data : data?.campaigns || []);
       setCampaignError('');
     } catch (err) {
@@ -127,7 +128,7 @@ export default function PhishingAdminDashboard() {
     try {
       const res = await fetch('/api/admin/gophish/resources');
       const data: GoPhishResource & { error?: string } = await res.json();
-      if (!res.ok) throw new Error(data.error || t('adm3.err.resources'));
+      if (!res.ok) throw new Error(serverMessage(data, t, 'adm3.err.resources'));
       setResources(data);
       setResourceError('');
       setLaunchTemplate(previous => data.templates.some(t => String(t.id) === previous) ? previous : String(data.templates[0]?.id ?? ''));
@@ -184,7 +185,7 @@ export default function PhishingAdminDashboard() {
       const res = await fetch('/api/admin/gophish/sync', { method: 'POST' });
       const data = await res.json();
       if (res.ok) toast.show({ message: t('adm.sync.ok'), tone: 'ok' });
-      else toast.show({ message: `${t('adm.sync.fail')}: ${data.error || ''}`.replace(/: $/, ''), tone: 'bad' });
+      else toast.show({ message: `${t('adm.sync.fail')}: ${serverMessage(data, t, 'srv.SERVER_ERROR')}`, tone: 'bad' });
     } catch {
       toast.show({ message: t('adm.error.server'), tone: 'bad' });
     }
@@ -202,7 +203,7 @@ export default function PhishingAdminDashboard() {
     try {
       const res = await fetch('/api/admin/gophish/resources/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ preset }) });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || t('adm3.err.setup'));
+      if (!res.ok) throw new Error(serverMessage(data, t, 'adm3.err.setup'));
       await loadResources();
       if (data.template_id) setLaunchTemplate(String(data.template_id));
       if (data.page_id) setLaunchPage(String(data.page_id));
@@ -246,7 +247,7 @@ export default function PhishingAdminDashboard() {
         setLaunchName('');
         await loadCampaigns();
       } else {
-        setLaunchError(data.error || t('adm3.err.launch'));
+        setLaunchError(serverMessage(data, t, 'adm3.err.launch'));
       }
     } catch (err: unknown) {
       setLaunchError(t('adm3.err.connection', { detail: errorMessage(err) }));
@@ -325,7 +326,7 @@ export default function PhishingAdminDashboard() {
         await loadResources();
       } else {
         const data = await res.json();
-        setTemplateError(data.error || t('adm.error.server'));
+        setTemplateError(serverMessage(data, t, 'adm.error.server'));
       }
     } catch {
       setTemplateError(t('adm.error.server'));
@@ -417,7 +418,7 @@ export default function PhishingAdminDashboard() {
         await loadResources();
       } else {
         const data = await res.json();
-        setLandingError(data.error || t('adm.error.server'));
+        setLandingError(serverMessage(data, t, 'adm.error.server'));
       }
     } catch {
       setLandingError(t('adm.error.server'));
@@ -568,7 +569,7 @@ export default function PhishingAdminDashboard() {
         setIsAddDivisionModalOpen(false);
         await loadDivisions();
       } else {
-        setDivisionError(data.error || t('adm.error.server'));
+        setDivisionError(serverMessage(data, t, 'adm.error.server'));
       }
     } catch {
       setDivisionError(t('adm.error.server'));
