@@ -2,14 +2,17 @@
 
 import { FormEvent, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, CheckCircle2, Eye, EyeOff, ShieldCheck } from 'lucide-react';
+import {
+  ArrowRight, CheckCircle2, Eye, EyeOff, KeyRound,
+  LockKeyhole, Mail, Radar, ShieldCheck,
+} from 'lucide-react';
 import Logo from '@/components/Logo';
 import { SESSION_ENDED_KEY, useAuth } from '@/context/AuthContext';
 import { useI18n } from '@/i18n/I18nProvider';
 import LanguageSwitch from '@/components/ui/LanguageSwitch';
-import ThemeToggle from '@/components/ThemeToggle';
 import { ROLE_ROUTES } from '@/lib/authSession';
 import type { MessageKey } from '@/i18n/messages';
+import ThemeToggle from '@/components/ThemeToggle';
 import './auth.css';
 
 type LoginStep = 'credentials' | 'otp' | 'success';
@@ -150,77 +153,132 @@ export default function AuthPage() {
     }
   }
 
-  const stepNumber = step === 'credentials' ? 1 : 2;
   return (
-    <main className="login-page">
-      <header className="login-top">
-        <span className="login-brand"><Logo variant="mark" size={28} /><span>AFFERENT</span></span>
-        <span className="login-tools"><LanguageSwitch /><ThemeToggle /></span>
-      </header>
-
-      <div className="login-card">
-        {step !== 'success' && <p className="login-step">{t('auth.stepOf', { n: stepNumber })} · {step === 'credentials' ? t('auth.step.account') : t('auth.step.verify')}</p>}
-
-        {step === 'credentials' && (
-          <>
-            <h1>{t('auth.title')}</h1>
-            <p className="login-sub">{t('auth.subtitle')}</p>
-            {sessionEnded && <div className="login-notice" role="status"><strong>{t('auth.sessionEnded.title')}</strong>{t('auth.sessionEnded.body')}</div>}
-            <form onSubmit={handleCredentials} className="login-form">
-              <label htmlFor="email">{t('auth.email')}</label>
-              <input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder={t('auth.email.placeholder')} autoComplete="username" required autoFocus />
-
-              <label htmlFor="password">{t('auth.password')}</label>
-              <div className="login-password">
-                <input id="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={t('auth.password.placeholder')} autoComplete="current-password" required />
-                <button type="button" className="password-toggle" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? t('auth.password.hide') : t('auth.password.show')}>
-                  {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
-                </button>
-              </div>
-
-              {error && <div className="login-error" role="alert">{error}</div>}
-              <button className="login-primary" disabled={isSubmitting}>
-                {isSubmitting ? <span className="login-spinner" aria-label={t('state.loading')} /> : <><span>{t('auth.continue')}</span><ArrowRight size={18} aria-hidden="true" /></>}
-              </button>
-            </form>
-          </>
-        )}
-
-        {step === 'otp' && (
-          <>
-            <h1>{t('auth.otp.title')}</h1>
-            <p className="login-sub">{t('auth.otp.sent', { email: maskedEmail })}</p>
-            <form onSubmit={handleOtp} className="login-form">
-              <label htmlFor="otp">{t('auth.otp.label')}</label>
-              <input id="otp" className="otp-input" inputMode="numeric" pattern="[0-9]*" maxLength={6} value={otp}
-                onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="000000" autoComplete="one-time-code" autoFocus />
-              <div className="otp-meta">
-                <span className={expiresIn < 60 ? 'urgent' : ''}>{t('auth.otp.expires', { time: formatCountdown(expiresIn) })}</span>
-                <button type="button" disabled={resendIn > 0 || isSubmitting} onClick={handleResend}>
-                  {resendIn > 0 ? t('auth.otp.resendIn', { n: resendIn }) : t('auth.otp.resend')}
-                </button>
-              </div>
-              {error && <div className="login-error" role="alert">{error}</div>}
-              <button className="login-primary" disabled={isSubmitting || expiresIn === 0}>
-                {isSubmitting ? <span className="login-spinner" aria-label={t('state.loading')} /> : <><span>{t('auth.otp.verify')}</span><ArrowRight size={18} aria-hidden="true" /></>}
-              </button>
-              <button type="button" className="login-secondary" onClick={() => { setStep('credentials'); setOtp(''); setError(''); }}>
-                {t('auth.otp.other')}
-              </button>
-            </form>
-          </>
-        )}
-
-        {step === 'success' && (
-          <div className="login-success" role="status">
-            <CheckCircle2 size={44} aria-hidden="true" />
-            <h1>{t('auth.success.title')}</h1>
-            <p className="login-sub">{t('auth.success.body')}</p>
+    <main className="login-shell">
+      <section className="login-story" aria-label="AFFERENT platform overview">
+        <div className="login-story-grid" />
+        <div className="login-brand">
+          <Logo variant="mark" size={48} />
+          <div>
+            <span>AFFERENT</span>
+            <small>Team security, in one place</small>
           </div>
-        )}
+        </div>
 
-        <p className="login-trust"><ShieldCheck size={14} aria-hidden="true" /> {t('auth.trust')}</p>
-      </div>
+        <div className="login-story-copy">
+          <div className="login-eyebrow-wrap">
+            <span className="login-eyebrow"><Radar size={15} /> {t('auth.hero.eyebrow')}</span>
+          </div>
+          <h1>{t('auth.hero.title')}</h1>
+          <p>
+            {t('auth.hero.body')}
+          </p>
+          <div className="login-signal-row">
+            <div><ShieldCheck size={18} /><span><strong>{t('auth.hero.verified')}</strong><small>{t('auth.hero.verified.sub')}</small></span></div>
+            <div><Radar size={18} /><span><strong>{t('auth.hero.visibility')}</strong><small>{t('auth.hero.visibility.sub')}</small></span></div>
+          </div>
+        </div>
+      </section>
+
+      <section className="login-panel">
+        <div className="login-card">
+          <div className="login-lang"><LanguageSwitch /><ThemeToggle /></div>
+          <div className="login-mobile-brand"><Logo variant="mark" size={42} /><span>AFFERENT</span></div>
+
+          <div className="login-progress" aria-label={t('auth.steps')}>
+            <div className={`login-step ${step === 'credentials' ? 'active' : 'completed'}`}>
+              <span className={`login-step-circle ${step === 'credentials' ? 'active' : 'completed'}`}>1</span>
+              <span className="login-step-label">{t('auth.step.account')}</span>
+            </div>
+            <i className={`login-step-connector ${step !== 'credentials' ? 'active' : ''}`} />
+            <div className={`login-step ${step === 'otp' ? 'active' : step === 'success' ? 'completed' : 'inactive'}`}>
+              <span className={`login-step-circle ${step === 'otp' ? 'active' : step === 'success' ? 'completed' : ''}`}>2</span>
+              <span className="login-step-label">{t('auth.step.verify')}</span>
+            </div>
+          </div>
+
+          {step === 'credentials' && (
+            <>
+              <div className="login-heading">
+                <span className="login-kicker">{t('auth.welcome')}</span>
+                <h2>{t('auth.title')}</h2>
+                <p>{t('auth.subtitle')}</p>
+              </div>
+              {sessionEnded && <div className="login-notice" role="status"><strong>{t('auth.sessionEnded.title')}</strong>{t('auth.sessionEnded.body')}</div>}
+              <form onSubmit={handleCredentials} className="login-form">
+                <label htmlFor="email">{t('auth.email')}</label>
+                <div className="login-input-wrap">
+                  <Mail size={18} />
+                  <input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder={t('auth.email.placeholder')} autoComplete="username" required autoFocus />
+                </div>
+
+                <label htmlFor="password">{t('auth.password')}</label>
+                <div className="login-input-wrap">
+                  <LockKeyhole size={18} />
+                  <input id="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={t('auth.password.placeholder')} autoComplete="current-password" required />
+                  <button type="button" className="password-toggle" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? t('auth.password.hide') : t('auth.password.show')}>
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+
+                {error && <div className="login-error" role="alert">{error}</div>}
+                <button className="login-primary" disabled={isSubmitting}>
+                  {isSubmitting ? <span className="login-spinner" /> : <><span>{t('auth.continue')}</span><ArrowRight size={18} /></>}
+                </button>
+              </form>
+            </>
+          )}
+
+          {step === 'otp' && (
+            <>
+              <div className="login-heading">
+                <span className="otp-icon"><KeyRound size={22} /></span>
+                <h2>{t('auth.otp.title')}</h2>
+                <p>{t('auth.otp.sent', { email: maskedEmail })}</p>
+              </div>
+              <form onSubmit={handleOtp} className="login-form">
+                <label htmlFor="otp">{t('auth.otp.label')}</label>
+                <input
+                  id="otp"
+                  className="otp-input"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={otp}
+                  onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="000000"
+                  autoComplete="one-time-code"
+                  autoFocus
+                />
+                <div className="otp-meta">
+                  <span className={expiresIn < 60 ? 'urgent' : ''}>{t('auth.otp.expires', { time: formatCountdown(expiresIn) })}</span>
+                  <button type="button" disabled={resendIn > 0 || isSubmitting} onClick={handleResend}>
+                    {resendIn > 0 ? t('auth.otp.resendIn', { n: resendIn }) : t('auth.otp.resend')}
+                  </button>
+                </div>
+                {error && <div className="login-error" role="alert">{error}</div>}
+                <button className="login-primary" disabled={isSubmitting || expiresIn === 0}>
+                  {isSubmitting ? <span className="login-spinner" /> : <><span>{t('auth.otp.verify')}</span><ArrowRight size={18} /></>}
+                </button>
+                <button type="button" className="login-secondary" onClick={() => { setStep('credentials'); setOtp(''); setError(''); }}>
+                  {t('auth.otp.other')}
+                </button>
+              </form>
+            </>
+          )}
+
+          {step === 'success' && (
+            <div className="login-success" role="status">
+              <CheckCircle2 size={52} />
+              <h2>{t('auth.success.title')}</h2>
+              <p>{t('auth.success.body')}</p>
+              <span className="login-spinner dark" />
+            </div>
+          )}
+
+          <div className="login-trust"><ShieldCheck size={14} /> {t('auth.trust')}</div>
+        </div>
+      </section>
     </main>
   );
 }

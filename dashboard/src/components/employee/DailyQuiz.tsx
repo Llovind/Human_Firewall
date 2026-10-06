@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, CheckCircle2, Flame, ShieldCheck, XCircle } from 'lucide-react';
 import StateMessage from '@/components/ui/StateMessage';
+import Confetti from '@/components/ui/Confetti';
 import { useToast } from '@/components/ui/Toast';
 import { useI18n } from '@/i18n/I18nProvider';
 import type { MessageKey } from '@/i18n/messages';
@@ -123,6 +124,7 @@ export default function DailyQuiz({ email, fallbackStreak, onBack, onAnswered }:
           const question = load.question; const right = choice === question.correct_answer_index;
           return (
             <div className="game-result" role="status">
+              {right && <Confetti />}
               <div className="game-result-head" data-correct={right}>
                 {right ? <CheckCircle2 size={28} aria-hidden="true" /> : <XCircle size={28} aria-hidden="true" />}
                 <div><h3>{t(right ? 'quiz.correct.title' : 'quiz.wrong.title')}</h3><p>{t(right ? 'quiz.correct.body' : 'quiz.wrong.body')}</p></div>

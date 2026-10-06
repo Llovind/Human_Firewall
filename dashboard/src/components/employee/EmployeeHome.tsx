@@ -131,7 +131,7 @@ export default function EmployeeHome(props: EmployeeHomeProps) {
 
   return (
     <div className="emp-home">
-      <h1 className="emp-greeting">{t('emp.greeting', { name: (name || '').split(' ')[0] || '' }).replace(/\s+\./, '.')}</h1>
+      <h1 className="emp-greeting">{t('emp.greeting', { name: (name || '').split(' ')[0] || '' }).replace(/\s+\./, '.')} <span className="wave" aria-hidden="true">👋</span></h1>
 
       {unseen.length > 0 && (
         <section className="emp-notices" aria-label={t('notice.request.title')} role="status">

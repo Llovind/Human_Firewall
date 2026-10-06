@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, CheckCircle2, Lock, ShieldCheck, Timer, XCircle } from 'lucide-react';
 import StateMessage from '@/components/ui/StateMessage';
+import Confetti from '@/components/ui/Confetti';
 import { useI18n } from '@/i18n/I18nProvider';
 import type { MessageKey } from '@/i18n/messages';
 
@@ -156,6 +157,7 @@ export default function SpotTheFake({ email, division, onBack, onTakeQuiz, onSco
 
         {eligibility?.eligible && phase === 'result' && (
           <div className="game-result" role="status">
+            {correct && <Confetti />}
             <div className="game-result-head" data-correct={correct}>
               {correct ? <CheckCircle2 size={28} aria-hidden="true" /> : <XCircle size={28} aria-hidden="true" />}
               <div><h3>{t(correct ? 'game.result.correct' : 'game.result.wrong')}</h3><p>{t(correct ? 'game.result.correct.body' : 'game.result.wrong.body', { name: fakeSide })}</p></div>

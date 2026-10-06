@@ -1,0 +1,127 @@
+/* Character layer: the compact, serious layout stays; this brings back the bright colour, round corners and a few playful touches
+   of the original design. Everything lives in this one file so it can be tuned or removed in one place. */
+:root {
+  --accent: #2563eb; --accent-strong: #1d4ed8; --border-active: #2563eb;
+  --bg-deep: #e9f1ff; --bg-base: #f0f5ff; --bg-elevated: #e4edfd; --bg-hover: #dce8fb; --border: #cfdcf2;
+  --pop-blue: #2563eb;   --pop-blue-bg: #e3edff;   --pop-blue-text: #1d4ed8;
+  --pop-teal: #0d9488;   --pop-teal-bg: #d9f5ef;   --pop-teal-text: #0f766e;
+  --pop-amber: #d97706;  --pop-amber-bg: #fdecc8;  --pop-amber-text: #92400e;
+  --pop-violet: #7c3aed; --pop-violet-bg: #ece6ff; --pop-violet-text: #6d28d9;
+  --pop-pink: #db2777;   --pop-pink-bg: #fde4ef;   --pop-pink-text: #be185d;
+  --radius-sm: 10px; --radius-md: 14px; --radius-lg: 18px; --radius-xl: 22px;
+  --shadow-card: 0 1px 2px rgba(20, 50, 120, .06), 0 8px 20px -10px rgba(37, 99, 235, .22);
+  --grad-cta: linear-gradient(135deg, #1d4ed8, #2563eb 55%, #3b82f6);
+}
+[data-theme="dark"] {
+  --accent: #7db3ff; --accent-strong: #a9cdff; --border-active: #7db3ff;
+  --bg-deep: #0a1626; --bg-base: #0e1b2e; --bg-elevated: #172a42; --bg-hover: #203650; --border: #233851;
+  --pop-blue: #60a5fa;   --pop-blue-bg: rgba(96, 165, 250, .18);  --pop-blue-text: #bfdbfe;
+  --pop-teal: #2dd4bf;   --pop-teal-bg: rgba(45, 212, 191, .16);  --pop-teal-text: #99f6e4;
+  --pop-amber: #fbbf24;  --pop-amber-bg: rgba(251, 191, 36, .16); --pop-amber-text: #fde68a;
+  --pop-violet: #a78bfa; --pop-violet-bg: rgba(167, 139, 250, .18); --pop-violet-text: #ddd6fe;
+  --pop-pink: #f472b6;   --pop-pink-bg: rgba(244, 114, 182, .16); --pop-pink-text: #fbcfe8;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 24px -12px rgba(0, 0, 0, .6);
+  --grad-cta: linear-gradient(135deg, #5b9cf5, #7db3ff 60%, #9cc4ff);
+}
+
+/* Key figures: a coloured top edge, each in its own colour. */
+.kpi { border-top: 4px solid var(--kpi-c, var(--pop-blue)); }
+.exec-kpis > .kpi:nth-child(4n+1), .kpi:nth-child(4n+1) { --kpi-c: var(--pop-blue); }
+.exec-kpis > .kpi:nth-child(4n+2), .kpi:nth-child(4n+2) { --kpi-c: var(--pop-teal); }
+.exec-kpis > .kpi:nth-child(4n+3), .kpi:nth-child(4n+3) { --kpi-c: var(--pop-amber); }
+.exec-kpis > .kpi:nth-child(4n+4), .kpi:nth-child(4n+4) { --kpi-c: var(--pop-violet); }
+
+/* Sidebar: coloured icons and a bold edge on the page you are on. */
+.sb nav button:nth-of-type(5n+1) svg { color: var(--pop-blue); }
+.sb nav button:nth-of-type(5n+2) svg { color: var(--pop-teal); }
+.sb nav button:nth-of-type(5n+3) svg { color: var(--pop-amber); }
+.sb nav button:nth-of-type(5n+4) svg { color: var(--pop-violet); }
+.sb nav button:nth-of-type(5n+5) svg { color: var(--pop-pink); }
+.sb-link[aria-current="page"] { box-shadow: inset 4px 0 0 var(--accent); }
+.sb-count { color: var(--pop-blue-text); background: var(--pop-blue-bg); border-color: transparent; font-weight: 700; }
+
+/* Cards that explain themselves get a small coloured marker before the title. */
+.emp-card > h2::before, .emp-card-head h2::before, .exec-card > h3::before, .ops-head h3::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 8px; border-radius: 3px; background: var(--pop-blue); vertical-align: 1px; }
+.emp-grid > :nth-child(2n) h2::before, .exec-grid > :nth-child(2n) h3::before { background: var(--pop-teal); }
+.emp-grid > :nth-child(3n) h2::before { background: var(--pop-amber); }
+
+/* Employee side is where the fun lives: the next step is a bold colour block. */
+.emp-page .emp-next { color: #fff; background: var(--pop-blue); border-color: transparent; }
+.emp-page .emp-next h2, .emp-page .emp-next p, .emp-page .emp-next small { color: #fff; }
+.emp-page .emp-next .eyebrow, .emp-page .emp-next .emp-eyebrow { color: rgba(255, 255, 255, .85); }
+.emp-page .emp-next .btn-primary { color: var(--pop-blue-text); background: #fff; border-color: #fff; font-weight: 700; }
+.emp-page .emp-next .btn-primary:hover { background: #eef4ff; }
+[data-theme="dark"] .emp-page .emp-next { background: #1e3a8a; }
+[data-theme="dark"] .emp-page .emp-next .btn-primary { color: #0b1b33; }
+.emp-page .emp-greeting { font-size: 30px; font-weight: 700; }
+
+/* Quiz and game: lettered choices in four colours. */
+.emp-page .quiz-option:nth-child(4n+1) .quiz-letter { color: var(--pop-blue-text); background: var(--pop-blue-bg); }
+.emp-page .quiz-option:nth-child(4n+2) .quiz-letter { color: var(--pop-teal-text); background: var(--pop-teal-bg); }
+.emp-page .quiz-option:nth-child(4n+3) .quiz-letter { color: var(--pop-amber-text); background: var(--pop-amber-bg); }
+.emp-page .quiz-option:nth-child(4n+4) .quiz-letter { color: var(--pop-violet-text); background: var(--pop-violet-bg); }
+.emp-page .quiz-option .quiz-letter { width: 32px; height: 32px; font-size: 14px; border-radius: 8px; }
+.emp-page .training-option:nth-child(1) { border-top: 4px solid var(--pop-teal); }
+.emp-page .training-option:nth-child(2) { border-top: 4px solid var(--pop-violet); }
+
+/* Badges: earned ones are coloured, unearned stay quiet. */
+.badge-grid li[data-earned="true"]:nth-child(5n+1) { background: var(--pop-blue-bg); border-color: var(--pop-blue); }
+.badge-grid li[data-earned="true"]:nth-child(5n+2) { background: var(--pop-teal-bg); border-color: var(--pop-teal); }
+.badge-grid li[data-earned="true"]:nth-child(5n+3) { background: var(--pop-amber-bg); border-color: var(--pop-amber); }
+.badge-grid li[data-earned="true"]:nth-child(5n+4) { background: var(--pop-violet-bg); border-color: var(--pop-violet); }
+.badge-grid li[data-earned="true"]:nth-child(5n+5) { background: var(--pop-pink-bg); border-color: var(--pop-pink); }
+.badge-grid li[data-earned="true"] strong { color: var(--text-primary); }
+
+/* A little life: buttons lift on hover, bars are flat bright colour. */
+@media (prefers-reduced-motion: no-preference) {
+  .btn-primary, .training-option, .quiz-option, .badge-grid li { transition: transform .12s ease, box-shadow .12s ease; }
+  .btn-primary:hover, .training-option:hover, .quiz-option:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+}
+.exec-bar i { background: var(--pop-teal); }
+.strip-item[aria-pressed="true"] { border-color: var(--accent); }
+
+
+/* Round, soft and a little bouncy. */
+.btn { border-radius: 999px; }
+.btn.iconbtn, .iconbtn { border-radius: 12px; }
+.btn-primary { background: var(--grad-cta); border-color: transparent; color: #fff; box-shadow: 0 6px 14px -6px rgba(37, 99, 235, .55); }
+.btn-primary:hover:not(:disabled) { background: var(--grad-cta); filter: brightness(1.06); border-color: transparent; }
+[data-theme="dark"] .btn-primary { color: #0b1b33; box-shadow: 0 6px 14px -6px rgba(125, 179, 255, .4); }
+.emp-card, .emp-next, .exec-card, .ops-card, .kpi, .incident-panel, .clause, .option-grid article, .settings-card, .pxc, .rule-grid > div, .quiz-option, .training-option, .badge-grid li { border-radius: var(--radius-md); }
+.emp-card, .exec-card, .ops-card, .kpi, .incident-panel, .clause, .settings-card, .pxc { box-shadow: var(--shadow-card); }
+.table-wrap, .ui-dialog { border-radius: var(--radius-lg); }
+.filter-search input, .filter-select select, .field input, .field select, .field textarea, .num-input { border-radius: 12px; }
+.seg, .strip-item, .strip-static { border-radius: 999px; }
+.seg button { border-radius: 999px; }
+.chip, .sev { border-radius: 999px; }
+.emp-page .emp-next { background: linear-gradient(135deg, #1e40af, #2563eb 55%, #3b82f6); box-shadow: 0 14px 28px -14px rgba(37, 99, 235, .7); }
+[data-theme="dark"] .emp-page .emp-next { background: linear-gradient(135deg, #1e3a8a, #2549b8); }
+.emp-page .emp-next .btn-primary { background: #fff; box-shadow: none; }
+.sb-link { border-radius: 12px; }
+.sb-link[aria-current="page"] { color: var(--pop-blue-text); background: var(--pop-blue-bg); border-color: transparent; box-shadow: inset 4px 0 0 var(--accent); }
+.sb-search { border-radius: 999px; }
+.avatar { background: var(--pop-violet-bg); color: var(--pop-violet-text); border-color: transparent; }
+.emp-card > h2::before, .emp-card-head h2::before, .exec-card > h3::before, .ops-head h3::before { border-radius: 50%; }
+
+/* Small moments of delight, off when the person asks for less motion. */
+.wave { display: inline-block; transform-origin: 70% 70%; }
+.game-result { position: relative; overflow: hidden; }
+.confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.confetti i { position: absolute; top: -14px; border-radius: 2px; opacity: 0; background: var(--pop-blue); }
+.confetti i[data-hue="1"] { background: var(--pop-teal); } .confetti i[data-hue="2"] { background: var(--pop-amber); }
+.confetti i[data-hue="3"] { background: var(--pop-violet); } .confetti i[data-hue="4"] { background: var(--pop-pink); }
+@media (prefers-reduced-motion: no-preference) {
+  .wave { animation: wave 2.2s ease-in-out 1s 2; }
+  @keyframes wave { 0%, 60%, 100% { transform: rotate(0); } 10%, 30% { transform: rotate(16deg); } 20%, 40% { transform: rotate(-10deg); } 50% { transform: rotate(10deg); } }
+  .confetti i { animation: fall 1.6s ease-out forwards; }
+  @keyframes fall { 0% { opacity: 1; transform: translate(0, 0) rotate(0); } 100% { opacity: 0; transform: translate(var(--drift, 0), 260px) rotate(540deg); } }
+  .emp-card, .exec-card, .kpi, .clause { animation: rise .4s ease both; }
+  .emp-card:nth-child(2), .exec-card:nth-child(2), .kpi:nth-child(2) { animation-delay: .05s; }
+  .emp-card:nth-child(3), .exec-card:nth-child(3), .kpi:nth-child(3) { animation-delay: .1s; }
+  .emp-card:nth-child(4), .kpi:nth-child(4) { animation-delay: .15s; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .badge-grid li[data-earned="true"]:hover { transform: translateY(-2px) rotate(-1deg); }
+  .emp-list li { transition: background-color .15s ease; }
+  .emp-flame, .emp-card svg.lucide-flame { animation: flicker 1.8s ease-in-out infinite; transform-origin: 50% 90%; color: var(--pop-amber); }
+  @keyframes flicker { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18) rotate(-4deg); } }
+}

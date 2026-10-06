@@ -96,7 +96,7 @@ export default function OverviewSection({ stats, incidents, summaries, scores, c
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
                   <XAxis type="number" domain={[0, 100]} stroke="var(--text-secondary)" fontSize={12} />
                   <YAxis type="category" dataKey="name" stroke="var(--text-secondary)" fontSize={12} width={110} />
-                  <Tooltip cursor={false} contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-primary)' }} formatter={value => [value, t('ov.div.series')]} />
+                  <Tooltip cursor={false} itemStyle={{ color: 'var(--text-primary)' }} labelStyle={{ color: 'var(--text-secondary)' }} contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-primary)' }} formatter={value => [value, t('ov.div.series')]} />
                   <Bar dataKey="score" radius={[0, 4, 4, 0]} barSize={16} isAnimationActive={false}>
                     {divisionData.map(entry => <Cell key={entry.name} fill={entry.score >= 80 ? 'var(--sev-ok)' : entry.score >= 50 ? 'var(--sev-medium)' : 'var(--sev-critical)'} />)}
                   </Bar>

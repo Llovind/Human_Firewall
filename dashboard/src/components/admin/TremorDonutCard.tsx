@@ -42,7 +42,7 @@ export function TremorDonutCard({ title, description, data, totalLabel, unit, cl
                 <Pie rootTabIndex={-1} data={data} dataKey="value" nameKey="name" innerRadius="62%" outerRadius="92%" paddingAngle={2} stroke="var(--bg-surface)" onMouseEnter={(_, index) => setActive(index)} onMouseLeave={() => setActive(null)} isAnimationActive={false}>
                   {data.map((item, index) => <Cell key={item.name} fill={item.color} opacity={active === null || active === index ? 1 : 0.5} />)}
                 </Pie>
-                <Tooltip contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-primary)' }} />
+                <Tooltip itemStyle={{ color: 'var(--text-primary)' }} contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-primary)' }} />
               </PieChart>
             </ResponsiveContainer>
             <div className="donut-center"><b>{total}</b><small>{totalLabel ?? t('ov.sev.total')}</small></div>
