@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/i18n/I18nProvider';
-import { Check, Copy, Download, Globe2, Loader2, Network, ShieldCheck, WifiOff } from 'lucide-react';
+import { BookOpen, Check, Copy, Download, Globe2, Loader2, Network, ShieldCheck, WifiOff } from 'lucide-react';
+import Dialog from '@/components/ui/Dialog';
+import type { MessageKey } from '@/i18n/messages';
 
 type ProxyStatus = {
   registered: boolean;
@@ -55,6 +57,7 @@ export default function ProxyConnectionCard({ onStatus }: { onStatus?: (report: 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const deviceFetch = useCallback((path: string, options?: RequestInit) => fetch(
     `${apiBase}${path}`,
     { ...options, credentials: 'include' },
@@ -178,7 +181,7 @@ export default function ProxyConnectionCard({ onStatus }: { onStatus?: (report: 
     onStatus?.({ registered: status.registered, connected: status.registered && probeState === 'connected', checking: loading || (status.registered && probeState === 'checking'), failed: Boolean(error) });
   }, [onStatus, status.registered, probeState, loading, error]);
   const proxyFailed = status.registered && probeState === 'disconnected';
-  const stateColor = proxyConnected ? '#22c55e' : proxyFailed ? '#ef4444' : status.registered ? '#f59e0b' : '#94a3b8';
+  const tone = proxyConnected ? 'ok' : proxyFailed ? 'bad' : status.registered ? 'warn' : 'neutral';
   const StateIcon = proxyConnected ? ShieldCheck : proxyFailed ? WifiOff : status.registered ? Network : WifiOff;
   const title = proxyConnected
     ? t('proxy.on.title')
@@ -187,49 +190,60 @@ export default function ProxyConnectionCard({ onStatus }: { onStatus?: (report: 
       : status.registered
         ? t('proxy.registered.title')
         : t('proxy.setup.title');
+  const body = proxyConnected ? t('proxy.on.body') : proxyFailed ? t('proxy.failed.body') : status.registered ? t('proxy.registered.body') : t('proxy.setup.body');
 
   return (
-    <section className="glass-card proxy-connect-card" aria-live="polite">
-      <div className="proxy-connect-main">
-        <div className="proxy-connect-icon" style={{ color: stateColor, borderColor: `${stateColor}55`, background: `${stateColor}12` }}>
-          <StateIcon size={24} />
-        </div>
+    <section className="proxy-connect-card pxc" data-tone={tone} aria-live="polite">
+      <div className="pxc-main">
+        <span className="pxc-icon" aria-hidden="true"><StateIcon size={22} /></span>
         <div>
-          <div className="proxy-eyebrow"><span style={{ background: stateColor }} /> {t('proxy.eyebrow')}</div>
+          <p className="pxc-eyebrow">{t('proxy.eyebrow')}</p>
           <h2>{title}</h2>
-          <p>
-            {proxyConnected
-              ? t('proxy.on.body')
-              : proxyFailed
-                ? t('proxy.failed.body')
-              : status.registered
-                ? t('proxy.registered.body')
-                : t('proxy.setup.body')}
-          </p>
-          {error && <div className="proxy-error">{error}</div>}
+          <p>{body}</p>
+          {error && <p className="field-error" role="alert">{error}</p>}
         </div>
       </div>
-      <div className="proxy-connect-action">
-        <span>{t('proxy.address')}</span>
-        <button type="button" className="proxy-address" onClick={copyProxy} title={t('proxy.copy')} aria-label={t('proxy.copy')}>
-          <Globe2 size={15} /> {proxyUrl} {copied ? <Check size={14} /> : <Copy size={14} />}
+      <div className="pxc-actions">
+        <span className="emp-muted">{t('proxy.address')}</span>
+        <button type="button" className="pxc-address" onClick={copyProxy} title={t('proxy.copy')} aria-label={t('proxy.copy')}>
+          <Globe2 size={15} aria-hidden="true" /> <span>{proxyUrl}</span> {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
         </button>
         {!status.registered && (
-          <button type="button" className="btn btn-primary proxy-activate" onClick={activate} disabled={loading}>
-            {loading ? <Loader2 size={16} className="spin" /> : <ShieldCheck size={16} />}
+          <button type="button" className="btn btn-primary" onClick={activate} disabled={loading}>
+            {loading ? <Loader2 size={16} className="spin" aria-hidden="true" /> : <ShieldCheck size={16} aria-hidden="true" />}
             {t('proxy.activate')}
           </button>
         )}
-        <a
-          href="/api/proxy/ca.crt"
-          download="afferent-proxy-ca.crt"
-          className="btn btn-secondary proxy-ca-download"
-          title={t('proxy.ca.hint')}
-        >
-          <Download size={13} /> {t('proxy.ca')}
+        <a href="/api/proxy/ca.crt" download="afferent-proxy-ca.crt" className="btn" title={t('proxy.ca.hint')}>
+          <Download size={14} aria-hidden="true" /> {t('proxy.ca')}
         </a>
-        {status.registered && <small>{t('proxy.ip', { ip: status.sourceIpHint || t('proxy.ip.stored') })}</small>}
+        <button type="button" className="btn" onClick={() => setGuideOpen(true)}><BookOpen size={14} aria-hidden="true" /> {t('setup.open')}</button>
+        {status.registered && <small className="emp-muted">{t('proxy.ip', { ip: status.sourceIpHint || t('proxy.ip.stored') })}</small>}
       </div>
+      <SetupGuide open={guideOpen} onClose={() => setGuideOpen(false)} proxyUrl={proxyUrl} />
     </section>
+  );
+}
+
+type Device = 'windows' | 'macos' | 'ios' | 'android';
+const DEVICES: Device[] = ['windows', 'macos', 'ios', 'android'];
+
+/** Plain steps, one device at a time. The address is shown at the step that needs it. */
+function SetupGuide({ open, onClose, proxyUrl }: { open: boolean; onClose: () => void; proxyUrl: string }) {
+  const { t } = useI18n();
+  const [device, setDevice] = useState<Device>('windows');
+  const steps: MessageKey[] = ['setup.s1', 'setup.s2', `setup.${device}.s3` as MessageKey, `setup.${device}.s4` as MessageKey, 'setup.s5'];
+  return (
+    <Dialog open={open} onClose={onClose} size="lg" title={t('setup.title')} description={t('setup.desc')}
+      footer={<button type="button" className="btn btn-primary" onClick={onClose}>{t('setup.done')}</button>}>
+      <div className="seg" role="group" aria-label={t('setup.tabs')} style={{ flexWrap: 'wrap' }}>
+        {DEVICES.map(item => <button key={item} type="button" aria-pressed={device === item} onClick={() => setDevice(item)}>{t(`setup.os.${item}` as MessageKey)}</button>)}
+      </div>
+      <ol className="setup-steps">
+        {steps.map(step => <li key={step}>{t(step)}</li>)}
+      </ol>
+      <p className="setup-address"><span className="emp-muted">{t('setup.address')}</span> <code>{proxyUrl}</code></p>
+      <p className="emp-muted">{t('setup.help')}</p>
+    </Dialog>
   );
 }

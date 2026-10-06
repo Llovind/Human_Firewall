@@ -6,6 +6,7 @@ import SeverityBadge, { normalizeSeverity } from '@/components/ui/SeverityBadge'
 import StateMessage from '@/components/ui/StateMessage';
 import StatusChip from '@/components/ui/StatusChip';
 import { useI18n } from '@/i18n/I18nProvider';
+import { usePolling } from '@/hooks/usePolling';
 import type { BehaviorScore, ComplianceSummary, GoPhishCampaign, Incident } from '@/components/admin/types';
 
 const COMPLIANCE_GOAL = 80;
@@ -18,6 +19,28 @@ interface ExecutiveSummaryProps {
   campaigns: GoPhishCampaign[];
 }
 
+interface WeekPoint { week_start: string; avg_score: number; people: number; high_risk: number; open_incidents: number; reports: number; clicks: number }
+
+/** Direction and size of the change across the window. "good" says whether a rise is welcome. */
+function change(values: number[], goodWhenUp: boolean) {
+  if (values.length < 2) return undefined;
+  const delta = Math.round((values[values.length - 1] - values[0]) * 10) / 10;
+  return { direction: delta > 0 ? 'up' as const : delta < 0 ? 'down' as const : 'flat' as const, delta: Math.abs(delta), good: delta === 0 ? undefined : (delta > 0) === goodWhenUp };
+}
+
+function Sparkline({ points, label }: { points: number[]; label: string }) {
+  const W = 320, H = 72, pad = 6;
+  const min = Math.min(...points), max = Math.max(...points), span = max - min || 1;
+  const x = (i: number) => pad + (i * (W - pad * 2)) / Math.max(1, points.length - 1);
+  const y = (v: number) => H - pad - ((v - min) / span) * (H - pad * 2);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label} style={{ width: '100%', maxWidth: 420, height: 'auto' }}>
+      <polyline points={points.map((v, i) => `${x(i)},${y(v)}`).join(' ')} fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round" />
+      {points.map((v, i) => <circle key={i} cx={x(i)} cy={y(v)} r={i === points.length - 1 ? 4 : 2.5} fill="var(--accent)" />)}
+    </svg>
+  );
+}
+
 const isHighRisk = (score: BehaviorScore) => ['high', 'critical'].includes((score.risk || '').toLowerCase());
 
 /**
@@ -26,6 +49,13 @@ const isHighRisk = (score: BehaviorScore) => ['high', 'critical'].includes((scor
  */
 export default function ExecutiveSummary({ incidents, scores, compliance, campaigns }: ExecutiveSummaryProps) {
   const { t } = useI18n();
+  const { data: trendData } = usePolling<{ weeks: WeekPoint[] }>('/api/admin/trends?weeks=8', 60000);
+  const weeks = trendData?.weeks ?? [];
+  const span = Math.max(0, weeks.length - 1);
+  const trendOf = (values: number[], goodWhenUp: boolean) => {
+    const c = change(values, goodWhenUp);
+    return c ? { direction: c.direction, good: c.good, text: t(`exec.trend.${c.direction}` as 'exec.trend.up', { n: c.delta, weeks: span }) } : undefined;
+  };
 
   const data = useMemo(() => {
     const open = incidents.filter(i => i.status !== 'closed');
@@ -63,9 +93,9 @@ export default function ExecutiveSummary({ incidents, scores, compliance, campai
       </div>
 
       <div className="exec-kpis">
-        <KpiCard label={t('exec.kpi.score')} value={data.avg ?? '—'} unit="/ 100" hint={t('exec.kpi.score.hint')} />
-        <KpiCard label={t('exec.kpi.incidents')} value={data.open.length} hint={t('exec.kpi.incidents.hint', { n: data.urgent.length })} />
-        <KpiCard label={t('exec.kpi.people')} value={data.atRisk} hint={t('exec.kpi.people.hint', { total: scores.length })} />
+        <KpiCard label={t('exec.kpi.score')} value={data.avg ?? '—'} unit="/ 100" hint={t('exec.kpi.score.hint')} trend={trendOf(weeks.map(w => w.avg_score), true)} />
+        <KpiCard label={t('exec.kpi.incidents')} value={data.open.length} hint={t('exec.kpi.incidents.hint', { n: data.urgent.length })} trend={trendOf(weeks.map(w => w.open_incidents), false)} />
+        <KpiCard label={t('exec.kpi.people')} value={data.atRisk} hint={t('exec.kpi.people.hint', { total: scores.length })} trend={trendOf(weeks.map(w => w.high_risk), false)} />
         <KpiCard label={t('exec.kpi.clicks')} value={data.clickRate === null ? '—' : data.clickRate} unit={data.clickRate === null ? undefined : '%'} hint={data.clickRate === null ? t('exec.kpi.clicks.none') : t('exec.kpi.clicks.hint', { n: data.campaignCount })} />
       </div>
 
@@ -87,7 +117,15 @@ export default function ExecutiveSummary({ incidents, scores, compliance, campai
               </>}
         </div>
       </div>
-      <p className="emp-muted">{t('exec.notrend')}</p>
+      {weeks.length >= 2
+        ? (
+          <div className="exec-card">
+            <h3>{t('exec.trend.title')}</h3>
+            <Sparkline points={weeks.map(w => w.avg_score)} label={t('exec.trend.chart', { from: weeks[0].week_start, to: weeks[weeks.length - 1].week_start, values: weeks.map(w => w.avg_score).join(', ') })} />
+            <p className="emp-muted">{weeks[0].week_start} → {weeks[weeks.length - 1].week_start}</p>
+          </div>
+        )
+        : <p className="emp-muted">{t('exec.trend.collecting')}</p>}
     </section>
   );
 }

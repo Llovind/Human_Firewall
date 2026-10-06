@@ -111,6 +111,18 @@ def dashboard_summary():
     return jsonify(summary), 200
 
 
+@admin_api_bp.route('/api/admin/trends', methods=['GET'])
+@require_roles('soc', 'grc', 'ciso')
+def weekly_trends():
+    """Weekly numbers for the executive trend. Reading refreshes this week's row, so the history builds up by itself."""
+    try:
+        weeks = max(2, min(52, int(request.args.get('weeks', 12))))
+    except ValueError:
+        return jsonify({'error': 'weeks must be a number'}), 400
+    database.record_weekly_snapshot()
+    return jsonify({'weeks': database.list_weekly_snapshots(weeks)}), 200
+
+
 @admin_api_bp.route('/api/leaderboard', methods=['GET'])
 @admin_api_bp.route('/api/admin/leaderboard', methods=['GET'])
 @require_roles('employee', 'phishing_admin', 'soc', 'grc', 'ciso')

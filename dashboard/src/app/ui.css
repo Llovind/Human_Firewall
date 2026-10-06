@@ -113,7 +113,7 @@ a.kpi:hover { border-color: var(--border-control); }
 .data-table tbody tr[data-clickable] { cursor: pointer; }
 .data-table tbody tr[aria-selected="true"] { background: var(--bg-hover); box-shadow: inset 3px 0 0 var(--accent); }
 .data-table tbody tr:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
-.th-sort { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+.th-sort { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; min-width: 28px; padding: 4px 2px; margin: -4px -2px; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
 .th-sort:hover { color: var(--text-primary); }
 @container (max-width: 640px) { .data-table :is(th, td)[data-secondary] { display: none; } }
 
@@ -394,3 +394,46 @@ a.kpi:hover { border-color: var(--border-control); }
 .library-item { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--border); font-size: var(--text-sm); }
 .library-item small { display: block; color: var(--text-muted); }
 .campaign-details > summary { cursor: pointer; min-height: 40px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-weight: 600; }
+
+/* ── Proxy connection card + setup guide ─────────────────────────────── */
+.pxc { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; padding: 16px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.pxc-main { display: flex; gap: 12px; align-items: flex-start; flex: 1 1 320px; min-width: 0; }
+.pxc-icon { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: var(--radius-sm); background: var(--bg-elevated); color: var(--text-secondary); }
+.pxc[data-tone="ok"] .pxc-icon { color: var(--sev-ok); background: var(--sev-ok-bg); }
+.pxc[data-tone="bad"] .pxc-icon { color: var(--sev-critical); background: var(--sev-critical-bg); }
+.pxc[data-tone="warn"] .pxc-icon { color: var(--sev-medium); background: var(--sev-medium-bg); }
+.pxc-eyebrow { font-size: var(--text-xs); color: var(--text-secondary); }
+.pxc h2 { font-size: 16px; font-weight: 600; letter-spacing: 0; }
+.pxc-main p { font-size: var(--text-sm); color: var(--text-secondary); }
+.pxc-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: 0 1 auto; min-width: 0; }
+.pxc-address { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; max-width: 100%; padding: 4px 10px; font: inherit; font-size: var(--text-sm); color: var(--text-primary); background: var(--bg-surface); border: 1px solid var(--border-control); border-radius: var(--radius-sm); cursor: pointer; }
+.pxc-address span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pxc-address:hover { background: var(--bg-hover); }
+.pxc-address:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.setup-steps { display: grid; gap: 10px; padding-left: 22px; font-size: var(--text-base); line-height: 1.5; }
+.setup-address { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.setup-address code { font-size: 14px; overflow-wrap: anywhere; }
+
+/* ── Settings page ───────────────────────────────────────────────────── */
+.settings-page { min-height: 100svh; background: var(--bg-base); color: var(--text-primary); }
+.settings-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px clamp(16px, 4vw, 32px); border-bottom: 1px solid var(--border); background: var(--bg-surface); }
+.settings-main { width: min(100% - 32px, 720px); margin: 24px auto 64px; display: grid; gap: 16px; }
+.settings-main h1 { font-size: 24px; font-weight: 600; letter-spacing: 0; }
+.settings-card { display: grid; gap: 12px; padding: 16px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.settings-card h2 { font-size: 16px; font-weight: 600; letter-spacing: 0; }
+.settings-card dl { display: grid; gap: 8px; margin: 0; }
+.settings-card dl div { display: grid; grid-template-columns: minmax(96px, 1fr) 2fr; gap: 8px; font-size: var(--text-base); }
+.settings-card dt { color: var(--text-secondary); }
+.settings-card dd { margin: 0; overflow-wrap: anywhere; }
+.settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.settings-row small { color: var(--text-secondary); }
+.account-dropdown .account-link { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px; border-radius: 8px; color: var(--text-primary); text-decoration: none; }
+.account-dropdown .account-link:hover { background: var(--bg-hover); }
+.account-dropdown .account-link:focus-visible, .account-dropdown button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+
+/* ── Notification bell ───────────────────────────────────────────────── */
+.notif { position: relative; }
+.notif-btn { position: relative; }
+.notif-count { position: absolute; top: -2px; right: -2px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; font-size: 11px; line-height: 16px; font-weight: 700; text-align: center; color: var(--on-accent); background: var(--sev-critical); }
+.notif-panel { position: absolute; right: 0; top: calc(100% + 8px); z-index: 60; width: min(360px, calc(100vw - 32px)); display: grid; gap: 8px; padding: 12px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); }
+.notif-panel .emp-list li { align-items: center; padding: 8px 0; font-size: var(--text-sm); }

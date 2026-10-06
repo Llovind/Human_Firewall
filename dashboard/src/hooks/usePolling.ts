@@ -34,6 +34,8 @@ export function usePolling<T>(
   const flashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchData = useCallback(async () => {
+    // An empty address means "nothing to watch yet" (for example before sign-in or for a role without this feed).
+    if (!url) return;
     if (controllerRef.current) return;
     const controller = new AbortController();
     controllerRef.current = controller;

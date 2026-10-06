@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import Logo from '@/components/Logo';
 import AccountMenu from '@/components/AccountMenu';
+import NotificationBell from '@/components/NotificationBell';
 import { useI18n } from '@/i18n/I18nProvider';
 import { usePreference } from '@/hooks/usePreference';
 import { useTheme } from '@/hooks/useTheme';
@@ -171,7 +172,10 @@ export default function DashboardLayout({ role, activeTab, onTabChange, children
             <small>{roleLabel}</small>
             <h1>{activeDef ? t(activeDef.labelKey) : t('nav.overview')}</h1>
           </div>
-          {role === 'ciso' && <span className="shell-chip" title={t('shell.readonlyHint')}>{t('shell.readonly')}</span>}
+          <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            {role === 'ciso' && <span className="shell-chip" title={t('shell.readonlyHint')}>{t('shell.readonly')}</span>}
+            <NotificationBell role={role} onOpenTab={choose} />
+          </span>
         </header>
         <div className="shell-content" id="content" tabIndex={-1}>
           <main className="main" style={{ padding: 0 }}>

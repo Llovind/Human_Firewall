@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     });
     return response;
   } catch {
-    return NextResponse.json({ error: 'Layanan autentikasi tidak tersedia' }, { status: 503 });
+    return NextResponse.json({ error: 'Layanan autentikasi tidak tersedia', code: 'SERVICE_UNAVAILABLE' }, { status: 503 });
   }
 }
 

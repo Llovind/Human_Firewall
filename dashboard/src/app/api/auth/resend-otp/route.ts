@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     const data = await response.json();
     return NextResponse.json(data, { status: response.status });
   } catch {
-    return NextResponse.json({ error: 'Layanan autentikasi tidak tersedia' }, { status: 503 });
+    return NextResponse.json({ error: 'Layanan autentikasi tidak tersedia', code: 'SERVICE_UNAVAILABLE' }, { status: 503 });
   }
 }
 

@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
       ...(response.headers.get('retry-after') ? { 'Retry-After': response.headers.get('retry-after')! } : {}),
     } });
   } catch {
-    return NextResponse.json({ error: 'Layanan autentikasi tidak tersedia' }, { status: 503 });
+    return NextResponse.json({ error: 'Layanan autentikasi tidak tersedia', code: 'SERVICE_UNAVAILABLE' }, { status: 503 });
   }
 }
 

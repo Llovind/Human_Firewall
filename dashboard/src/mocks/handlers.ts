@@ -120,6 +120,7 @@ export const routes: Route[] = [
 
   /* ── SOC / GRC / CISO dashboards ───────────────────── */
   { method: 'GET', path: /^\/api\/incident$/, normal: ctx => f.incidents(ctx.request.cookies.get(CLOSED_COOKIE)?.value, readJson(ctx.request, OWNERS_COOKIE, {}) as Record<string, string | null>), empty: () => ({ incidents: [], stats: emptyStats }) },
+  { method: 'GET', path: /^\/api\/admin\/trends$/, normal: () => f.weeklyTrends(), empty: () => ({ weeks: [] }) },
   { method: 'GET', path: /^\/api\/incident\/([A-Za-z0-9_-]{3,64})\/events$/, normal: ctx => f.incidentEvents(ctx.match[1], (readJson(ctx.request, EVENTS_COOKIE, []) as { ticket_id: string }[]).filter(e => e.ticket_id === ctx.match[1])), empty: () => ({ events: [] }) },
   { method: 'PATCH', path: /^\/api\/incident$/, normal: async ctx => {
     // Resolve, reopen and assign are remembered in cookies so the flow can be tried; clearing cookies resets it.

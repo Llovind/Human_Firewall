@@ -394,3 +394,15 @@ export const secondOpinion = (domain: string) => ({
   status: 'completed', model: 'mock-local-llm',
   result: { assessment: 'likely_phishing', category: 'credential_harvesting', reason: `The hostname "${domain}" imitates a payroll service using urgency words.`, elapsedMs: 1840 },
 });
+
+/** Eight weeks, oldest first: the score climbs slowly, people at risk and open incidents fall. */
+export const weeklyTrends = () => {
+  const monday = new Date(); monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7) - 49);
+  const score = [48, 49, 51, 50, 53, 55, 56, 57];
+  const high = [5, 5, 4, 4, 3, 3, 2, 2];
+  const open = [7, 6, 6, 5, 5, 4, 4, 3];
+  return { weeks: score.map((avg, i) => {
+    const day = new Date(monday); day.setUTCDate(monday.getUTCDate() + i * 7);
+    return { week_start: day.toISOString().slice(0, 10), avg_score: avg, people: 12, high_risk: high[i], open_incidents: open[i], reports: 10 + i * 2, clicks: 14 - i };
+  }) };
+};

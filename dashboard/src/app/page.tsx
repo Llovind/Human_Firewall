@@ -8,6 +8,7 @@ import Logo from '@/components/Logo';
 import ThemeToggle from '@/components/ThemeToggle';
 import LanguageSwitch from '@/components/ui/LanguageSwitch';
 import AccountMenu from '@/components/AccountMenu';
+import NotificationBell from '@/components/NotificationBell';
 import EmployeeHome, { type DivisionAverage, type EmployeeActivity, type EmployeeScore } from '@/components/employee/EmployeeHome';
 import TrainingPicker from '@/components/employee/TrainingPicker';
 import SpotTheFake from '@/components/employee/SpotTheFake';
@@ -100,6 +101,7 @@ export default function EmployeeDashboardPage() {
         <span className="emp-top-tools">
           <LanguageSwitch />
           <ThemeToggle />
+          <NotificationBell role="employee" />
           <AccountMenu />
         </span>
       </header>

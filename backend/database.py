@@ -232,6 +232,19 @@ def init_db():
             )
         ''')
         cursor.execute('CREATE INDEX IF NOT EXISTS ix_incident_events_ticket ON incident_events(ticket_id, id)')
+        # One row per week (Monday, UTC): lets the CISO page show a trend. The current week is updated in place.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS weekly_snapshots (
+                week_start TEXT PRIMARY KEY,
+                avg_score REAL NOT NULL,
+                people INTEGER NOT NULL,
+                high_risk INTEGER NOT NULL,
+                open_incidents INTEGER NOT NULL,
+                reports INTEGER NOT NULL,
+                clicks INTEGER NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
 
         # Tabel registration_otp — menyimpan kode OTP pendaftaran Telegram
         cursor.execute('''
@@ -3623,5 +3636,47 @@ def delete_simulation_campaign(campaign_id: int):
         conn.execute('DELETE FROM simulation_campaigns WHERE id = ?', (campaign_id,))
         conn.commit()
         return True
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# WEEKLY TREND SNAPSHOTS
+# ---------------------------------------------------------------------------
+
+def _week_start(day=None):
+    from datetime import date, timedelta
+    day = day or date.today()
+    return (day - timedelta(days=day.weekday())).isoformat()
+
+
+def record_weekly_snapshot(day=None):
+    """Store (or refresh) this week's numbers. Scores use the same rules as the dashboard: points / 2, high risk below 60 points."""
+    conn = get_connection()
+    try:
+        people = conn.execute('SELECT points, click_count, reports_count_malicious FROM user_history WHERE divisi IS NOT NULL').fetchall()
+        total = len(people)
+        avg_score = round(sum(max(0, min(100, (r['points'] or 0) / 2.0)) for r in people) / total, 1) if total else 0.0
+        high_risk = sum(1 for r in people if (r['points'] or 0) < 60)
+        clicks = sum(r['click_count'] or 0 for r in people)
+        reports = sum(r['reports_count_malicious'] or 0 for r in people)
+        open_incidents = conn.execute("SELECT COUNT(*) FROM incidents WHERE status NOT IN ('closed', 'resolved')").fetchone()[0]
+        conn.execute('''
+            INSERT INTO weekly_snapshots (week_start, avg_score, people, high_risk, open_incidents, reports, clicks, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(week_start) DO UPDATE SET avg_score = excluded.avg_score, people = excluded.people,
+                high_risk = excluded.high_risk, open_incidents = excluded.open_incidents, reports = excluded.reports,
+                clicks = excluded.clicks, updated_at = CURRENT_TIMESTAMP
+        ''', (_week_start(day), avg_score, total, high_risk, open_incidents, reports, clicks))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def list_weekly_snapshots(weeks=12):
+    conn = get_connection()
+    try:
+        rows = conn.execute('SELECT week_start, avg_score, people, high_risk, open_incidents, reports, clicks FROM weekly_snapshots ORDER BY week_start DESC LIMIT ?', (weeks,)).fetchall()
+        return [dict(r) for r in reversed(rows)]
     finally:
         conn.close()
